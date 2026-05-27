@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    # Host port 5436 avoids conflicts with existing PostgreSQL instances on
+    # 5432 (native), 5433/5434 (FlowForge Docker), 5435 (DevBrain Docker)
+    ports:
+      - "5436:5432"
+    environment:
+      POSTGRES_DB: memex
+      POSTGRES_USER: memex
+      POSTGRES_PASSWORD: memex
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U memex -d memex"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Ollama runs natively on this machine (port 11434) — no Docker needed.
+  # GPU passthrough works out of the box with native install.
+  # To pull models (one-time): ollama pull llama3.2 && ollama pull nomic-embed-text
+
+volumes:
+  pg_data:

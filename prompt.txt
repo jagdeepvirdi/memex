@@ -1,0 +1,58 @@
+## Session 1 Claude Code Prompt
+*(Copy and use this for your first Claude Code session)*
+
+```
+Read the design handoff at 
+D:\Project\design\Memex-PersonalKnowledgeOS-handoff.zip
+and the README inside it.
+
+Also read D:\Project\Memex\CLAUDE.md for full project context.
+Also read D:\Project\Memex\TASKS.md for the full task list.
+Also read D:\Project\common\ports-in-use.csv for reference of all existing ports allocation.
+
+Execute Phase 1 — Session 1 as defined in TASKS.md.
+
+Your tasks for this session are:
+
+1. Scaffold the project structure exactly as defined in CLAUDE.md:
+   - client/ — Vite + React + TypeScript
+   - server/ — Node.js + Express + TypeScript
+   - shared/types.ts — core TypeScript interfaces
+
+2. Extract ALL design tokens from the Claude Design handoff
+   and wire them into tailwind.config.ts. Pay close attention to:
+   - Dark base #0D0D0D and surfaces #161616 and #1E1E1E
+   - Warm amber accent #F59E0B
+   - Text primary #F5F5F5, muted #9CA3AF
+   - Playfair Display for headings (display font)
+   - DM Sans for body text
+   - JetBrains Mono for passwords and specs
+   - 12px card radius, 8px input radius
+   Load all three fonts from Google Fonts in index.html
+
+3. Implement index.html — correct background color,
+   all three fonts loaded, proper meta tags
+
+4. Implement root App.tsx shell — React Router setup,
+   correct dark background renders in browser,
+   placeholder routes for Dashboard, Category, Item, Vault
+
+5. Create docker-compose.yml with:
+   - PostgreSQL using pgvector/pgvector:pg16 image
+   - Ollama with NVIDIA GPU passthrough for RTX 2060 Max-Q:
+     deploy.resources.reservations.devices:
+       driver: nvidia, count: all, capabilities: [gpu]
+   - App service pointing to server/
+
+6. Create .env.example with all variables from CLAUDE.md
+
+Do NOT implement any pages, components, or backend logic.
+Do NOT start Phase 1 Session 2 or any other tasks.
+
+Stop after confirming:
+- Correct dark background renders at localhost:5173
+- All three fonts (Playfair Display, DM Sans, JetBrains Mono)
+  are visibly loading correctly
+- tailwind.config.ts contains all design tokens from the handoff
+- docker-compose.yml is complete and valid
+```
