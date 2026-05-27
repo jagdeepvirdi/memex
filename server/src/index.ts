@@ -9,7 +9,8 @@ import type { Request, Response, NextFunction } from 'express'
 
 // Load .env from project root regardless of CWD
 const __dirname = dirname(fileURLToPath(import.meta.url))
-config({ path: resolve(__dirname, '../../.env') })
+const envPath = resolve(__dirname, '../../.env')
+config({ path: envPath })
 
 import itemsRouter from './routes/items.js'
 import categoriesRouter from './routes/categories.js'

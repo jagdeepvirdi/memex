@@ -1,3 +1,11 @@
+import { config } from 'dotenv'
+import { resolve, dirname } from 'path'
+import { fileURLToPath } from 'url'
+
+// Load .env from project root
+const __dirname = dirname(fileURLToPath(import.meta.url))
+config({ path: resolve(__dirname, '../../../.env') })
+
 import pg from 'pg'
 
 const { Pool } = pg
