@@ -21,13 +21,13 @@ export async function scrapeUrl(url: string): Promise<ScrapedContent> {
   return scrapeGeneric(url);
 }
 
-function extractYoutubeId(url: string): string | null {
+export function extractYoutubeId(url: string): string | null {
   const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i;
   const match = url.match(regex);
   return match ? match[1] : null;
 }
 
-function extractInstagramShortcode(url: string): string | null {
+export function extractInstagramShortcode(url: string): string | null {
   const regex = /(?:instagram\.com\/(?:p|reels|tv)\/)([^\/\?#\s]+)/i;
   const match = url.match(regex);
   return match ? match[1] : null;
@@ -35,7 +35,6 @@ function extractInstagramShortcode(url: string): string | null {
 
 async function scrapeYoutube(url: string, videoId: string): Promise<ScrapedContent> {
   try {
-    // Attempt to get title via oEmbed (doesn't require API key)
     const oEmbedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`);
     const oEmbedData = await oEmbedRes.json() as { title: string };
     const title = oEmbedData.title || `YouTube Video (${videoId})`;
@@ -51,7 +50,6 @@ async function scrapeYoutube(url: string, videoId: string): Promise<ScrapedConte
     };
   } catch (error) {
     console.error('YouTube scrape error:', error);
-    // Fallback if transcript fails
     return {
       title: `YouTube Video (${videoId})`,
       content: 'Transcript unavailable.',
@@ -63,8 +61,6 @@ async function scrapeYoutube(url: string, videoId: string): Promise<ScrapedConte
 
 async function scrapeInstagram(url: string, shortcode: string): Promise<ScrapedContent> {
   try {
-    // Instagram oEmbed often requires an app ID / token now, 
-    // but some basic info might still be available or we can try a simple fetch
     const oEmbedRes = await fetch(`https://api.instagram.com/oembed/?url=${encodeURIComponent(url)}`);
     if (oEmbedRes.ok) {
       const data = await oEmbedRes.json() as { title: string; author_name: string };
@@ -116,7 +112,6 @@ async function scrapeGeneric(url: string): Promise<ScrapedContent> {
     };
   } catch (error) {
     console.error('Generic scrape error:', error);
-    // Fallback: just return the URL and minimal info
     return {
       title: url,
       content: 'Failed to extract content from this URL.',

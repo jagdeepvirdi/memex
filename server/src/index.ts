@@ -33,7 +33,7 @@ declare global {
   }
 }
 
-const app = express()
+export const app = express()
 const PORT = process.env.PORT ?? 3002
 const JWT_SECRET = process.env.JWT_SECRET || 'memex-default-secret'
 
@@ -95,9 +95,11 @@ app.use('/api/auth', authRouter)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
-app.listen(PORT, () => {
-  console.log(`Memex server listening on http://localhost:${PORT}`)
-  
-  // Start background workers
-  startEmbeddingWorker()
-})
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`Memex server listening on http://localhost:${PORT}`)
+    
+    // Start background workers
+    startEmbeddingWorker()
+  })
+}

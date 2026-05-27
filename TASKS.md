@@ -318,6 +318,10 @@
 - [x] **Unit Tests**:
   - [x] `client/src/lib/crypto.test.ts` (Encryption/Decryption parity)
   - [x] `server/src/services/classifier.test.ts` (Regex and JSON extraction logic)
+  - [x] `server/src/services/scraper.test.ts` (URL platform detection)
+  - [x] `server/src/db/helpers.test.ts` (Recursive category resolution)
+  - [x] `server/src/routes/auth.test.ts` (JWT login integration)
+  - [x] `client/src/components/cards/ItemCard.test.tsx` (UI conditional rendering)
 - [x] **Security Audit**: Verified password hashing (bcrypt), JWT secret management, zero-knowledge vault (AES-GCM), and added security headers (Helmet/CORS).
 - [x] **Contributor Guide**: `CONTRIBUTING.md` with coding standards and branch strategy.
 
