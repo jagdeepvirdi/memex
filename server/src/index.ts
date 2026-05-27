@@ -2,13 +2,15 @@ import { config } from 'dotenv'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import jwt from 'jsonwebtoken'
+import express from 'express'
+import helmet from 'helmet'
+import cors from 'cors'
 import type { Request, Response, NextFunction } from 'express'
 
 // Load .env from project root regardless of CWD
 const __dirname = dirname(fileURLToPath(import.meta.url))
 config({ path: resolve(__dirname, '../../.env') })
 
-import express from 'express'
 import itemsRouter from './routes/items.js'
 import categoriesRouter from './routes/categories.js'
 import tagsRouter from './routes/tags.js'
@@ -34,6 +36,10 @@ const app = express()
 const PORT = process.env.PORT ?? 3002
 const JWT_SECRET = process.env.JWT_SECRET || 'memex-default-secret'
 
+// ── Security Middleware ──────────────────────────────────────────────────────
+
+app.use(helmet()) // Security headers
+app.use(cors())   // Enable CORS for all routes (standard for local-first apps)
 app.use(express.json())
 
 // ── Auth Middleware ──────────────────────────────────────────────────────────

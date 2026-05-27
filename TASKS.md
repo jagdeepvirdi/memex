@@ -318,8 +318,9 @@
 - [x] **Unit Tests**:
   - [x] `client/src/lib/crypto.test.ts` (Encryption/Decryption parity)
   - [x] `server/src/services/classifier.test.ts` (Regex and JSON extraction logic)
-- [x] **Security Audit**: Final verification of password hashing and JWT secret management.
+- [x] **Security Audit**: Verified password hashing (bcrypt), JWT secret management, zero-knowledge vault (AES-GCM), and added security headers (Helmet/CORS).
 - [x] **Contributor Guide**: `CONTRIBUTING.md` with coding standards and branch strategy.
+
 
 ---
 
