@@ -9,7 +9,7 @@ import {
   ITEM_SELECT_SQL,
   rowToItem,
 } from '../db/helpers.js'
-import { classify, mapToCategories } from '../services/classifier.js'
+import { classify, classifyBatch, mapToCategories } from '../services/classifier.js'
 import { embedItem } from '../services/embedder.js'
 import type { ItemType, ItemSource } from '../../../shared/types.js'
 
@@ -274,37 +274,52 @@ router.post('/enrich', async (_req, res) => {
 
     res.json({ queued: rows.length })
 
-    // Fire and forget
-    const limit = pLimit(3)
-    await Promise.all(rows.map(row => limit(async () => {
+    // Fire and forget — process in batches of 5, 2 concurrent batch calls
+    const BATCH_SIZE = 5
+    const limit = pLimit(2)
+    const chunks: typeof rows[] = []
+    for (let i = 0; i < rows.length; i += BATCH_SIZE) chunks.push(rows.slice(i, i + BATCH_SIZE))
+
+    let done = 0
+    await Promise.all(chunks.map(chunk => limit(async () => {
+      let results: Awaited<ReturnType<typeof classifyBatch>>
       try {
-        const classification = await classify(`Title: ${row.title}\n\nContent: ${row.content}`)
+        results = await classifyBatch(chunk)
+      } catch {
+        // Batch failed — fall back to individual classify for each item in chunk
+        results = await Promise.all(chunk.map(async row => {
+          try {
+            const c = await classify(row.title + ' ' + row.content.slice(0, 400))
+            return { id: row.id, ...c }
+          } catch {
+            return { id: row.id, type: 'note' as const, title: row.title, categories: [], tags: [], summary: '', structured: {} }
+          }
+        }))
+      }
+
+      for (const result of results) {
         const client = await pool.connect()
         try {
           await client.query('BEGIN')
           await client.query(
             `UPDATE items SET type=$1, title=$2, structured=$3, updated_at=NOW() WHERE id=$4`,
-            [
-              classification.type,
-              classification.title || row.title,
-              JSON.stringify({ ...classification.structured, summary: classification.summary }),
-              row.id,
-            ]
+            [result.type, result.title || result.id, JSON.stringify({ ...result.structured, summary: result.summary }), result.id]
           )
-          if (classification.tags.length > 0) await setItemTags(client, row.id, classification.tags)
-          if (classification.categories.length > 0) await setItemCategories(client, row.id, classification.categories)
+          if (result.tags.length > 0) await setItemTags(client, result.id, result.tags)
+          if (result.categories.length > 0) await setItemCategories(client, result.id, result.categories)
           await client.query('COMMIT')
         } catch (err) {
           await client.query('ROLLBACK')
-          console.error(`Re-enrich update failed for ${row.id}:`, err)
+          console.error(`Re-enrich DB update failed for ${result.id}:`, err)
         } finally {
           client.release()
         }
-      } catch (err) {
-        console.error(`Re-enrich classify failed for ${row.id}:`, err)
       }
+
+      done += chunk.length
+      console.log(`[Re-enrich] ${done}/${rows.length} done`)
     })))
-    console.log(`[Re-enrich] Completed ${rows.length} items`)
+    console.log(`[Re-enrich] All ${rows.length} items complete`)
   } catch (err) {
     console.error('POST /api/items/enrich error:', err)
   }

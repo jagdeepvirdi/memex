@@ -223,6 +223,49 @@ export async function classify(text: string): Promise<ClassificationResult> {
   return fallback(text)
 }
 
+// ── Batch classify — one Ollama call for multiple notes ──────────────────────
+
+const BATCH_SYSTEM = `You are a knowledge classifier. Classify each note and return ONLY a JSON array, one object per note, same order.
+Each object: {"type":"note|recipe|media|spec|stock|link|book","title":"<title max 80 chars>","categories":["<top>","<mid>"],"tags":["<t1>","<t2>","<t3>"],"summary":"<one sentence>"}
+Return ONLY the JSON array. No explanation. No markdown.`
+
+export async function classifyBatch(
+  items: Array<{ id: string; title: string; content: string }>,
+): Promise<Array<ClassificationResult & { id: string }>> {
+  const numbered = items
+    .map((item, i) => `[${i + 1}] ${(item.title || 'Untitled').slice(0, 80)}: ${item.content.slice(0, 300)}`)
+    .join('\n')
+
+  const prompt = `Classify these ${items.length} notes:\n\n${numbered}\n\nReturn ONLY the JSON array of ${items.length} objects:`
+
+  const raw = await aiChat(prompt, BATCH_SYSTEM)
+
+  // Extract JSON array
+  const start = raw.indexOf('[')
+  const end = raw.lastIndexOf(']')
+  if (start === -1 || end === -1) throw new Error('No JSON array in batch response')
+
+  const parsed = JSON.parse(raw.slice(start, end + 1)) as Record<string, unknown>[]
+  if (!Array.isArray(parsed) || parsed.length !== items.length) {
+    throw new Error(`Expected ${items.length} results, got ${parsed.length}`)
+  }
+
+  return parsed.map((obj, i) => {
+    const validated = classificationSchema.safeParse(obj)
+    const result = validated.success ? validated.data : { type: 'note' as const, title: items[i].title || 'Untitled', categories: [], tags: [], summary: '', structured: {} }
+    const categories = result.categories.length > 0 ? result.categories : mapToCategories(result.type as ItemType, result.structured)
+    return {
+      id: items[i].id,
+      type: result.type as ItemType,
+      title: result.title,
+      categories,
+      tags: result.tags,
+      summary: result.summary,
+      structured: result.structured,
+    }
+  })
+}
+
 // ── Stock ticker extraction (convenience helper for Phase 4 ingest) ───────────
 
 export function extractTicker(structured: StockData | Record<string, unknown>): string | null {

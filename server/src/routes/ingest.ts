@@ -5,7 +5,7 @@ import pLimit from 'p-limit';
 import { scrapeUrl } from '../services/scraper.js';
 import { summarizeAndClassify } from '../services/summarizer.js';
 import { parseKeepZip } from '../services/keepImporter.js';
-import { classify } from '../services/classifier.js';
+import { classify, classifyBatch } from '../services/classifier.js';
 import { pool } from '../db/client.js';
 import { setItemCategories, setItemTags } from '../db/helpers.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
@@ -27,46 +27,64 @@ interface Job {
 // In-memory job store
 const jobs: Record<string, Job> = {};
 
-// Background: classify saved items and update DB records one by one
+// Background: classify saved items in batches of 5, update DB records
 async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: string) {
-  const limit = pLimit(3);
+  const BATCH_SIZE = 5;
+  const limit = pLimit(2);
   let completed = 0;
 
-  const tasks = itemIds.map((id, i) => limit(async () => {
-    try {
-      const note = notes[i];
-      const classification = await classify(`Title: ${note.title}\n\nContent: ${note.content}`);
+  const chunks: Array<{ id: string; title: string; content: string; labels: string[] }[]> = [];
+  for (let i = 0; i < itemIds.length; i += BATCH_SIZE) {
+    chunks.push(itemIds.slice(i, i + BATCH_SIZE).map((id, j) => ({
+      id,
+      title: notes[i + j]?.title || 'Untitled',
+      content: notes[i + j]?.content || '',
+      labels: notes[i + j]?.labels || [],
+    })));
+  }
 
+  const tasks = chunks.map(chunk => limit(async () => {
+    let results: Array<{ id: string; type: any; title: string; categories: string[]; tags: string[]; summary: string; structured: any }>;
+    try {
+      results = await classifyBatch(chunk);
+    } catch {
+      results = await Promise.all(chunk.map(async item => {
+        try {
+          const c = await classify(`${item.title} ${item.content.slice(0, 400)}`);
+          return { id: item.id, ...c };
+        } catch {
+          return { id: item.id, type: 'note', title: item.title, categories: [], tags: [], summary: '', structured: {} };
+        }
+      }));
+    }
+
+    for (let k = 0; k < results.length; k++) {
+      const result = results[k];
+      const originalLabels = chunk[k]?.labels || [];
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
         await client.query(
           `UPDATE items SET type=$1, title=$2, structured=$3, updated_at=NOW() WHERE id=$4`,
-          [
-            classification.type,
-            classification.title || note.title || 'Untitled',
-            JSON.stringify({ ...classification.structured, summary: classification.summary }),
-            id,
-          ]
+          [result.type, result.title || chunk[k].title || 'Untitled',
+           JSON.stringify({ ...result.structured, summary: result.summary }), result.id]
         );
-        const allTags = Array.from(new Set([...classification.tags, ...(note.labels || [])]));
-        if (allTags.length > 0) await setItemTags(client, id, allTags);
-        if (classification.categories.length > 0) await setItemCategories(client, id, classification.categories);
+        const allTags = Array.from(new Set([...result.tags, ...originalLabels]));
+        if (allTags.length > 0) await setItemTags(client, result.id, allTags);
+        if (result.categories.length > 0) await setItemCategories(client, result.id, result.categories);
         await client.query('COMMIT');
       } catch (err) {
         await client.query('ROLLBACK');
-        console.error(`Failed to update classified item ${id}:`, err);
+        console.error(`Failed to update classified item ${result.id}:`, err);
       } finally {
         client.release();
       }
-    } catch (err) {
-      console.error(`Ollama classification failed for item ${itemIds[i]}:`, err);
     }
 
-    completed++;
+    completed += chunk.length;
     jobs[jobId].completed = completed;
     jobs[jobId].progress = Math.round((completed / itemIds.length) * 100);
-    if (completed === itemIds.length) {
+    if (completed >= itemIds.length) {
       jobs[jobId].status = 'completed';
       jobs[jobId].completedAt = Date.now();
       const elapsed = ((jobs[jobId].completedAt! - jobs[jobId].startedAt) / 1000).toFixed(1);
