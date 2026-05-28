@@ -84,7 +84,49 @@ markitdown --help
 
 ---
 
-## 🐛 Known Bugs
+## 🐛 Known Bugs / Planned Improvements
+
+- [ ] **Category staging area — review AI-suggested categories before DB commit**
+  - **Problem:** Ollama returns free-form category names ("book", "books", "travel", "Bangkok")
+    that get created as new DB rows instead of mapping to the canonical seeded tree.
+  - **Canonical tree (from `002_seed_categories.sql`) that must be preserved:**
+    ```
+    Food        → Bakery → Cakes / Cookies / Bread
+                → Savory → Indian / Italian / Thai / Chinese
+    Media       → Movies → Action / Drama / Horror / Comedy
+                → Books  → Fiction / Non-Fiction / Technical
+    Tech        → Laptops / Cameras / Phones / Specs
+    Finance     → Stocks / Crypto / Notes
+    Personal    → Numbers / Contacts
+    Links       → YouTube / Instagram / Articles / Docs
+    Travel      → Destinations / Hotels / Restaurants / Attractions
+    ```
+  - **Proposed fix — two-step approach:**
+    1. **Fuzzy-map at classify time:** After Ollama returns `categories`, normalise them against
+       the canonical tree (case-insensitive, singular/plural, e.g. "book" → "Media > Books",
+       "travel" → "Travel"). Fall back to `mapToCategories(type, structured)` when no match.
+    2. **Staging area in UI:** New "Review Categories" page — shows all items with AI-assigned
+       categories that don't match the canonical tree. User can bulk-remap before commit,
+       or approve and let a new root category be created intentionally.
+  - **Immediate workaround:** Run a DB cleanup migration to delete rogue root categories
+    (those not in the canonical list) and reassign their items to the correct canonical node.
+  - **Do after enrichment completes** — running it mid-process would cause conflicts.
+
+- [ ] **"Move to Vault" action on sensitive notes**
+  - **Problem:** Google Keep notes often contain sensitive data — bank account numbers, UPI IDs,
+    PINs, license keys, contact details — that should be encrypted in the vault, not stored as
+    plain text in the items table.
+  - **How to implement:**
+    1. Add a **"Move to Vault"** button on the Item detail page (and item cards via context menu).
+    2. On click: open a small modal asking for the vault master password (to derive the AES key).
+    3. Encrypt `item.content` client-side using the existing `encryptVaultItem()` in `crypto.ts`.
+    4. `POST /api/vault` to save the encrypted blob, then `DELETE /api/items/:id` to remove the
+       plain-text version.
+  - **AI can help identify candidates:** During enrichment, flag notes whose content matches
+    patterns for bank details, PINs, license keys (regex on structured or content fields).
+    Show a "Sensitive?" badge on those item cards so the user notices them.
+  - **Vault fields mapping:** `service` = inferred label (e.g. "Bank — HDFC"), `username` = account
+    holder name if found, `ciphertext` + `iv` = encrypted content.
 
 - [ ] **Category proliferation / duplicates during AI enrichment**
   - **Observed:** After enrichment, many new AI-generated categories appear (e.g. "book", "books",
