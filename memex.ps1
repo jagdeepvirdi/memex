@@ -62,7 +62,7 @@ function Start-BgProcess {
         [string]   $Name,
         [string]   $WorkDir,
         [string]   $Exe,
-        [string[]] $Args
+        [string[]] $ProcArgs
     )
     $null = New-Item -ItemType Directory -Force -Path $RunDir, $LogDir
 
@@ -75,7 +75,7 @@ function Start-BgProcess {
 
     $proc = Start-Process `
         -FilePath         $Exe `
-        -ArgumentList     $Args `
+        -ArgumentList     $ProcArgs `
         -WorkingDirectory $WorkDir `
         -RedirectStandardOutput $logStdout `
         -RedirectStandardError  $logStderr `
@@ -153,11 +153,11 @@ function Invoke-Start {
     head "[$Mode] Launching processes..."
 
     if ($Mode -eq 'dev') {
-        $serverLog = Start-BgProcess 'server' (Join-Path $Root 'server') 'npm' @('run', 'dev')
-        $null      = Start-BgProcess 'client' (Join-Path $Root 'client') 'npm' @('run', 'dev')
+        $serverLog = Start-BgProcess 'server' (Join-Path $Root 'server') 'npm.cmd' @('run', 'dev')
+        $null      = Start-BgProcess 'client' (Join-Path $Root 'client') 'npm.cmd' @('run', 'dev')
     }
     else {
-        $serverLog = Start-BgProcess 'server' (Join-Path $Root 'server') 'npm' @('start')
+        $serverLog = Start-BgProcess 'server' (Join-Path $Root 'server') 'npm.cmd' @('start')
     }
 
     Write-Host ""
