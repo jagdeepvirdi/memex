@@ -27,61 +27,56 @@ interface Job {
 // In-memory job store
 const jobs: Record<string, Job> = {};
 
-// Background: classify saved items in batches of 5, update DB records
+// Background: classify saved items one by one and update DB records
 async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: string) {
-  const BATCH_SIZE = 5;
-  const limit = pLimit(2);
+  const limit = pLimit(3);
   let completed = 0;
 
-  const chunks: Array<{ id: string; title: string; content: string; labels: string[] }[]> = [];
-  for (let i = 0; i < itemIds.length; i += BATCH_SIZE) {
-    chunks.push(itemIds.slice(i, i + BATCH_SIZE).map((id, j) => ({
-      id,
-      title: notes[i + j]?.title || 'Untitled',
-      content: notes[i + j]?.content || '',
-      labels: notes[i + j]?.labels || [],
-    })));
-  }
+  const tasks = itemIds.map((id, i) => limit(async () => {
+    const note = notes[i];
+    const text = [note?.title, note?.content].filter(Boolean).join('\n\n');
 
-  const tasks = chunks.map(chunk => limit(async () => {
-    let results: Array<{ id: string; type: any; title: string; categories: string[]; tags: string[]; summary: string; structured: any }>;
-    try {
-      results = await classifyBatch(chunk);
-    } catch {
-      results = await Promise.all(chunk.map(async item => {
-        try {
-          const c = await classify(`${item.title} ${item.content.slice(0, 400)}`);
-          return { id: item.id, ...c };
-        } catch {
-          return { id: item.id, type: 'note', title: item.title, categories: [], tags: [], summary: '', structured: {} };
-        }
-      }));
+    // Skip genuinely empty notes
+    if (!text.trim()) {
+      completed++;
+      jobs[jobId].completed = completed;
+      jobs[jobId].progress = Math.round((completed / itemIds.length) * 100);
+      return;
     }
 
-    for (let k = 0; k < results.length; k++) {
-      const result = results[k];
-      const originalLabels = chunk[k]?.labels || [];
+    try {
+      const result = await classify(text);
+
+      // Only write to DB if classification produced something meaningful
+      if (!result.title || result.title === 'Untitled') {
+        result.title = note?.title || note?.content?.split('\n')[0]?.slice(0, 80) || 'Untitled';
+      }
+
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
         await client.query(
           `UPDATE items SET type=$1, title=$2, structured=$3, updated_at=NOW() WHERE id=$4`,
-          [result.type, result.title || chunk[k].title || 'Untitled',
-           JSON.stringify({ ...result.structured, summary: result.summary }), result.id]
+          [result.type, result.title,
+           JSON.stringify({ ...result.structured, summary: result.summary }), id]
         );
-        const allTags = Array.from(new Set([...result.tags, ...originalLabels]));
-        if (allTags.length > 0) await setItemTags(client, result.id, allTags);
-        if (result.categories.length > 0) await setItemCategories(client, result.id, result.categories);
+        const allTags = Array.from(new Set([...result.tags, ...(note?.labels || [])]));
+        if (allTags.length > 0) await setItemTags(client, id, allTags);
+        if (result.categories.length > 0) await setItemCategories(client, id, result.categories);
         await client.query('COMMIT');
+        console.log(`[Classify] OK: ${result.title} → ${result.type}`);
       } catch (err) {
         await client.query('ROLLBACK');
-        console.error(`Failed to update classified item ${result.id}:`, err);
+        console.error(`[Classify] DB update failed for ${id}:`, err);
       } finally {
         client.release();
       }
+    } catch (err) {
+      // Classification failed — leave structured={} so it stays pending and can be retried
+      console.error(`[Classify] Failed for ${id}, leaving as pending`);
     }
 
-    completed += chunk.length;
+    completed++;
     jobs[jobId].completed = completed;
     jobs[jobId].progress = Math.round((completed / itemIds.length) * 100);
     if (completed >= itemIds.length) {
