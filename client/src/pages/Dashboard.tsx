@@ -133,7 +133,8 @@ export default function Dashboard() {
                  label="AI Enriched"
                  value={stats?.aiEnriched ?? 0}
                  sub={stats && stats.pendingAI > 0 ? `${stats.pendingAI} pending` : undefined}
-                 onClick={stats && stats.pendingAI > 0 ? () => navigate('/items/pending') : undefined}
+                 onClick={() => navigate('/items/enriched')}
+                 onSubClick={stats && stats.pendingAI > 0 ? () => navigate('/items/pending') : undefined}
                />
                <StatCard 
                  icon={<Key size={18} className="text-teal-400" />} 
@@ -212,7 +213,7 @@ export default function Dashboard() {
   )
 }
 
-function StatCard({ icon, label, value, sub, onClick }: { icon: React.ReactNode, label: string, value: number | string, sub?: string, onClick?: () => void }) {
+function StatCard({ icon, label, value, sub, onClick, onSubClick }: { icon: React.ReactNode, label: string, value: number | string, sub?: string, onClick?: () => void, onSubClick?: () => void }) {
   return (
     <div
       onClick={onClick}
@@ -226,7 +227,12 @@ function StatCard({ icon, label, value, sub, onClick }: { icon: React.ReactNode,
        </div>
        <div className="flex items-end justify-between ml-1">
          <span className="text-2xl font-mono text-ink">{value}</span>
-         {sub && <span className="text-[10px] text-accent font-medium pb-0.5">{sub}</span>}
+         {sub && (
+           <span
+             onClick={e => { e.stopPropagation(); onSubClick?.() }}
+             className={`text-[10px] text-accent font-medium pb-0.5 ${onSubClick ? 'hover:underline cursor-pointer' : ''}`}
+           >{sub}</span>
+         )}
        </div>
     </div>
   )

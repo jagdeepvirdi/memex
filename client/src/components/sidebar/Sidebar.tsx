@@ -48,12 +48,19 @@ export default function Sidebar({ activeSection }: SidebarProps) {
     checkStatus();
     const interval = setInterval(checkStatus, 30000);
 
-    // Poll DB-backed enrichment count every 5s
+    // Poll DB-backed enrichment count every 5s; refresh categories when items get classified
+    let prevPending = -1;
     const checkEnrichment = async () => {
       try {
         const data = await apiFetch<{ pending: number; total: number }>('/items/enrichment');
         if (data.total > 0) {
           setEnrichment(data);
+          // Refresh categories whenever the pending count drops (new items got classified)
+          if (prevPending > 0 && data.pending < prevPending) {
+            fetchCategories().then(setCategories).catch(console.error);
+            fetchTags().then(setTags).catch(console.error);
+          }
+          prevPending = data.pending;
         } else {
           setEnrichment(null);
         }

@@ -9,6 +9,7 @@ import Settings from './pages/Settings'
 import Login from './pages/Login'
 import Trash from './pages/Trash'
 import PendingItems from './pages/PendingItems'
+import EnrichedItems from './pages/EnrichedItems'
 import SemanticGraph from './pages/SemanticGraph'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -39,6 +40,9 @@ export default function App() {
             } />
             <Route path="/items/pending" element={
               <ProtectedRoute><PendingItems /></ProtectedRoute>
+            } />
+            <Route path="/items/enriched" element={
+              <ProtectedRoute><EnrichedItems /></ProtectedRoute>
             } />
             <Route path="/trash" element={
               <ProtectedRoute><Trash /></ProtectedRoute>

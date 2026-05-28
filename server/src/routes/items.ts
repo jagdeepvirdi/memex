@@ -50,6 +50,7 @@ const listQuerySchema = z.object({
   deleted: z.coerce.boolean().default(false),
   unreviewed: z.coerce.boolean().default(false),
   pendingEnrichment: z.coerce.boolean().default(false),
+  enriched: z.coerce.boolean().default(false),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 })
@@ -82,7 +83,7 @@ router.get('/', async (req, res) => {
     return
   }
 
-  const { type, category, tag, q, deleted, unreviewed, pendingEnrichment, limit, offset } = parsed.data
+  const { type, category, tag, q, deleted, unreviewed, pendingEnrichment, enriched, limit, offset } = parsed.data
 
   const conditions: string[] = deleted ? ['i.deleted_at IS NOT NULL'] : ['i.deleted_at IS NULL']
   const params: unknown[] = []
@@ -99,6 +100,10 @@ router.get('/', async (req, res) => {
 
   if (pendingEnrichment) {
     conditions.push(`i.structured = '{}'::jsonb`)
+  }
+
+  if (enriched) {
+    conditions.push(`i.structured != '{}'::jsonb`)
   }
 
   if (category) {

@@ -59,7 +59,7 @@ export async function createItem(item: CreateItemRequest): Promise<Item> {
   })
 }
 
-export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number, pendingEnrichment?: boolean } = {}): Promise<{ items: Item[], total: number }> {
+export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number, pendingEnrichment?: boolean, enriched?: boolean } = {}): Promise<{ items: Item[], total: number }> {
   const params = new URLSearchParams()
   if (options.type) params.append('type', options.type)
   if (options.category) params.append('category', options.category)
@@ -67,6 +67,7 @@ export async function fetchItems(options: { type?: string, category?: string, ta
   if (options.limit) params.append('limit', options.limit.toString())
   if (options.offset) params.append('offset', options.offset.toString())
   if (options.pendingEnrichment) params.append('pendingEnrichment', 'true')
+  if (options.enriched) params.append('enriched', 'true')
 
   return apiFetch<{ items: Item[], total: number }>(`/items?${params.toString()}`)
 }
