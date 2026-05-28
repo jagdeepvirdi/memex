@@ -41,7 +41,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'memex-default-secret'
 
 app.use(helmet()) // Security headers
 app.use(cors())   // Enable CORS for all routes (standard for local-first apps)
-app.use(express.json())
+app.use(express.json({ limit: '50mb' }))
 
 // ── Auth Middleware ──────────────────────────────────────────────────────────
 
