@@ -47,6 +47,43 @@
 
 ---
 
+## 🔧 Setup & Dependencies
+
+### MarkItDown — File Ingestion (PDF, Word, PPT, Excel, Images)
+**License:** MIT — microsoft/markitdown — no restrictions.
+
+**What it does:** Converts documents to Markdown so Ollama can classify them.
+Adds a "File" tab to Quick Add (drag-and-drop PDF, Word, PowerPoint, Excel, CSV, images, HTML, EPUB).
+
+**One-time installation (requires Python 3.10+):**
+```bash
+pip install 'markitdown[all]'
+```
+
+**Verify install:**
+```bash
+markitdown --help
+```
+
+**After installing:** Restart the Memex server. Settings → Intelligence Engine will show a green "Installed" badge.
+
+**Supported formats:** PDF · DOCX/DOC · PPTX/PPT · XLSX/XLS · CSV · JPG/PNG/GIF/WebP · HTML · JSON · XML · EPUB · TXT · MD
+
+**How the flow works:**
+1. Open Quick Add → File tab
+2. Drop or browse a file
+3. Click "Convert & Classify with AI" → MarkItDown converts to Markdown → Ollama classifies
+4. Review the preview card (title, type, categories, tags)
+5. Click "Save to Memex"
+
+**If MarkItDown is not installed:** The File tab shows the pip install command. The server returns HTTP 503 with the install instructions.
+
+**Server endpoints added:**
+- `GET /api/ingest/markitdown/health` — returns `{ installed: true/false }` (public, no auth)
+- `POST /api/ingest/file` — accepts multipart file, returns classified preview item
+
+---
+
 ## 🟢 Features / Improvements
 
 - [ ] Wire up model selector in Settings (llama3.2 vs gemma3:4b)
