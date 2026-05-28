@@ -86,6 +86,16 @@ markitdown --help
 
 ## 🟢 Features / Improvements
 
+- [ ] **ETA on AI Enrichment progress widget (Sidebar)**
+  - Track when enrichment started and how many notes were pending at that point
+  - Every poll (5s), compute rate = notes_classified / elapsed_seconds
+  - Display: "~12 min left" or "~3 notes/min" alongside the X/764 counter
+  - Implementation: `GET /api/items/enrichment` already returns `pending` + `total`;
+    store `{ startTime, startPending }` in component state on first non-zero result,
+    then derive `rate = (startPending - pending) / elapsed` and `eta = pending / rate`
+  - Edge cases: rate = 0 (just started, show "calculating..."), rate very slow (show hours)
+  - Already have the data — purely a frontend calculation, no server changes needed
+
 - [ ] Wire up model selector in Settings (llama3.2 vs gemma3:4b)
 - [ ] Pagination on Dashboard and category pages (currently limited to 12/50)
 - [ ] Bulk delete from PendingItems / EnrichedItems pages
