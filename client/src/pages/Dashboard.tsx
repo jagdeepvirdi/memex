@@ -150,7 +150,7 @@ export default function Dashboard() {
           <section className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-xl text-ink">Recent Additions</h3>
-              <button className="text-xs text-accent hover:underline font-medium">View All Items</button>
+              <button onClick={() => setShowSearch(true)} className="text-xs text-accent hover:underline font-medium">View All Items</button>
             </div>
             
             {loading ? (
@@ -160,7 +160,7 @@ export default function Dashboard() {
             ) : items.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {items.map(item => (
-                  <ItemCard key={item.id} item={item} />
+                  <ItemCard key={item.id} item={item} onClick={() => navigate(`/item/${item.id}`)} />
                 ))}
               </div>
             ) : (
