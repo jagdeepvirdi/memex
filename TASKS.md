@@ -148,6 +148,19 @@ markitdown --help
 
 ---
 
+- [ ] **"Mark All as Reviewed" bulk action for enriched Keep notes**
+  - **Problem:** Every Keep note imports with `reviewed=false`. After Ollama enriches them the
+    badge stays — clicking 764 individual REVIEW badges is impractical.
+  - **Where to add it:** Button on the `/items/enriched` page header — "Mark All as Reviewed".
+  - **Server:** `PUT /api/items/review-all` — sets `reviewed=true` WHERE `source='keep'`
+    AND `structured != '{}'::jsonb` (only enriched notes, not pending ones).
+  - **Optional quality gate:** Only auto-approve notes that have at least one category AND a
+    non-empty summary — leaves genuinely poor classifications still flagged for manual review.
+  - **What "reviewed" means:** User has confirmed the AI's type/categories/tags are correct.
+    It only controls the pulsing amber REVIEW badge on item cards — no other functional impact.
+
+---
+
 ## 🟢 Features / Improvements
 
 - [ ] **ETA on AI Enrichment progress widget (Sidebar)**
