@@ -6,6 +6,7 @@ import { scrapeUrl } from '../services/scraper.js';
 import { summarizeAndClassify } from '../services/summarizer.js';
 import { parseKeepZip } from '../services/keepImporter.js';
 import { classify, classifyBatch } from '../services/classifier.js';
+import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { pool } from '../db/client.js';
 import { setItemCategories, setItemTags } from '../db/helpers.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
@@ -188,6 +189,61 @@ router.get('/jobs/:id', (req, res) => {
     ? ((job.completedAt - job.startedAt) / 1000).toFixed(1)
     : ((Date.now() - job.startedAt) / 1000).toFixed(1);
   res.json({ ...job, elapsed });
+});
+
+// ── GET /api/ingest/markitdown/health ─────────────────────────────────────────
+
+router.get('/markitdown/health', async (_req, res) => {
+  const installed = await checkMarkitdownInstalled();
+  res.json({ installed });
+});
+
+// ── POST /api/ingest/file — convert any document to Markdown → classify ───────
+
+router.post('/file', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  const { originalname, buffer, mimetype } = req.file;
+
+  if (!SUPPORTED_MIME_TYPES.includes(mimetype) && !originalname.match(/\.(pdf|docx?|pptx?|xlsx?|csv|jpe?g|png|gif|webp|bmp|html?|xml|json|epub|txt|md)$/i)) {
+    return res.status(415).json({ error: `Unsupported file type: ${mimetype}` });
+  }
+
+  try {
+    const markdown = await convertToMarkdown(buffer, originalname);
+
+    if (!markdown.trim()) {
+      return res.status(422).json({ error: 'No text could be extracted from this file.' });
+    }
+
+    // Classify using first 3000 chars — enough context without overwhelming Ollama
+    const classification = await classify(markdown.slice(0, 3000));
+
+    // Fall back to filename (without extension) if AI didn't infer a title
+    if (!classification.title || classification.title === 'Untitled') {
+      classification.title = originalname.replace(/\.[^.]+$/, '');
+    }
+
+    res.json({
+      preview: {
+        title: classification.title,
+        type: classification.type,
+        content: markdown,
+        structured: { ...classification.structured, summary: classification.summary },
+        categories: classification.categories,
+        tags: classification.tags,
+        source: 'manual',
+        sourceUrl: undefined,
+      },
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'File conversion failed';
+    console.error('File ingest error:', err);
+    if (msg.includes('not found')) {
+      return res.status(503).json({ error: msg });
+    }
+    res.status(500).json({ error: msg });
+  }
 });
 
 router.post('/text', async (req, res) => {

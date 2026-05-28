@@ -47,7 +47,7 @@ app.use(express.json({ limit: '50mb' }))
 
 const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
   // Public paths
-  if (req.path.startsWith('/api/auth') || req.path.startsWith('/api/health')) {
+  if (req.path.startsWith('/api/auth') || req.path.startsWith('/api/health') || req.path === '/api/ingest/markitdown/health') {
     return next()
   }
   

@@ -30,12 +30,16 @@ export default function SettingsPage() {
   const [ollamaStatus, setOllamaStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
   const [enrichStatus, setEnrichStatus] = useState<{ pending: number; total: number } | null>(null)
   const [enriching, setEnriching] = useState(false)
+  const [markitdownInstalled, setMarkitdownInstalled] = useState<boolean | null>(null)
 
   useEffect(() => {
     loadCategories()
     apiFetch<{ pending: number; total: number }>('/items/enrichment')
       .then(setEnrichStatus)
       .catch(() => {})
+    apiFetch<{ installed: boolean }>('/ingest/markitdown/health')
+      .then(r => setMarkitdownInstalled(r.installed))
+      .catch(() => setMarkitdownInstalled(false))
   }, [])
 
   const handleReEnrich = async () => {
@@ -172,6 +176,25 @@ export default function SettingsPage() {
                      <p className="text-xs text-ink-muted mt-0.5">Used for semantic search and related items.</p>
                   </div>
                   <span className="text-xs text-ink-muted font-mono bg-white/5 px-2 py-1 rounded">nomic-embed-text</span>
+               </div>
+
+               <div className="flex items-center justify-between">
+                  <div>
+                     <p className="text-sm text-ink font-medium">MarkItDown <span className="text-[10px] text-ink-muted font-sans ml-1">MIT · microsoft/markitdown</span></p>
+                     <p className="text-xs text-ink-muted mt-0.5">Converts PDF, Word, Excel, PowerPoint, images → Markdown for AI ingestion.</p>
+                     {markitdownInstalled === false && (
+                       <code className="block mt-1.5 text-[10px] bg-bg text-accent px-2 py-1 rounded font-mono border border-white/10">
+                         pip install 'markitdown[all]'
+                       </code>
+                     )}
+                  </div>
+                  {markitdownInstalled === null ? (
+                    <Loader2 size={14} className="animate-spin text-ink-muted" />
+                  ) : markitdownInstalled ? (
+                    <span className="flex items-center gap-1 text-xs text-green-400 font-medium"><Check size={12} /> Installed</span>
+                  ) : (
+                    <span className="text-xs text-yellow-400 font-medium">Not installed</span>
+                  )}
                </div>
 
                {enrichStatus && enrichStatus.total > 0 && (

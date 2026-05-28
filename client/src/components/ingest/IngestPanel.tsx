@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Loader2, Plus, Globe, X, FolderArchive, FileText } from 'lucide-react';
+import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import { ingestUrl, createItem } from '../../lib/api';
 import ItemCard from '../cards/ItemCard';
 import KeepImportPanel from './KeepImportPanel';
+import FileIngestPanel from './FileIngestPanel';
 import Editor from '../Editor';
 import type { Item, ItemType, CreateItemRequest } from '../../../../shared/types';
 
@@ -13,7 +14,7 @@ interface IngestPanelProps {
 }
 
 export default function IngestPanel({ onSuccess, onCancel }: IngestPanelProps) {
-  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual'>('url');
+  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual' | 'file'>('url');
   const [url, setUrl] = useState('');
   const [manualText, setManualText] = useState('');
   const [loading, setLoading] = useState(false);
@@ -148,7 +149,16 @@ export default function IngestPanel({ onSuccess, onCancel }: IngestPanelProps) {
           }`}
         >
           <FolderArchive size={16} />
-          Google Keep ZIP
+          Google Keep
+        </button>
+        <button
+          onClick={() => setActiveTab('file')}
+          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+            activeTab === 'file' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
+          }`}
+        >
+          <Paperclip size={16} />
+          File
         </button>
       </div>
 
@@ -218,8 +228,10 @@ export default function IngestPanel({ onSuccess, onCancel }: IngestPanelProps) {
               <PreviewState preview={preview} setPreview={setPreview} handleSave={handleSave} isSaving={isSaving} error={error} />
             )}
           </>
-        ) : (
+        ) : activeTab === 'keep' ? (
           <KeepImportPanel />
+        ) : (
+          <FileIngestPanel onSuccess={onSuccess} />
         )}
       </div>
     </div>
