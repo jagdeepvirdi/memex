@@ -81,6 +81,7 @@ export default function KeepImportPanel() {
       setSavedCount(data.saved);
       setJobId(data.jobId);
       setImportComplete(true);
+      localStorage.setItem('memex-import-job', JSON.stringify({ jobId: data.jobId, total: data.saved }));
 
       // Poll progress in background so user can watch enrichment happen
       const poll = setInterval(async () => {

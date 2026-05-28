@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
-import { 
-  Home, 
-  Folder, 
-  Shield, 
-  Tag as TagIcon, 
-  ChevronRight, 
+import {
+  Home,
+  Folder,
+  Shield,
+  Tag as TagIcon,
+  ChevronRight,
   ChevronDown,
   Settings as SettingsIcon,
   LogOut,
   Brain,
-  Trash2
+  Trash2,
+  Sparkles,
+  Check
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchCategories, fetchTags, apiFetch } from '../../lib/api';
@@ -25,6 +27,7 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
   const [aiStatus, setAiStatus] = useState<'ok' | 'error' | 'loading'>('loading');
+  const [enrichment, setEnrichment] = useState<{ total: number; completed: number; progress: number; elapsed: string; done: boolean } | null>(null);
   const navigate = useNavigate();
   const { logout, user } = useAuthStore();
 
@@ -44,7 +47,35 @@ export default function Sidebar({ activeSection }: SidebarProps) {
 
     checkStatus();
     const interval = setInterval(checkStatus, 30000);
-    return () => clearInterval(interval);
+
+    // Poll active import job if one exists
+    const stored = localStorage.getItem('memex-import-job');
+    let jobInterval: ReturnType<typeof setInterval> | null = null;
+    if (stored) {
+      const { jobId, total } = JSON.parse(stored);
+      jobInterval = setInterval(async () => {
+        try {
+          const job = await apiFetch<any>(`/ingest/jobs/${jobId}`);
+          const done = job.status === 'completed' || job.status === 'failed';
+          setEnrichment({ total, completed: job.completed ?? 0, progress: job.progress, elapsed: job.elapsed, done });
+          if (done) {
+            clearInterval(jobInterval!);
+            localStorage.removeItem('memex-import-job');
+            setTimeout(() => setEnrichment(null), 5000);
+          }
+        } catch {
+          // Job gone (server restarted) — stop polling
+          clearInterval(jobInterval!);
+          localStorage.removeItem('memex-import-job');
+          setEnrichment(null);
+        }
+      }, 3000);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (jobInterval) clearInterval(jobInterval);
+    };
   }, []);
 
   const toggleCat = (id: string, e: React.MouseEvent) => {
@@ -150,6 +181,29 @@ export default function Sidebar({ activeSection }: SidebarProps) {
                </button>
             </div>
          </div>
+
+         {enrichment && (
+           <div className={`p-3 rounded-xl border transition-all ${enrichment.done ? 'bg-green-500/10 border-green-500/20' : 'bg-accent/5 border-accent/20'}`}>
+             <div className="flex items-center justify-between mb-2">
+               <p className="text-[9px] text-ink-muted uppercase tracking-widest font-bold">AI Enrichment</p>
+               {enrichment.done
+                 ? <Check size={10} className="text-green-400" />
+                 : <Sparkles size={10} className="text-accent animate-pulse" />}
+             </div>
+             <div className="flex items-center justify-between mb-1.5">
+               <span className="text-[10px] text-ink font-mono">
+                 {enrichment.done ? 'Done' : `${enrichment.completed} / ${enrichment.total}`}
+               </span>
+               <span className="text-[10px] text-ink-muted">{enrichment.elapsed}s</span>
+             </div>
+             <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+               <div
+                 className={`h-full rounded-full transition-all duration-500 ${enrichment.done ? 'bg-green-400' : 'bg-accent'}`}
+                 style={{ width: `${enrichment.progress}%` }}
+               />
+             </div>
+           </div>
+         )}
 
          <div className="p-3 bg-white/5 rounded-xl border border-white/5 group hover:border-white/10 transition-all">
             <div className="flex items-center justify-between mb-2">
