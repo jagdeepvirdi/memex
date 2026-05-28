@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Loader2, Upload, Check, AlertCircle, FileJson } from 'lucide-react';
 import { createItem, apiFetch } from '../../lib/api';
+import { useAuthStore } from '../../store/authStore';
 import ItemCard from '../cards/ItemCard';
 import type { CreateItemRequest, ItemSource } from '../../../../shared/types';
 
@@ -48,18 +49,21 @@ export default function KeepImportPanel() {
       const formData = new FormData();
       formData.append('file', file);
 
+      const token = useAuthStore.getState().token
       const res = await fetch('/api/ingest/keep', {
         method: 'POST',
         body: formData,
         headers: {
-           // Auth header is missing here, I should use apiFetch style or manually add it
-           'Authorization': `Bearer ${localStorage.getItem('memex-auth') ? JSON.parse(localStorage.getItem('memex-auth')!).state.token : ''}`
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         }
       });
 
       if (!res.ok) throw new Error('Failed to upload ZIP');
 
       const data = await res.json();
+      if (data.notes.length === 0) {
+        throw new Error('No Keep notes found in ZIP. Make sure you uploaded a Google Takeout ZIP containing your Keep data.');
+      }
       setNotes(data.notes);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to upload ZIP');

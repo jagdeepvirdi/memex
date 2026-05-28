@@ -17,8 +17,11 @@ export function parseKeepZip(buffer: Buffer): KeepNote[] {
   const seenHashes = new Set<string>();
 
   for (const entry of zipEntries) {
-    // Keep takeout stores notes in Keep/ folder as .json files
-    if (entry.entryName.startsWith('Keep/') && entry.entryName.endsWith('.json')) {
+    // Google Takeout stores notes at Keep/*.json or Takeout/Keep/*.json
+    const isKeepJson =
+      (entry.entryName.startsWith('Keep/') || entry.entryName.includes('/Keep/')) &&
+      entry.entryName.endsWith('.json')
+    if (isKeepJson) {
       try {
         const content = entry.getData().toString('utf8');
         const data = JSON.parse(content);
