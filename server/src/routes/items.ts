@@ -49,6 +49,7 @@ const listQuerySchema = z.object({
   q: z.string().optional(),
   deleted: z.coerce.boolean().default(false),
   unreviewed: z.coerce.boolean().default(false),
+  pendingEnrichment: z.coerce.boolean().default(false),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 })
@@ -81,7 +82,7 @@ router.get('/', async (req, res) => {
     return
   }
 
-  const { type, category, tag, q, deleted, unreviewed, limit, offset } = parsed.data
+  const { type, category, tag, q, deleted, unreviewed, pendingEnrichment, limit, offset } = parsed.data
 
   const conditions: string[] = deleted ? ['i.deleted_at IS NOT NULL'] : ['i.deleted_at IS NULL']
   const params: unknown[] = []
@@ -94,6 +95,10 @@ router.get('/', async (req, res) => {
 
   if (unreviewed) {
     conditions.push(`i.reviewed = FALSE`)
+  }
+
+  if (pendingEnrichment) {
+    conditions.push(`i.structured = '{}'::jsonb`)
   }
 
   if (category) {
@@ -347,19 +352,27 @@ router.get('/enrichment', async (_req, res) => {
 
 router.get('/stats', async (_req, res) => {
   try {
-    const totalResult = await pool.query('SELECT COUNT(*) FROM items WHERE deleted_at IS NULL')
+    const { rows } = await pool.query(`
+      SELECT
+        COUNT(*)                                                        AS total,
+        COUNT(*) FILTER (WHERE structured != '{}'::jsonb)              AS ai_enriched,
+        COUNT(*) FILTER (WHERE structured  = '{}'::jsonb)              AS pending_ai,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') AS recent
+      FROM items WHERE deleted_at IS NULL
+    `)
     const typeResult = await pool.query('SELECT type, COUNT(*) FROM items WHERE deleted_at IS NULL GROUP BY type')
     const vaultResult = await pool.query('SELECT COUNT(*) FROM vault_items')
-    const recentResult = await pool.query('SELECT COUNT(*) FROM items WHERE deleted_at IS NULL AND created_at > NOW() - INTERVAL \'24 hours\'')
 
     const itemsByType: Record<string, number> = {}
     typeResult.rows.forEach(r => itemsByType[r.type] = parseInt(r.count, 10))
 
     res.json({
-      totalItems: parseInt(totalResult.rows[0].count, 10),
+      totalItems:      parseInt(rows[0].total,       10),
+      aiEnriched:      parseInt(rows[0].ai_enriched, 10),
+      pendingAI:       parseInt(rows[0].pending_ai,  10),
       itemsByType,
       totalVaultItems: parseInt(vaultResult.rows[0].count, 10),
-      recentActivity: parseInt(recentResult.rows[0].count, 10)
+      recentActivity:  parseInt(rows[0].recent,      10),
     })
   } catch (err) {
     console.error('GET /api/items/stats error:', err)

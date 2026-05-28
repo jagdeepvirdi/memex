@@ -79,7 +79,7 @@ function Start-BgProcess {
         -WorkingDirectory $WorkDir `
         -RedirectStandardOutput $logStdout `
         -RedirectStandardError  $logStderr `
-        -NoNewWindow -PassThru
+        -WindowStyle Hidden -PassThru
 
     $proc.Id | Set-Content (Get-PidFile $Name)
     ok "$Name started  pid=$($proc.Id)"

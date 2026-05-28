@@ -128,10 +128,12 @@ export default function Dashboard() {
                  label="Total Items" 
                  value={stats?.totalItems ?? 0} 
                />
-               <StatCard 
-                 icon={<Zap size={18} className="text-yellow-400" />} 
-                 label="AI Classified" 
-                 value={stats?.totalItems ?? 0} 
+               <StatCard
+                 icon={<Zap size={18} className="text-yellow-400" />}
+                 label="AI Enriched"
+                 value={stats?.aiEnriched ?? 0}
+                 sub={stats && stats.pendingAI > 0 ? `${stats.pendingAI} pending` : undefined}
+                 onClick={stats && stats.pendingAI > 0 ? () => navigate('/items/pending') : undefined}
                />
                <StatCard 
                  icon={<Key size={18} className="text-teal-400" />} 
@@ -210,16 +212,22 @@ export default function Dashboard() {
   )
 }
 
-function StatCard({ icon, label, value }: { icon: React.ReactNode, label: string, value: number | string }) {
+function StatCard({ icon, label, value, sub, onClick }: { icon: React.ReactNode, label: string, value: number | string, sub?: string, onClick?: () => void }) {
   return (
-    <div className="bg-surface/50 border border-white/5 p-4 rounded-2xl flex flex-col gap-3 hover:border-white/10 transition-all group">
+    <div
+      onClick={onClick}
+      className={`bg-surface/50 border border-white/5 p-4 rounded-2xl flex flex-col gap-3 hover:border-white/10 transition-all group ${onClick ? 'cursor-pointer' : ''}`}
+    >
        <div className="flex items-center gap-2">
           <div className="p-2 bg-white/5 rounded-lg group-hover:scale-110 transition-transform">
              {icon}
           </div>
           <span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">{label}</span>
        </div>
-       <span className="text-2xl font-mono text-ink ml-1">{value}</span>
+       <div className="flex items-end justify-between ml-1">
+         <span className="text-2xl font-mono text-ink">{value}</span>
+         {sub && <span className="text-[10px] text-accent font-medium pb-0.5">{sub}</span>}
+       </div>
     </div>
   )
 }

@@ -59,13 +59,14 @@ export async function createItem(item: CreateItemRequest): Promise<Item> {
   })
 }
 
-export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number } = {}): Promise<{ items: Item[], total: number }> {
+export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number, pendingEnrichment?: boolean } = {}): Promise<{ items: Item[], total: number }> {
   const params = new URLSearchParams()
   if (options.type) params.append('type', options.type)
   if (options.category) params.append('category', options.category)
   if (options.tag) params.append('tag', options.tag)
   if (options.limit) params.append('limit', options.limit.toString())
   if (options.offset) params.append('offset', options.offset.toString())
+  if (options.pendingEnrichment) params.append('pendingEnrichment', 'true')
 
   return apiFetch<{ items: Item[], total: number }>(`/items?${params.toString()}`)
 }

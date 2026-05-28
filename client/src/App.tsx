@@ -8,6 +8,7 @@ import Vault from './pages/Vault'
 import Settings from './pages/Settings'
 import Login from './pages/Login'
 import Trash from './pages/Trash'
+import PendingItems from './pages/PendingItems'
 import SemanticGraph from './pages/SemanticGraph'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -35,6 +36,9 @@ export default function App() {
             } />
             <Route path="/vault" element={
               <ProtectedRoute><Vault /></ProtectedRoute>
+            } />
+            <Route path="/items/pending" element={
+              <ProtectedRoute><PendingItems /></ProtectedRoute>
             } />
             <Route path="/trash" element={
               <ProtectedRoute><Trash /></ProtectedRoute>

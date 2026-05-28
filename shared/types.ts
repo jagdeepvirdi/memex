@@ -160,7 +160,9 @@ export interface HealthResponse {
 
 export interface StatsResponse {
   totalItems: number
+  aiEnriched: number   // items Ollama has classified (structured != {})
+  pendingAI: number    // items still waiting for AI enrichment
   itemsByType: Record<ItemType, number>
   totalVaultItems: number
-  recentActivity: number // count in last 24h
+  recentActivity: number
 }
