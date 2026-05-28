@@ -315,10 +315,14 @@ markitdown --help
   - Attraction → `Travel > Attractions`
   - Destination/City → `Travel > Destinations`
 
-  **Why this is powerful:** A Keep note from 3 years ago saying "Try this ramen place in
-  Tokyo" becomes a searchable, filterable entry in your Places database — with the original
-  source URL, your own rating context, and one-click Google Maps navigation. Your entire
-  travel history and wishlist lives in one structured table.
+  **Vision — what we are building toward:**
+  > A Keep note from years ago like *"Dog-friendly spots near Kanchanaburi — river rafting
+  > place, good food"* becomes a filterable entry in `/places` with visit status, your rating
+  > context, and a Maps button — your entire travel wishlist and history in one structured table.
+
+  This is the north star for the Places feature. Every restaurant, café, hotel, and attraction
+  ever mentioned across all Keep notes should surface here — enriched, organised, and actionable.
+  No more digging through old notes to remember "where was that place I wanted to visit?"
 
 ---
 
