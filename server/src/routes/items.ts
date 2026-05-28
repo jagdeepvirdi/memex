@@ -261,6 +261,26 @@ router.post('/', async (req, res) => {
 
 // ── GET /api/items/stats ───────────────────────────────────────────────────────
 
+// Items from Keep that still have empty structured data = not yet AI-classified
+router.get('/enrichment', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE structured = '{}'::jsonb) AS pending,
+        COUNT(*) AS total
+      FROM items
+      WHERE source = 'keep' AND deleted_at IS NULL
+    `)
+    res.json({
+      pending: parseInt(rows[0].pending, 10),
+      total:   parseInt(rows[0].total,   10),
+    })
+  } catch (err) {
+    console.error('GET /api/items/enrichment error:', err)
+    res.status(500).json({ error: 'Failed to fetch enrichment status' })
+  }
+})
+
 router.get('/stats', async (_req, res) => {
   try {
     const totalResult = await pool.query('SELECT COUNT(*) FROM items WHERE deleted_at IS NULL')

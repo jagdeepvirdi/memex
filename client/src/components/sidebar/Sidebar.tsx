@@ -27,7 +27,7 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   const [tags, setTags] = useState<Tag[]>([]);
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
   const [aiStatus, setAiStatus] = useState<'ok' | 'error' | 'loading'>('loading');
-  const [enrichment, setEnrichment] = useState<{ total: number; completed: number; progress: number; elapsed: string; done: boolean } | null>(null);
+  const [enrichment, setEnrichment] = useState<{ pending: number; total: number } | null>(null);
   const navigate = useNavigate();
   const { logout, user } = useAuthStore();
 
@@ -48,33 +48,25 @@ export default function Sidebar({ activeSection }: SidebarProps) {
     checkStatus();
     const interval = setInterval(checkStatus, 30000);
 
-    // Poll active import job if one exists
-    const stored = localStorage.getItem('memex-import-job');
-    let jobInterval: ReturnType<typeof setInterval> | null = null;
-    if (stored) {
-      const { jobId, total } = JSON.parse(stored);
-      jobInterval = setInterval(async () => {
-        try {
-          const job = await apiFetch<any>(`/ingest/jobs/${jobId}`);
-          const done = job.status === 'completed' || job.status === 'failed';
-          setEnrichment({ total, completed: job.completed ?? 0, progress: job.progress, elapsed: job.elapsed, done });
-          if (done) {
-            clearInterval(jobInterval!);
-            localStorage.removeItem('memex-import-job');
-            setTimeout(() => setEnrichment(null), 5000);
-          }
-        } catch {
-          // Job gone (server restarted) — stop polling
-          clearInterval(jobInterval!);
-          localStorage.removeItem('memex-import-job');
+    // Poll DB-backed enrichment count every 5s
+    const checkEnrichment = async () => {
+      try {
+        const data = await apiFetch<{ pending: number; total: number }>('/items/enrichment');
+        if (data.total > 0) {
+          setEnrichment(data);
+        } else {
           setEnrichment(null);
         }
-      }, 3000);
-    }
+      } catch {
+        // ignore — non-critical
+      }
+    };
+    checkEnrichment();
+    const enrichInterval = setInterval(checkEnrichment, 5000);
 
     return () => {
       clearInterval(interval);
-      if (jobInterval) clearInterval(jobInterval);
+      clearInterval(enrichInterval);
     };
   }, []);
 
@@ -182,24 +174,30 @@ export default function Sidebar({ activeSection }: SidebarProps) {
             </div>
          </div>
 
-         {enrichment && (
-           <div className={`p-3 rounded-xl border transition-all ${enrichment.done ? 'bg-green-500/10 border-green-500/20' : 'bg-accent/5 border-accent/20'}`}>
+         {enrichment && enrichment.total > 0 && (
+           <div className={`p-3 rounded-xl border transition-all ${
+             enrichment.pending === 0 ? 'bg-green-500/10 border-green-500/20' : 'bg-accent/5 border-accent/20'
+           }`}>
              <div className="flex items-center justify-between mb-2">
                <p className="text-[9px] text-ink-muted uppercase tracking-widest font-bold">AI Enrichment</p>
-               {enrichment.done
+               {enrichment.pending === 0
                  ? <Check size={10} className="text-green-400" />
                  : <Sparkles size={10} className="text-accent animate-pulse" />}
              </div>
              <div className="flex items-center justify-between mb-1.5">
                <span className="text-[10px] text-ink font-mono">
-                 {enrichment.done ? 'Done' : `${enrichment.completed} / ${enrichment.total}`}
+                 {enrichment.pending === 0
+                   ? `${enrichment.total} classified`
+                   : `${enrichment.total - enrichment.pending} / ${enrichment.total}`}
                </span>
-               <span className="text-[10px] text-ink-muted">{enrichment.elapsed}s</span>
+               {enrichment.pending > 0 && (
+                 <span className="text-[10px] text-ink-muted">{enrichment.pending} left</span>
+               )}
              </div>
              <div className="h-1 bg-white/10 rounded-full overflow-hidden">
                <div
-                 className={`h-full rounded-full transition-all duration-500 ${enrichment.done ? 'bg-green-400' : 'bg-accent'}`}
-                 style={{ width: `${enrichment.progress}%` }}
+                 className={`h-full rounded-full transition-all duration-500 ${enrichment.pending === 0 ? 'bg-green-400' : 'bg-accent'}`}
+                 style={{ width: `${Math.round(((enrichment.total - enrichment.pending) / enrichment.total) * 100)}%` }}
                />
              </div>
            </div>
