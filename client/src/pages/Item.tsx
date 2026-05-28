@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield } from 'lucide-react'
+import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
 import ItemCard from '../components/cards/ItemCard'
@@ -16,8 +16,13 @@ export default function ItemPage() {
   const [loading, setLoading] = useState(true)
   const [loadingRelated, setLoadingRelated] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [editedTitle, setEditedTitle] = useState('')
   const [editedContent, setEditedContent] = useState('')
+  const [editedCategories, setEditedCategories] = useState('')
+  const [editedTags, setEditedTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState('')
   const [saving, setSaving] = useState(false)
+  const tagInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!id) return;
@@ -25,7 +30,10 @@ export default function ItemPage() {
     apiFetch<Item>(`/items/${id}`)
       .then(res => {
         setItem(res)
+        setEditedTitle(res.title)
         setEditedContent(res.content)
+        setEditedCategories(res.categories.join(' > '))
+        setEditedTags(res.tags)
         
         setLoadingRelated(true)
         return apiFetch<Item[]>(`/items/${id}/related`)
@@ -57,11 +65,24 @@ export default function ItemPage() {
     if (!item) return
     setSaving(true)
     try {
+      // Parse category path — accepts "Food > Savory > Indian" or "Food, Savory, Indian"
+      const categories = editedCategories
+        .split(/[>\/,]/)
+        .map(s => s.trim())
+        .filter(Boolean)
+
       const updated = await apiFetch<Item>(`/items/${item.id}`, {
         method: 'PUT',
-        body: JSON.stringify({ content: editedContent })
+        body: JSON.stringify({
+          title: editedTitle,
+          content: editedContent,
+          categories,
+          tags: editedTags,
+        })
       })
       setItem(updated)
+      setEditedCategories(updated.categories.join(' > '))
+      setEditedTags(updated.tags)
       setIsEditing(false)
       toast.success('Changes saved')
     } catch (err) {
@@ -71,6 +92,24 @@ export default function ItemPage() {
       setSaving(false)
     }
   }
+
+  const startEditing = () => {
+    if (!item) return
+    setEditedTitle(item.title)
+    setEditedContent(item.content)
+    setEditedCategories(item.categories.join(' > '))
+    setEditedTags(item.tags)
+    setIsEditing(true)
+  }
+
+  const addTag = () => {
+    const t = tagInput.trim().toLowerCase()
+    if (t && !editedTags.includes(t)) setEditedTags(prev => [...prev, t])
+    setTagInput('')
+    tagInputRef.current?.focus()
+  }
+
+  const removeTag = (tag: string) => setEditedTags(prev => prev.filter(t => t !== tag))
 
   if (loading) {
     return (
@@ -120,8 +159,8 @@ export default function ItemPage() {
           <div className="flex items-center gap-3">
             {!isEditing ? (
               <>
-                <button 
-                  onClick={() => setIsEditing(true)}
+                <button
+                  onClick={startEditing}
                   className="p-2 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all"
                   title="Edit Item"
                 >
@@ -137,8 +176,8 @@ export default function ItemPage() {
               </>
             ) : (
               <>
-                <button 
-                  onClick={() => { setIsEditing(false); setEditedContent(item.content); }}
+                <button
+                  onClick={() => { setIsEditing(false); setEditedTitle(item.title); setEditedContent(item.content); setEditedCategories(item.categories.join(' > ')); setEditedTags(item.tags); }}
                   className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all"
                   title="Cancel"
                 >
@@ -160,25 +199,45 @@ export default function ItemPage() {
         <div className="p-12 max-w-4xl mx-auto w-full flex flex-col gap-12">
           {/* Title Area */}
           <div className="flex flex-col gap-6">
-            <h1 className="font-display text-4xl text-ink leading-tight">{item.title}</h1>
-            
+            {isEditing ? (
+              <input
+                value={editedTitle}
+                onChange={e => setEditedTitle(e.target.value)}
+                className="font-display text-4xl text-ink leading-tight bg-transparent border-b-2 border-accent/50 outline-none w-full pb-1"
+                placeholder="Title"
+                autoFocus
+              />
+            ) : (
+              <h1 className="font-display text-4xl text-ink leading-tight">{item.title}</h1>
+            )}
+
             <div className="flex flex-wrap gap-4 text-xs">
               <div className="flex items-center gap-2 text-ink-muted bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
                 <Calendar size={14} className="text-accent" />
                 {new Date(item.createdAt).toLocaleDateString(undefined, { dateStyle: 'long' })}
               </div>
-              
-              {item.categories.length > 0 && (
+
+              {isEditing ? (
+                <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg border border-accent/30 flex-1 min-w-[260px]">
+                  <Folder size={14} className="text-accent shrink-0" />
+                  <input
+                    value={editedCategories}
+                    onChange={e => setEditedCategories(e.target.value)}
+                    className="bg-transparent outline-none text-ink text-xs w-full"
+                    placeholder="Food > Savory > Indian  (or type a new path)"
+                  />
+                </div>
+              ) : item.categories.length > 0 ? (
                 <div className="flex items-center gap-2 text-ink-muted bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
                   <Folder size={14} className="text-accent" />
                   {item.categories.join(' › ')}
                 </div>
-              )}
+              ) : null}
 
               {item.sourceUrl && (
-                <a 
-                  href={item.sourceUrl} 
-                  target="_blank" 
+                <a
+                  href={item.sourceUrl}
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-accent bg-accent/5 px-3 py-1.5 rounded-lg border border-accent/10 hover:bg-accent/10 transition-all"
                 >
@@ -206,17 +265,37 @@ export default function ItemPage() {
           </div>
 
           {/* Tags */}
-          {item.tags.length > 0 && (
+          {(item.tags.length > 0 || isEditing) && (
             <div className="flex flex-col gap-3">
               <h3 className="text-[10px] text-ink-muted uppercase tracking-widest font-bold flex items-center gap-2">
                 <Tag size={12} /> Tags
               </h3>
-              <div className="flex flex-wrap gap-2">
-                {item.tags.map(tag => (
-                  <span key={tag} className="px-3 py-1 bg-white/5 border border-white/5 rounded-full text-xs text-ink-muted">
+              <div className="flex flex-wrap gap-2 items-center">
+                {(isEditing ? editedTags : item.tags).map(tag => (
+                  <span key={tag} className="flex items-center gap-1 px-3 py-1 bg-white/5 border border-white/5 rounded-full text-xs text-ink-muted group">
                     #{tag}
+                    {isEditing && (
+                      <button onClick={() => removeTag(tag)} className="text-ink-muted/50 hover:text-red-400 transition-colors ml-0.5">
+                        <X size={10} />
+                      </button>
+                    )}
                   </span>
                 ))}
+                {isEditing && (
+                  <div className="flex items-center gap-1">
+                    <input
+                      ref={tagInputRef}
+                      value={tagInput}
+                      onChange={e => setTagInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addTag() } }}
+                      placeholder="Add tag..."
+                      className="bg-white/5 border border-white/10 rounded-full px-3 py-1 text-xs text-ink outline-none focus:border-accent/50 w-28"
+                    />
+                    <button onClick={addTag} className="p-1 text-ink-muted hover:text-accent transition-colors">
+                      <Plus size={14} />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
