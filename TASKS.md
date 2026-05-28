@@ -38,12 +38,12 @@
 
 ---
 
-## 🟡 Medium Priority
+## ✅ Medium Priority (DONE — 130 tests total passing)
 
-- [ ] `server/src/services/classifier.ts` — classify() returns valid schema for recipe, media, note, book types
-- [ ] `server/src/routes/categories.ts` — tree structure, item counts
-- [ ] `server/src/routes/search.ts` — semantic search returns ranked results
-- [ ] `client/src/lib/crypto.ts` — expand beyond happy path (wrong password, corrupted ciphertext)
+- [x] `server/src/services/classifier.ts` — classify() all types, mapToCategories all paths, retry/fallback logic; also fixed non-fiction/fiction key ordering bug
+- [x] `server/src/routes/categories.ts` — buildTree nesting, CRUD, 409 conflicts, self-parent guard
+- [x] `server/src/routes/search.ts` — query required, embed called, filters, graph endpoint
+- [x] `client/src/lib/crypto.ts` — random IV, corrupted ciphertext, empty string, unicode, different salts, long strings
 
 ---
 

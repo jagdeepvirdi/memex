@@ -122,6 +122,13 @@ function mapRecipeCategories(structured: RecipeData): string[] {
 }
 
 const BOOK_GENRE_MAP: Record<string, string> = {
+  // Non-fiction keys must come before 'fiction' — 'non-fiction'.includes('fiction') is true
+  'non-fiction': 'Non-Fiction',
+  nonfiction: 'Non-Fiction',
+  biography: 'Non-Fiction',
+  memoir: 'Non-Fiction',
+  history: 'Non-Fiction',
+  philosophy: 'Non-Fiction',
   fiction: 'Fiction',
   novel: 'Fiction',
   fantasy: 'Fiction',
@@ -130,12 +137,6 @@ const BOOK_GENRE_MAP: Record<string, string> = {
   thriller: 'Fiction',
   mystery: 'Fiction',
   romance: 'Fiction',
-  'non-fiction': 'Non-Fiction',
-  nonfiction: 'Non-Fiction',
-  biography: 'Non-Fiction',
-  memoir: 'Non-Fiction',
-  history: 'Non-Fiction',
-  philosophy: 'Non-Fiction',
   technical: 'Technical',
   programming: 'Technical',
   engineering: 'Technical',
