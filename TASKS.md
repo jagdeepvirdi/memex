@@ -84,6 +84,28 @@ markitdown --help
 
 ---
 
+## 🐛 Known Bugs
+
+- [ ] **Category proliferation / duplicates during AI enrichment**
+  - **Observed:** After enrichment, many new AI-generated categories appear (e.g. "book", "books",
+    "recipe", "travel") alongside the pre-seeded tree (e.g. "Media > Books", "Food > Savory").
+    The original seeded categories appear to be pushed down or replaced.
+  - **Root cause:** Ollama returns free-form category names in its JSON response (e.g. `["book"]`
+    or `["Travel", "Bangkok"]`). `resolveCategoryPath` creates these as new root categories if
+    they don't match any existing node — it has no knowledge of the canonical tree.
+  - **Fix approach:**
+    1. After classify(), map AI categories to the canonical tree using `mapToCategories` as
+       primary source when AI categories don't match known roots
+    2. OR: normalise AI category names before calling `resolveCategoryPath` — fuzzy-match
+       against existing category names and reuse them instead of creating new ones
+    3. OR: add a "merge categories" admin action in Settings that deduplicates and reassigns
+       items from rogue categories (e.g. "book" → "Media > Books")
+  - **Note:** This will get worse as enrichment completes — all 764 notes will add their own
+    AI-invented category paths. Best to fix the classifier pipeline before re-running enrichment.
+  - **Wait until enrichment finishes** to see the full picture, then fix + re-enrich.
+
+---
+
 ## 🟢 Features / Improvements
 
 - [ ] **ETA on AI Enrichment progress widget (Sidebar)**
