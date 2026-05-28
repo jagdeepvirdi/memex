@@ -1,9 +1,8 @@
 import { useState, useRef } from 'react';
 import { Loader2, Upload, Check, AlertCircle, FileJson } from 'lucide-react';
-import { createItem, apiFetch } from '../../lib/api';
+import { apiFetch } from '../../lib/api';
 import { useAuthStore } from '../../store/authStore';
-import ItemCard from '../cards/ItemCard';
-import type { CreateItemRequest, ItemSource } from '../../../../shared/types';
+import type { ItemSource } from '../../../../shared/types';
 
 interface KeepNote {
   title: string;
@@ -13,23 +12,18 @@ interface KeepNote {
   source: ItemSource;
 }
 
-interface ClassifiedNote extends KeepNote {
-  type: any;
-  structured: any;
-  categories: string[];
-  tags: string[];
-}
 
 export default function KeepImportPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState<KeepNote[]>([]);
-  const [classifiedResults, setClassifiedResults] = useState<ClassifiedNote[]>([]);
-  const [isClassifying, setIsClassifying] = useState(false);
-  const [progress, setProgress] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const [importComplete, setImportComplete] = useState(false);
+  const [savedCount, setSavedCount] = useState(0);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [jobProgress, setJobProgress] = useState(0);
+  const [jobElapsed, setJobElapsed] = useState('0');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -72,68 +66,35 @@ export default function KeepImportPanel() {
     }
   };
 
-  const handleClassify = async () => {
+  const handleBulkImport = async () => {
     if (notes.length === 0) return;
-
-    setIsClassifying(true);
-    setError(null);
-    setProgress(0);
-
-    try {
-      const { jobId } = await apiFetch<any>('/ingest/keep/classify', {
-        method: 'POST',
-        body: JSON.stringify({ notes }),
-      });
-
-      // Polling
-      const poll = setInterval(async () => {
-        try {
-          const job = await apiFetch<any>(`/ingest/jobs/${jobId}`);
-          setProgress(job.progress);
-
-          if (job.status === 'completed') {
-            clearInterval(poll);
-            setClassifiedResults(job.results);
-            setIsClassifying(false);
-          } else if (job.status === 'failed') {
-            clearInterval(poll);
-            setError(job.error || 'Batch classification failed');
-            setIsClassifying(false);
-          }
-        } catch (err) {
-          clearInterval(poll);
-          setError('Lost connection to server');
-          setIsClassifying(false);
-        }
-      }, 2000);
-
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Batch classification failed');
-      setIsClassifying(false);
-    }
-  };
-
-  const handleSaveAll = async () => {
-    if (classifiedResults.length === 0) return;
-
     setIsSaving(true);
     setError(null);
 
     try {
-      for (const result of classifiedResults) {
-        const createReq: CreateItemRequest = {
-          title: result.title,
-          type: result.type,
-          content: result.content,
-          categories: result.categories,
-          tags: result.tags,
-          source: result.source,
-        };
-        await createItem(createReq);
-      }
+      const token = useAuthStore.getState().token;
+      const data = await apiFetch<{ saved: number; jobId: string }>('/ingest/keep/bulk', {
+        method: 'POST',
+        body: JSON.stringify({ notes }),
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      setSavedCount(data.saved);
+      setJobId(data.jobId);
       setImportComplete(true);
+
+      // Poll progress in background so user can watch enrichment happen
+      const poll = setInterval(async () => {
+        try {
+          const job = await apiFetch<any>(`/ingest/jobs/${data.jobId}`);
+          setJobProgress(job.progress);
+          setJobElapsed(job.elapsed);
+          if (job.status === 'completed' || job.status === 'failed') clearInterval(poll);
+        } catch {
+          clearInterval(poll);
+        }
+      }, 2000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save items');
+      setError(err instanceof Error ? err.message : 'Failed to import notes');
     } finally {
       setIsSaving(false);
     }
@@ -146,16 +107,36 @@ export default function KeepImportPanel() {
           <Check size={32} />
         </div>
         <div>
-          <h2 className="font-display text-2xl text-ink mb-2">Import Successful!</h2>
+          <h2 className="font-display text-2xl text-ink mb-2">{savedCount} notes saved!</h2>
           <p className="text-ink-muted">
-            {classifiedResults.length} items have been added to your Memex.
+            Your notes are in Memex. AI is classifying them in the background.
           </p>
         </div>
-        <button 
+
+        {/* Background progress */}
+        <div className="w-full max-w-sm space-y-2">
+          <div className="flex justify-between text-xs text-ink-muted">
+            <span>AI enrichment</span>
+            <span>{jobProgress}% · {jobElapsed}s</span>
+          </div>
+          <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-accent transition-all duration-500"
+              style={{ width: `${jobProgress}%` }}
+            />
+          </div>
+          {jobProgress < 100 && (
+            <p className="text-[10px] text-ink-muted text-center">
+              You can go to the dashboard now — classification continues in the background.
+            </p>
+          )}
+        </div>
+
+        <button
           onClick={() => window.location.reload()}
           className="bg-accent text-bg px-8 py-3 rounded-lg font-bold"
         >
-          View Dashboard
+          Go to Dashboard
         </button>
       </div>
     );
@@ -217,96 +198,43 @@ export default function KeepImportPanel() {
           </div>
         )}
 
-        {notes.length > 0 && classifiedResults.length === 0 && (
+        {notes.length > 0 && (
           <div className="space-y-6">
             <div className="bg-white/5 p-4 rounded-lg border border-white/5">
               <p className="text-ink font-medium">{notes.length} notes found</p>
-              <p className="text-ink-muted text-sm mt-1">Ready to classify with local AI (Ollama)</p>
+              <p className="text-ink-muted text-sm mt-1">
+                They'll be saved instantly. AI classification runs in the background.
+              </p>
             </div>
 
-            <div className="max-h-60 overflow-y-auto space-y-2 border border-white/5 rounded-lg p-2">
+            <div className="max-h-52 overflow-y-auto space-y-1 border border-white/5 rounded-lg p-2">
               {notes.map((note, i) => (
                 <div key={i} className="text-xs text-ink-muted p-2 hover:bg-white/5 rounded truncate">
-                  {note.title || note.content.slice(0, 50)}
+                  {note.title || note.content.slice(0, 60) || 'Untitled'}
                 </div>
               ))}
             </div>
 
             <button
-              onClick={handleClassify}
-              disabled={isClassifying}
-              className="w-full bg-accent text-bg py-4 rounded-lg font-bold flex flex-col items-center justify-center gap-1 shadow-lg"
+              onClick={handleBulkImport}
+              disabled={isSaving}
+              className="w-full bg-accent text-bg py-4 rounded-lg font-bold flex flex-col items-center justify-center gap-1 shadow-lg disabled:opacity-50"
             >
-              {isClassifying ? (
+              {isSaving ? (
                 <>
-                  <Loader2 className="animate-spin" />
-                  <span className="text-xs opacity-70">Classifying via Ollama... {progress}%</span>
-                  <div className="w-full max-w-[200px] h-1 bg-white/10 rounded-full mt-2 overflow-hidden">
-                     <div className="h-full bg-accent transition-all duration-500" style={{ width: `${progress}%` }} />
-                  </div>
+                  <Loader2 className="animate-spin" size={20} />
+                  <span className="text-xs opacity-70 font-normal">Saving to database...</span>
                 </>
               ) : (
                 <>
-                  <span>Start AI Classification</span>
-                  <span className="text-[10px] opacity-70 font-normal">This happens in the background</span>
+                  <span>Import {notes.length} Notes Now</span>
+                  <span className="text-[10px] opacity-70 font-normal">AI enrichment runs in the background</span>
                 </>
               )}
             </button>
           </div>
         )}
-
-        {classifiedResults.length > 0 && (
-          <div className="space-y-6 pb-20">
-             <div className="bg-green-500/10 p-4 rounded-lg border border-green-500/20 flex items-center justify-between">
-                <div>
-                  <p className="text-green-500 font-medium">Classification Complete</p>
-                  <p className="text-ink-muted text-sm">{classifiedResults.length} items ready to save</p>
-                </div>
-                <Check className="text-green-500" />
-             </div>
-
-             <div className="grid grid-cols-1 gap-4">
-                {classifiedResults.slice(0, 5).map((result, i) => (
-                  <div key={i} className="opacity-60 scale-[0.98]">
-                    <ItemCard 
-                      item={{ 
-                        ...result, 
-                        id: `p-${i}`, 
-                        createdAt: new Date(), 
-                        updatedAt: new Date(),
-                        structured: result.structured || {}
-                      }} 
-                    />
-                  </div>
-                ))}
-                {classifiedResults.length > 5 && (
-                  <p className="text-center text-ink-muted text-xs italic">
-                    + {classifiedResults.length - 5} more items
-                  </p>
-                )}
-             </div>
-          </div>
-        )}
       </div>
-
-      {classifiedResults.length > 0 && !importComplete && (
-        <div className="p-6 border-t border-white/5 bg-surface sticky bottom-0">
-          <button
-            onClick={handleSaveAll}
-            disabled={isSaving}
-            className="w-full bg-accent text-bg py-4 rounded-lg font-bold flex items-center justify-center gap-2 shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="animate-spin" />
-                Saving to DB...
-              </>
-            ) : (
-              `Confirm and Save ${classifiedResults.length} Items`
-            )}
-          </button>
-        </div>
-      )}
 
       {error && (
         <div className="p-4 m-6 mt-0 bg-red-400/10 border border-red-400/20 rounded-lg text-red-400 text-sm flex items-start gap-3">
