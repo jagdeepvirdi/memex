@@ -27,10 +27,34 @@ export default function SettingsPage() {
   const [categories, setCategories] = useState<Category[]>([])
   const [loadingCats, setLoadingCats] = useState(false)
   const [editingCat, setEditingCat] = useState<{id: string, name: string} | null>(null)
+  const [ollamaStatus, setOllamaStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
+  const [enrichStatus, setEnrichStatus] = useState<{ pending: number; total: number } | null>(null)
+  const [enriching, setEnriching] = useState(false)
 
   useEffect(() => {
     loadCategories()
+    apiFetch<{ pending: number; total: number }>('/items/enrichment')
+      .then(setEnrichStatus)
+      .catch(() => {})
   }, [])
+
+  const handleReEnrich = async () => {
+    setEnriching(true)
+    try {
+      const data = await apiFetch<{ queued: number }>('/items/enrich', { method: 'POST' })
+      if (data.queued === 0) {
+        setSuccess('All notes are already classified.')
+      } else {
+        setSuccess(`Re-queued ${data.queued} notes for AI classification. Check the sidebar for progress.`)
+      }
+      setTimeout(() => setSuccess(null), 5000)
+    } catch {
+      setError('Failed to start enrichment')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setEnriching(false)
+    }
+  }
 
   const loadCategories = async () => {
     setLoadingCats(true)
@@ -81,6 +105,17 @@ export default function SettingsPage() {
     } catch (err) {
       setError('Failed to rename')
     }
+  }
+
+  const handleTestOllama = async () => {
+    setOllamaStatus('testing')
+    try {
+      const data = await apiFetch<{ status: string }>('/health/ollama')
+      setOllamaStatus(data.status === 'ok' ? 'ok' : 'error')
+    } catch {
+      setOllamaStatus('error')
+    }
+    setTimeout(() => setOllamaStatus('idle'), 4000)
   }
 
   const handleDeleteCategory = async (id: string) => {
@@ -139,10 +174,48 @@ export default function SettingsPage() {
                   <span className="text-xs text-ink-muted font-mono bg-white/5 px-2 py-1 rounded">nomic-embed-text</span>
                </div>
 
-               <div className="pt-4 border-t border-white/5">
-                  <button className="text-xs bg-white/5 hover:bg-white/10 text-ink px-4 py-2 rounded-lg transition-all font-medium">
-                     Test Ollama Connection
+               {enrichStatus && enrichStatus.total > 0 && (
+                 <div className="flex items-center justify-between py-3 border-t border-white/5">
+                   <div>
+                     <p className="text-sm text-ink font-medium">AI Enrichment</p>
+                     <p className="text-xs text-ink-muted mt-0.5">
+                       {enrichStatus.pending === 0
+                         ? `All ${enrichStatus.total} Keep notes classified`
+                         : `${enrichStatus.total - enrichStatus.pending} / ${enrichStatus.total} classified — ${enrichStatus.pending} pending`}
+                     </p>
+                   </div>
+                   {enrichStatus.pending > 0 && (
+                     <button
+                       onClick={handleReEnrich}
+                       disabled={enriching}
+                       className="flex items-center gap-2 text-xs bg-accent text-bg px-4 py-2 rounded-lg font-bold hover:bg-accent-deep transition-all disabled:opacity-50"
+                     >
+                       {enriching ? <Loader2 size={12} className="animate-spin" /> : null}
+                       {enriching ? 'Starting...' : 'Re-run Enrichment'}
+                     </button>
+                   )}
+                 </div>
+               )}
+
+               <div className="pt-4 border-t border-white/5 flex items-center gap-4">
+                  <button
+                    onClick={handleTestOllama}
+                    disabled={ollamaStatus === 'testing'}
+                    className="flex items-center gap-2 text-xs bg-white/5 hover:bg-white/10 text-ink px-4 py-2 rounded-lg transition-all font-medium disabled:opacity-50"
+                  >
+                    {ollamaStatus === 'testing' && <Loader2 size={12} className="animate-spin" />}
+                    Test Ollama Connection
                   </button>
+                  {ollamaStatus === 'ok' && (
+                    <span className="flex items-center gap-1.5 text-xs text-green-400">
+                      <Check size={13} /> Connected
+                    </span>
+                  )}
+                  {ollamaStatus === 'error' && (
+                    <span className="flex items-center gap-1.5 text-xs text-red-400">
+                      <AlertCircle size={13} /> Ollama unreachable
+                    </span>
+                  )}
                </div>
             </div>
           </section>

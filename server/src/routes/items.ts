@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { z } from 'zod'
+import pLimit from 'p-limit'
 import { pool } from '../db/client.js'
 import {
   fetchItem,
@@ -260,6 +261,54 @@ router.post('/', async (req, res) => {
 // ... (stats, related, versions, single-fetch routes) ...
 
 // ── GET /api/items/stats ───────────────────────────────────────────────────────
+
+// Re-queue all unclassified Keep items through Ollama
+router.post('/enrich', async (_req, res) => {
+  try {
+    const { rows } = await pool.query<{ id: string; title: string; content: string }>(
+      `SELECT id, title, content FROM items
+       WHERE source = 'keep' AND structured = '{}'::jsonb AND deleted_at IS NULL
+       LIMIT 2000`
+    )
+    if (rows.length === 0) return res.json({ queued: 0 })
+
+    res.json({ queued: rows.length })
+
+    // Fire and forget
+    const limit = pLimit(3)
+    await Promise.all(rows.map(row => limit(async () => {
+      try {
+        const classification = await classify(`Title: ${row.title}\n\nContent: ${row.content}`)
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          await client.query(
+            `UPDATE items SET type=$1, title=$2, structured=$3, updated_at=NOW() WHERE id=$4`,
+            [
+              classification.type,
+              classification.title || row.title,
+              JSON.stringify({ ...classification.structured, summary: classification.summary }),
+              row.id,
+            ]
+          )
+          if (classification.tags.length > 0) await setItemTags(client, row.id, classification.tags)
+          if (classification.categories.length > 0) await setItemCategories(client, row.id, classification.categories)
+          await client.query('COMMIT')
+        } catch (err) {
+          await client.query('ROLLBACK')
+          console.error(`Re-enrich update failed for ${row.id}:`, err)
+        } finally {
+          client.release()
+        }
+      } catch (err) {
+        console.error(`Re-enrich classify failed for ${row.id}:`, err)
+      }
+    })))
+    console.log(`[Re-enrich] Completed ${rows.length} items`)
+  } catch (err) {
+    console.error('POST /api/items/enrich error:', err)
+  }
+})
 
 // Items from Keep that still have empty structured data = not yet AI-classified
 router.get('/enrichment', async (_req, res) => {
