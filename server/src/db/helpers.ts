@@ -52,14 +52,28 @@ export async function resolveCategoryPath(
   let parentId: string | null = null
 
   for (const name of path) {
-    const { rows } = await client.query<{ id: string }>(
-      `INSERT INTO categories (name, parent_id)
-       VALUES ($1, $2)
-       ON CONFLICT (name) WHERE parent_id IS NULL AND $2 IS NULL DO UPDATE SET name = EXCLUDED.name
-       ON CONFLICT (name, parent_id) WHERE parent_id IS NOT NULL DO UPDATE SET name = EXCLUDED.name
-       RETURNING id`,
-      [name, parentId],
-    )
+    let rows: { id: string }[]
+
+    if (parentId === null) {
+      // Root category — conflicts on the (name) WHERE parent_id IS NULL partial index
+      ;({ rows } = await client.query<{ id: string }>(
+        `INSERT INTO categories (name, parent_id)
+         VALUES ($1, NULL)
+         ON CONFLICT (name) WHERE parent_id IS NULL DO UPDATE SET name = EXCLUDED.name
+         RETURNING id`,
+        [name],
+      ))
+    } else {
+      // Child category — conflicts on the (name, parent_id) WHERE parent_id IS NOT NULL partial index
+      ;({ rows } = await client.query<{ id: string }>(
+        `INSERT INTO categories (name, parent_id)
+         VALUES ($1, $2)
+         ON CONFLICT (name, parent_id) WHERE parent_id IS NOT NULL DO UPDATE SET name = EXCLUDED.name
+         RETURNING id`,
+        [name, parentId],
+      ))
+    }
+
     parentId = rows[0].id
     ids.push(parentId)
   }
