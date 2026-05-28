@@ -163,6 +163,104 @@ markitdown --help
 
 ## 🟢 Features / Improvements
 
+- [ ] **Table View — "View All" as a rich data table with filters**
+
+  **Requirement:** Replace the card grid on "View All" with a dense, scannable table showing
+  every item's key metadata in one place. Make review actions available inline.
+
+  **Columns (sortable):**
+  | Title | Type | Categories | Tags | Summary | Created | Last Updated | Reviewed |
+  Each row has a ✓ button to mark reviewed inline (no page reload needed).
+
+  **Filters panel (above table):**
+  - Type: All / Note / Recipe / Media / Book / Link / Stock / Spec (pill toggles)
+  - Category: dropdown from the canonical tree
+  - Tags: multi-select chip input
+  - Date range: Created / Updated from–to
+  - Status: All / Pending Review / Reviewed / Pending Enrichment
+  - Search: full-text across title + summary
+
+  **Implementation notes:**
+  - Route: `/items/table` (new page) with URL params for shareable filter state
+    e.g. `/items/table?type=media&status=pending-review`
+  - Reuse existing `GET /api/items` — it already accepts type, category, tag, enriched,
+    pendingEnrichment, unreviewed. Add `q` (full-text) and `sortBy`/`sortDir` params.
+  - Add `PUT /api/items/review-all` for the bulk "Mark All as Reviewed" action (see bug above)
+  - Pagination: 50 rows per page, URL param `offset`
+  - Columns that are long (summary, content) should be truncated with tooltip on hover
+  - Export visible rows as CSV directly from this table
+
+  **Why it matters:** With 764 notes, the card grid is impossible to scan. A table lets the
+  user triage review status, spot bad AI classifications, and bulk-act in seconds.
+
+---
+
+- [ ] **Media Intelligence — Movie & Book database auto-extracted from notes**
+
+  **Requirement A — Single note, multiple entities (note splitting):**
+  When a note lists multiple movies or books (e.g. "Watched: Inception, Interstellar, Dune"),
+  Ollama should detect this as a multi-entity note and split it into individual items — one
+  item per movie/book — each with its own structured metadata.
+
+  **Requirement B — Per-entity enrichment:**
+  Each extracted movie/book item should be enriched with:
+
+  *Movies:*
+  - Genre (Thriller / Drama / Comedy / Action / Horror / Sci-Fi)
+  - Director, year, cast (top 3)
+  - Rating (user's own: 1–5 stars, stored in structured)
+  - Watched status (watched / want-to-watch / watching)
+  - Streaming platform if mentioned
+
+  *Books:*
+  - Author, year published, genre
+  - Read status (read / reading / want-to-read)
+  - User's rating (1–5 stars)
+  - Notes/highlights from the note content
+
+  **Requirement C — Dedicated collection views:**
+  - `/media/movies` — table of all `type=media` items: poster placeholder, title, genre,
+    director, year, watched status, rating. Filterable by genre/status/rating.
+  - `/media/books` — table of all `type=book` items: title, author, genre, status, rating.
+  - Both views should support inline status/rating updates without opening the item page.
+
+  **Implementation approach:**
+
+  *Step 1 — Multi-entity detection at classify time:*
+  Add a `multiEntity` field to the classifier output. If Ollama detects a list of movies/books,
+  return `{ type: 'media', multiEntity: true, entities: [{title, year, ...}, ...] }`.
+  The ingest route checks `multiEntity` and creates N items instead of 1.
+
+  *Step 2 — Structured schema extensions:*
+  ```typescript
+  // Current MediaData
+  { genre, year, director, watched }
+
+  // Extended MediaData
+  { genre, year, director, cast: string[], watched: boolean,
+    watchStatus: 'watched' | 'want-to-watch' | 'watching',
+    userRating: 1 | 2 | 3 | 4 | 5 | null,
+    streamingPlatform?: string }
+
+  // Extended BookData
+  { author, genre, year, status: 'read' | 'reading' | 'want-to-read',
+    userRating: 1 | 2 | 3 | 4 | 5 | null,
+    highlights?: string[] }
+  ```
+
+  *Step 3 — Collection pages:*
+  New pages `/media/movies` and `/media/books` with table + filter + inline edit for
+  status and rating. These are the "living databases" the user wants.
+
+  *Note on external data enrichment:*
+  Ollama can infer genre/director from training data for well-known titles. For unknown
+  titles, consider optionally calling a free API:
+  - Movies: OMDB API (free tier: 1000 req/day) — `http://www.omdbapi.com/?t=Inception`
+  - Books: Open Library API (free, no key) — `https://openlibrary.org/search.json?title=Sapiens`
+  This would be an opt-in setting, not automatic.
+
+---
+
 - [ ] **ETA on AI Enrichment progress widget (Sidebar)**
   - Track when enrichment started and how many notes were pending at that point
   - Every poll (5s), compute rate = notes_classified / elapsed_seconds
