@@ -261,6 +261,67 @@ markitdown --help
 
 ---
 
+- [ ] **Place Intelligence — Restaurant, Café & Location database auto-extracted from notes**
+
+  **Requirement:** Notes about restaurants, cafés, hotels, attractions, and destinations are
+  very common in Google Keep ("Must try — Thai Garden, Bangkok", "Dog-friendly cafés near
+  Kanchanaburi", "Hotels near Khao Yai"). These should be extracted and stored as structured
+  place entities — not just plain notes — so they're easy to browse, filter, and act on.
+
+  **Structured schema — Place:**
+  ```typescript
+  interface PlaceData {
+    name: string                // "Thai Garden"
+    type: 'restaurant' | 'cafe' | 'hotel' | 'attraction' | 'destination' | 'other'
+    cuisine?: string            // "Thai", "Italian" — for restaurants/cafés
+    city?: string               // "Bangkok"
+    country?: string            // "Thailand"
+    address?: string            // if mentioned in note or source
+    visitStatus: 'visited' | 'want-to-visit' | 'want-to-revisit'
+    userRating?: 1 | 2 | 3 | 4 | 5   // user's own rating from note context
+    priceRange?: '$' | '$$' | '$$$'   // if mentioned
+    notes?: string              // what to order, tips, highlights from note
+    mapsUrl?: string            // Google Maps link if present in source
+    tags?: string[]             // e.g. ["dog-friendly", "rooftop", "date-night"]
+  }
+  ```
+
+  **Source enrichment — use every clue available:**
+  - **Original note content:** Ollama extracts name, cuisine, city, visit context ("visited",
+    "must try", "want to go back") and infers visitStatus + rating from sentiment.
+  - **Keep labels:** Labels like "Travel", "Bangkok", "Food" carried over as tags give
+    geographic context without needing AI.
+  - **sourceUrl (if present):** If the Keep note had a URL (Google Maps link, TripAdvisor,
+    Zomato, blog post), re-fetch the URL with Jina to extract richer details — address,
+    hours, cuisine, rating from the platform.
+  - **Google Maps URL pattern:** `maps.google.com/...` or `goo.gl/maps/...` links in note
+    content or sourceUrl can be detected and stored as `mapsUrl` for one-click navigation.
+
+  **Multi-entity detection (same as movies/books):**
+  A single Keep note often lists many places ("Dog-friendly spots near Bangkok:
+  Kanchanaburi, Khao Yai, Hua Hin"). Ollama should detect this as a multi-entity place
+  note and split into N separate place items.
+
+  **Collection view — `/places`:**
+  Table with columns: Name | Type | Cuisine | City/Country | Visit Status | Rating | Tags | Source
+  - Filter by: type (restaurant/café/hotel/attraction), city, country, visit status, rating
+  - Inline edit: visit status (toggle visited/want-to-visit) and rating (star click)
+  - "Open in Maps" button if `mapsUrl` is present
+  - Group by city or country for trip planning view
+
+  **Maps to canonical category tree:**
+  - Restaurant/Café → `Travel > Restaurants`
+  - Hotel → `Travel > Hotels`
+  - Attraction → `Travel > Attractions`
+  - Destination/City → `Travel > Destinations`
+
+  **Why this is powerful:** A Keep note from 3 years ago saying "Try this ramen place in
+  Tokyo" becomes a searchable, filterable entry in your Places database — with the original
+  source URL, your own rating context, and one-click Google Maps navigation. Your entire
+  travel history and wishlist lives in one structured table.
+
+---
+
 - [ ] **ETA on AI Enrichment progress widget (Sidebar)**
   - Track when enrichment started and how many notes were pending at that point
   - Every poll (5s), compute rate = notes_classified / elapsed_seconds
