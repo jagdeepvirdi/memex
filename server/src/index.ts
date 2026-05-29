@@ -44,7 +44,10 @@ if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable must be set �
 // ── Security Middleware ──────────────────────────────────────────────────────
 
 app.use(helmet()) // Security headers
-app.use(cors())   // Enable CORS for all routes (standard for local-first apps)
+// CORS is intentionally open: Memex is a local-first, single-user tool that runs
+// on the user's own machine (localhost). If you ever deploy it to a shared server,
+// restrict this to specific origins, e.g. cors({ origin: 'https://your-host' }).
+app.use(cors())
 app.use(express.json({ limit: '50mb' }))
 
 // ── Auth Middleware ──────────────────────────────────────────────────────────

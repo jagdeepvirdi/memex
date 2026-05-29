@@ -38,7 +38,9 @@ export async function deriveKey(masterPassword: string, salt: Uint8Array): Promi
   return window.crypto.subtle.deriveKey(
     {
       name: 'PBKDF2',
-      salt: salt,
+      // Cast: Uint8Array is a valid BufferSource at runtime; the TS lib's
+      // generic Uint8Array<ArrayBufferLike> isn't structurally assignable.
+      salt: salt as BufferSource,
       iterations: 100000,
       hash: 'SHA-256'
     },

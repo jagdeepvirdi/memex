@@ -283,31 +283,22 @@ markitdown --help
 
 ---
 
-## 🐞 Known Weaknesses (from full code review)
+## 🐞 Known Weaknesses (from full code review) — ALL RESOLVED ✅
 
-- [ ] **`crypto.ts` base64 encoding is unsafe on large payloads**
-  - `btoa(String.fromCharCode(...new Uint8Array(encrypted)))` — the spread into `String.fromCharCode`
-    hits the JS call stack limit (~125k bytes) on large vault items; silently corrupts data
-  - Fix: replace with a loop-based encoder:
-    ```ts
-    const bytes = new Uint8Array(encrypted)
-    let binary = ''
-    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
-    return btoa(binary)
-    ```
+- [x] **`crypto.ts` base64 encoding is unsafe on large payloads** ✅
+  - Replaced `btoa(String.fromCharCode(...))` with loop-based `toBase64`/`fromBase64` helpers.
 
-- [ ] **`auth.ts` SELECT * leaks password_hash to application memory**
-  - Line 20: `SELECT * FROM users WHERE email = $1` loads all columns including `password_hash`
-  - Fix: `SELECT id, email, password_hash FROM users WHERE email = $1` (explicit columns)
+- [x] **`auth.ts` SELECT * leaks password_hash to application memory** ✅
+  - Now `SELECT id, email, password_hash FROM users WHERE email = $1` (explicit columns).
 
-- [ ] **CORS is wide open with no documentation comment**
-  - `server/src/index.ts`: `app.use(cors())` — allows all origins, all methods, all headers
-  - Correct for local-first use but should have an explicit comment:
-    `// Local-first tool — restrict origins if ever deployed to a shared server`
+- [x] **CORS is wide open with no documentation comment** ✅
+  - Added explanatory comment in `index.ts`: intentional for local-first single-user use,
+    with guidance to restrict origins if ever deployed to a shared server.
 
-- [ ] **`Skeleton.tsx` has a framer-motion type mismatch**
-  - `TS2322` on `Skeleton.tsx:5` — `HTMLMotionProps<"div">` type incompatibility
-  - Pre-existing Gemini code, not caught because `noEmit` doesn't run in strict mode for this component
+- [x] **`Skeleton.tsx` has a framer-motion type mismatch** ✅
+  - Typed props as `HTMLMotionProps<'div'>` (was `React.HTMLAttributes<HTMLDivElement>`).
+  - Also cleared the last remaining TS error project-wide: `crypto.ts` `deriveKey` salt now
+    cast to `BufferSource` (generic-Uint8Array lib mismatch). **Codebase is now zero TS errors.**
 
 ---
 
