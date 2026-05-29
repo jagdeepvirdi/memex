@@ -172,8 +172,16 @@ export interface IngestUrlRequest {
   url: string
 }
 
+export interface SimilarItem {
+  id: string
+  title: string
+  type: ItemType
+  similarity: number  // 0–1 cosine similarity
+}
+
 export interface IngestUrlResponse {
   preview: Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'embedding'>
+  similarItems: SimilarItem[]
 }
 
 export interface SearchRequest {

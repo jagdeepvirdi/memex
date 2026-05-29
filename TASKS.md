@@ -322,13 +322,13 @@ markitdown --help
   - Start with a bookmarklet (no browser store needed): a `javascript:` URL that POSTs to localhost
   - Extension version: Chrome/Firefox WebExtension, manifest v3, single popup UI
 
-- [ ] **Duplicate / near-duplicate detection at ingest time**
-  - `pgvector` already stores embeddings for all items
-  - At `POST /api/ingest/file|url|text`: after classify, run a cosine similarity query against
-    existing embeddings with threshold ~0.92; if matches found, show "You may have already saved
-    this" warning with links to the similar items
-  - Server: `GET /api/items/similar?itemId=...` (or inline in ingest response as `{ preview, similarItems }`)
-  - Client: add a "Similar items found" warning card in the preview step
+- [x] **Duplicate / near-duplicate detection at ingest time** ✅
+  - **Done:** `duplicateService.ts` — `findSimilarItems(embedding)` queries pgvector at 0.92
+    cosine threshold, returns up to 3 hits with id/title/type/similarity.
+  - All three preview endpoints (`/url`, `/text`, `/file`) run `classify` and `embedQuery` in
+    parallel via `Promise.all`, then append `similarItems` to the response — zero added latency.
+  - `IngestPanel` and `FileIngestPanel` show an amber warning card in the preview step listing
+    each match with type badge, title, similarity %, and a link to the existing item.
 
 - [ ] **Remind me later — actionable dates on any item**
   - Add `remind_at TIMESTAMPTZ` column to items (migration 011)

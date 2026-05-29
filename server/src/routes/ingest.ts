@@ -8,6 +8,8 @@ import { parseKeepZip } from '../services/keepImporter.js';
 import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
+import { findSimilarItems } from '../services/duplicateService.js';
+import { embedQuery } from '../services/embedder.js';
 import { pool } from '../db/client.js';
 import { setItemCategories, setItemTags, createItem } from '../db/helpers.js';
 import { extractAndLinkEntities } from '../services/entityService.js';
@@ -147,8 +149,14 @@ router.post('/url', async (req, res) => {
     const { url } = req.body as IngestUrlRequest;
     if (!url) return res.status(400).json({ error: 'URL is required' });
     const scraped = await scrapeUrl(url);
-    const preview = await summarizeAndClassify(scraped);
-    res.json({ preview });
+
+    const [preview, embedding] = await Promise.all([
+      summarizeAndClassify(scraped),
+      embedQuery(scraped.content.slice(0, 2000)),
+    ]);
+
+    const similarItems = await findSimilarItems(embedding);
+    res.json({ preview, similarItems });
   } catch (error) {
     console.error('Ingest URL error:', error);
     res.status(500).json({ error: 'Failed to ingest URL' });
@@ -243,12 +251,17 @@ router.post('/file', upload.single('file'), async (req, res) => {
   if (isImageMime(mimetype)) {
     try {
       const description = await describeImage(buffer, originalname);
-      const classification = await classify(description);
+
+      const [classification, embedding] = await Promise.all([
+        classify(description),
+        embedQuery(description.slice(0, 2000)),
+      ]);
 
       if (!classification.title || classification.title === 'Untitled') {
         classification.title = baseName;
       }
 
+      const similarItems = await findSimilarItems(embedding);
       return res.json({
         preview: {
           title: classification.title,
@@ -260,6 +273,7 @@ router.post('/file', upload.single('file'), async (req, res) => {
           source: 'manual',
           visionModel: await getAvailableVisionModel(),
         },
+        similarItems,
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Vision analysis failed';
@@ -281,12 +295,16 @@ router.post('/file', upload.single('file'), async (req, res) => {
       return res.status(422).json({ error: 'No text could be extracted from this file.' });
     }
 
-    const classification = await classify(markdown.slice(0, 3000));
+    const [classification, embedding] = await Promise.all([
+      classify(markdown.slice(0, 3000)),
+      embedQuery(markdown.slice(0, 2000)),
+    ]);
 
     if (!classification.title || classification.title === 'Untitled') {
       classification.title = baseName;
     }
 
+    const similarItems = await findSimilarItems(embedding);
     return res.json({
       preview: {
         title: classification.title,
@@ -297,6 +315,7 @@ router.post('/file', upload.single('file'), async (req, res) => {
         tags: classification.tags,
         source: 'manual',
       },
+      similarItems,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'File conversion failed';
@@ -312,7 +331,13 @@ router.post('/text', async (req, res) => {
   try {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: 'Text is required' });
-    const classification = await classify(text);
+
+    const [classification, embedding] = await Promise.all([
+      classify(text),
+      embedQuery(text.slice(0, 2000)),
+    ]);
+
+    const similarItems = await findSimilarItems(embedding);
     res.json({
       preview: {
         title: classification.title,
@@ -321,8 +346,10 @@ router.post('/text', async (req, res) => {
         structured: { ...classification.structured, summary: classification.summary },
         categories: classification.categories,
         tags: classification.tags,
-        source: 'manual'
-      }
+        source: 'manual',
+        reviewed: false,
+      },
+      similarItems,
     });
   } catch (error) {
     console.error('Text classification error:', error);

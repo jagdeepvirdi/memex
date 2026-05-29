@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip } from 'lucide-react';
+import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { ingestUrl, createItem } from '../../lib/api';
+import type { SimilarItem } from '../../lib/api';
 import ItemCard from '../cards/ItemCard';
 import KeepImportPanel from './KeepImportPanel';
 import FileIngestPanel from './FileIngestPanel';
@@ -24,6 +25,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'embedding'> | null>(null);
+  const [similarItems, setSimilarItems] = useState<SimilarItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleIngest = async (e: React.FormEvent) => {
@@ -33,10 +35,12 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
     setLoading(true);
     setError(null);
     setPreview(null);
+    setSimilarItems([]);
 
     try {
-      const { preview } = await ingestUrl(url);
+      const { preview, similarItems } = await ingestUrl(url);
       setPreview(preview);
+      setSimilarItems(similarItems ?? []);
       toast.success('URL analyzed successfully');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to ingest URL';
@@ -54,6 +58,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
     setLoading(true);
     setError(null);
     setPreview(null);
+    setSimilarItems([]);
 
     try {
       const res = await fetch('/api/ingest/text', {
@@ -65,11 +70,8 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
       if (!res.ok) throw new Error('Classification failed');
 
       const data = await res.json();
-      setPreview({
-        ...data.preview,
-        content: manualText,
-        source: 'manual'
-      });
+      setPreview({ ...data.preview, content: manualText, source: 'manual' });
+      setSimilarItems(data.similarItems ?? []);
       toast.success('Note classified successfully');
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to classify text';
@@ -193,7 +195,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
                 </button>
               </form>
             ) : (
-              <PreviewState preview={preview} setPreview={setPreview} handleSave={handleSave} isSaving={isSaving} error={error} />
+              <PreviewState preview={preview} setPreview={setPreview} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} />
             )}
           </>
         ) : activeTab === 'url' ? (
@@ -229,7 +231,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
                 </button>
               </form>
             ) : (
-              <PreviewState preview={preview} setPreview={setPreview} handleSave={handleSave} isSaving={isSaving} error={error} />
+              <PreviewState preview={preview} setPreview={setPreview} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} />
             )}
           </>
         ) : activeTab === 'keep' ? (
@@ -248,19 +250,53 @@ interface PreviewStateProps {
   handleSave: () => Promise<void>;
   isSaving: boolean;
   error: string | null;
+  similarItems?: SimilarItem[];
 }
 
-function PreviewState({ preview, setPreview, handleSave, isSaving, error }: PreviewStateProps) {
+function PreviewState({ preview, setPreview, handleSave, isSaving, error, similarItems = [] }: PreviewStateProps) {
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
+    <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      {/* Duplicate warning */}
+      {similarItems.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <AlertTriangle size={13} className="text-amber-400 shrink-0" />
+            <p className="text-xs text-amber-300 font-semibold">
+              {similarItems.length === 1 ? 'Similar item already in Memex' : `${similarItems.length} similar items already in Memex`}
+            </p>
+          </div>
+          <div className="space-y-1.5">
+            {similarItems.map(s => (
+              <div key={s.id} className="flex items-center justify-between gap-2 px-2 py-1.5 bg-white/5 rounded-lg">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[10px] bg-white/10 text-ink-muted px-1.5 py-0.5 rounded font-medium shrink-0">{s.type}</span>
+                  <span className="text-xs text-ink truncate">{s.title}</span>
+                  <span className="text-[10px] text-ink-muted shrink-0">{Math.round(s.similarity * 100)}% match</span>
+                </div>
+                <a
+                  href={`/item/${s.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="shrink-0 text-accent hover:text-accent/80 transition-colors"
+                  title="View existing item"
+                >
+                  <ExternalLink size={12} />
+                </a>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-amber-400/70 mt-2">You can still save — this might be an update or a different source.</p>
+        </div>
+      )}
+
       <div className="opacity-80 scale-[0.98] pointer-events-none">
-        <ItemCard 
-          item={{ 
-            ...preview, 
-            id: 'preview', 
-            createdAt: new Date(), 
-            updatedAt: new Date() 
-          }} 
+        <ItemCard
+          item={{
+            ...preview,
+            id: 'preview',
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }}
         />
       </div>
 
@@ -276,11 +312,7 @@ function PreviewState({ preview, setPreview, handleSave, isSaving, error }: Prev
           disabled={isSaving}
           className="flex-[2] bg-accent hover:bg-accent-dark text-bg py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition-all shadow-lg"
         >
-          {isSaving ? (
-            <Loader2 className="animate-spin" size={20} />
-          ) : (
-            <>Save to Memex</>
-          )}
+          {isSaving ? <Loader2 className="animate-spin" size={20} /> : 'Save to Memex'}
         </button>
       </div>
 

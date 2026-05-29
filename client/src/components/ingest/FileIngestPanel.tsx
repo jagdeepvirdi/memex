@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
-import { Loader2, Upload, FileText, AlertCircle, X, ExternalLink, Eye, ImageIcon, CheckCircle2 } from 'lucide-react';
+import { Loader2, Upload, FileText, AlertCircle, X, ExternalLink, Eye, ImageIcon, CheckCircle2, AlertTriangle } from 'lucide-react';
 import { apiFetch, createItem, fetchVisionHealth } from '../../lib/api';
+import type { SimilarItem } from '../../lib/api';
 import ItemCard from '../cards/ItemCard';
 import type { Item, CreateItemRequest } from '../../../../shared/types';
 
@@ -22,6 +23,7 @@ export default function FileIngestPanel({ onSuccess }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'embedding'> | null>(null);
+  const [similarItems, setSimilarItems] = useState<SimilarItem[]>([]);
   const [markitdownOk, setMarkitdownOk] = useState<boolean | null>(null);
   const [visionModel, setVisionModel] = useState<string | null>(null);
   const [visionChecked, setVisionChecked] = useState(false);
@@ -87,8 +89,9 @@ export default function FileIngestPanel({ onSuccess }: Props) {
         throw new Error(data.error || `Server error ${res.status}`);
       }
 
-      const { preview: p } = await res.json();
+      const { preview: p, similarItems: sim } = await res.json();
       setPreview({ ...p, reviewed: false, encrypted: false });
+      setSimilarItems(sim ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Conversion failed');
     } finally {
@@ -130,12 +133,38 @@ export default function FileIngestPanel({ onSuccess }: Props) {
   if (preview) {
     return (
       <div className="p-6 space-y-4 animate-in fade-in duration-200">
+        {similarItems.length > 0 && (
+          <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle size={13} className="text-amber-400 shrink-0" />
+              <p className="text-xs text-amber-300 font-semibold">
+                {similarItems.length === 1 ? 'Similar item already in Memex' : `${similarItems.length} similar items already in Memex`}
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              {similarItems.map(s => (
+                <div key={s.id} className="flex items-center justify-between gap-2 px-2 py-1.5 bg-white/5 rounded-lg">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[10px] bg-white/10 text-ink-muted px-1.5 py-0.5 rounded font-medium shrink-0">{s.type}</span>
+                    <span className="text-xs text-ink truncate">{s.title}</span>
+                    <span className="text-[10px] text-ink-muted shrink-0">{Math.round(s.similarity * 100)}% match</span>
+                  </div>
+                  <a href={`/item/${s.id}`} target="_blank" rel="noopener noreferrer"
+                    className="shrink-0 text-accent hover:text-accent/80 transition-colors" title="View existing item">
+                    <ExternalLink size={12} />
+                  </a>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-amber-400/70 mt-2">You can still save — this might be an update or a different source.</p>
+          </div>
+        )}
         <div className="opacity-80 pointer-events-none">
           <ItemCard item={{ ...preview, id: 'preview', createdAt: new Date(), updatedAt: new Date() }} />
         </div>
         <div className="flex gap-3">
           <button
-            onClick={() => { setPreview(null); setFile(null); setImagePreviewUrl(null); }}
+            onClick={() => { setPreview(null); setFile(null); setImagePreviewUrl(null); setSimilarItems([]); }}
             className="flex-1 bg-white/5 hover:bg-white/10 text-ink py-3 rounded-lg font-medium transition-all"
           >
             Back

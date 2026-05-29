@@ -11,6 +11,7 @@ import type {
   CategoryAnomaly,
   RemapCategoryResponse,
   ItemExtraction,
+  SimilarItem,
 } from '../../../shared/types'
 import { useAuthStore } from '../store/authStore'
 
@@ -146,6 +147,8 @@ export async function askKnowledge(question: string): Promise<AskResponse> {
 export async function fetchRediscovery(): Promise<RediscoveryItem[]> {
   return apiFetch<RediscoveryItem[]>('/items/rediscover')
 }
+
+export type { SimilarItem }
 
 export async function fetchVisionHealth(): Promise<{ available: boolean; model: string | null }> {
   return apiFetch<{ available: boolean; model: string | null }>('/ingest/vision/health')
