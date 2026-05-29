@@ -1,14 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield, Plus } from 'lucide-react'
+import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield, Plus, History, ChevronDown, ChevronUp, Check, Bot } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
 import ItemCard from '../components/cards/ItemCard'
 import Editor from '../components/Editor'
-import { apiFetch, migrateToVault } from '../lib/api'
+import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction } from '../lib/api'
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
-import type { Item } from '../../../shared/types'
+import type { Item, ItemExtraction } from '../../../shared/types'
 
 export default function ItemPage() {
   const { id } = useParams<{ id: string }>()
@@ -25,6 +25,9 @@ export default function ItemPage() {
   const [tagInput, setTagInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [migrating, setMigrating] = useState(false)
+  const [extractions, setExtractions] = useState<ItemExtraction[]>([])
+  const [showExtractions, setShowExtractions] = useState(false)
+  const [applyingId, setApplyingId] = useState<string | null>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
   const { vaultKey, isLocked } = useVaultStore()
 
@@ -38,7 +41,7 @@ export default function ItemPage() {
         setEditedContent(res.content)
         setEditedCategories(res.categories.join(' > '))
         setEditedTags(res.tags)
-        
+
         setLoadingRelated(true)
         return apiFetch<Item[]>(`/items/${id}/related`)
       })
@@ -51,7 +54,25 @@ export default function ItemPage() {
         setLoading(false)
         setLoadingRelated(false)
       })
+
+    fetchItemExtractions(id).then(setExtractions).catch(() => {})
   }, [id])
+
+  const handleApplyExtraction = async (extractionId: string) => {
+    if (!id) return
+    setApplyingId(extractionId)
+    try {
+      const updated = await applyExtraction(id, extractionId)
+      setItem(updated)
+      setExtractions(prev => prev.map(e => ({ ...e, applied: e.id === extractionId })))
+      toast.success('Extraction applied')
+    } catch (err) {
+      toast.error('Failed to apply extraction')
+      console.error(err)
+    } finally {
+      setApplyingId(null)
+    }
+  }
 
   const handleDelete = async () => {
     if (!item || !confirm('Are you sure you want to delete this item?')) return
@@ -342,6 +363,70 @@ export default function ItemPage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Extraction History */}
+          {extractions.length > 0 && (
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={() => setShowExtractions(v => !v)}
+                className="flex items-center gap-2 text-[10px] text-ink-muted uppercase tracking-widest font-bold hover:text-ink transition-colors w-fit"
+              >
+                <History size={12} />
+                Extraction History ({extractions.length})
+                {showExtractions ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                {extractions.some(e => !e.applied) && (
+                  <span className="ml-1 px-1.5 py-0.5 bg-accent/20 text-accent rounded text-[9px] normal-case tracking-normal font-semibold">
+                    newer available
+                  </span>
+                )}
+              </button>
+
+              {showExtractions && (
+                <div className="space-y-2">
+                  {extractions.map(ext => (
+                    <div
+                      key={ext.id}
+                      className={`flex items-center gap-3 px-4 py-3 rounded-xl border text-xs transition-all ${
+                        ext.applied
+                          ? 'bg-accent/5 border-accent/20'
+                          : 'bg-white/3 border-white/5'
+                      }`}
+                    >
+                      <Bot size={14} className={ext.applied ? 'text-accent' : 'text-ink-muted'} />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-ink font-medium truncate">{ext.model}</span>
+                          {ext.applied && (
+                            <span className="shrink-0 flex items-center gap-1 text-[10px] text-accent font-semibold">
+                              <Check size={10} /> Active
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-ink-muted mt-0.5 flex items-center gap-2">
+                          <span>{ext.type}</span>
+                          {ext.confidence != null && (
+                            <span className={`${ext.confidence >= 80 ? 'text-green-400' : ext.confidence >= 60 ? 'text-amber-400' : 'text-red-400'}`}>
+                              {ext.confidence}% confidence
+                            </span>
+                          )}
+                          <span>{new Date(ext.created_at).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
+                        </div>
+                      </div>
+                      {!ext.applied && (
+                        <button
+                          onClick={() => handleApplyExtraction(ext.id)}
+                          disabled={applyingId === ext.id}
+                          className="shrink-0 text-[10px] bg-accent/10 hover:bg-accent/20 text-accent px-3 py-1 rounded-lg font-semibold transition-all disabled:opacity-50"
+                        >
+                          {applyingId === ext.id ? <Loader2 size={10} className="animate-spin" /> : 'Apply'}
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { aiChat } from './ai.js'
-import type { ItemType, RecipeData, MediaData, BookData, StockData } from '../../../shared/types.js'
+import { getAiConfig } from './settings.js'
+import type { ItemType, RecipeData, MediaData, BookData, StockData, PlaceData } from '../../../shared/types.js'
 
 // ── Zod schema — validates & coerces the AI's JSON response ──────────────────
 
@@ -28,6 +29,7 @@ export type ClassificationResult = {
   multiEntity?: boolean
   entities?: any[]
   confidence: number
+  model?: string  // which AI model produced this result
 }
 
 // ── System prompts ────────────────────────────────────────────────────────────
@@ -346,12 +348,14 @@ function fallback(text: string): ClassificationResult {
 }
 
 export async function classify(text: string): Promise<ClassificationResult> {
+  const { model: activeModel } = await getAiConfig()
+
   // ── Attempt 1: normal prompt ──────────────────────────────────────────────
   try {
     const raw = await aiChat(text, SYSTEM_PROMPT, 'json', { temperature: 0 })
     const result = parseClassification(raw)
+    result.model = activeModel
 
-    // Normalize categories against canonical tree, or fall back to structured mapping
     const normalized = normalizeCategories(result.categories)
     result.categories = normalized.length > 0 ? normalized : mapToCategories(result.type, result.structured)
 
@@ -369,8 +373,8 @@ export async function classify(text: string): Promise<ClassificationResult> {
       { temperature: 0 }
     )
     const result = parseClassification(raw)
+    result.model = activeModel
 
-    // Normalize categories against canonical tree, or fall back to structured mapping
     const normalized = normalizeCategories(result.categories)
     result.categories = normalized.length > 0 ? normalized : mapToCategories(result.type, result.structured)
 
@@ -380,7 +384,7 @@ export async function classify(text: string): Promise<ClassificationResult> {
   }
 
   // ── Fallback: never block the user ────────────────────────────────────────
-  return fallback(text)
+  return { ...fallback(text), model: activeModel }
 }
 
 // ── Batch classify — one Ollama call for multiple notes ──────────────────────

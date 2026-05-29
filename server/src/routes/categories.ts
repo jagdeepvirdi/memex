@@ -1,7 +1,11 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import { pool } from '../db/client.js'
-import type { Category } from '../../../shared/types.js'
+import { setItemCategories } from '../db/helpers.js'
+import { normalizeCategories } from '../services/classifier.js'
+import type { Category, CategoryAnomaly } from '../../../shared/types.js'
+
+const CANONICAL_ROOTS = new Set(['Food', 'Media', 'Tech', 'Finance', 'Personal', 'Links', 'Travel'])
 
 const router = Router()
 
@@ -231,6 +235,142 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('DELETE /api/categories/:id error:', err)
     res.status(500).json({ error: 'Failed to delete category' })
+  }
+})
+
+// ── GET /api/categories/anomalies — rogue root categories ────────────────────
+
+router.get('/anomalies', async (_req, res) => {
+  try {
+    // Root categories not in the canonical set that have live items
+    const { rows: rogueRoots } = await pool.query<{
+      id: string; name: string; item_count: string
+    }>(`
+      SELECT c.id, c.name, COUNT(DISTINCT ic.item_id)::text AS item_count
+      FROM categories c
+      LEFT JOIN item_categories ic ON ic.category_id = c.id
+      LEFT JOIN items i ON i.id = ic.item_id AND i.deleted_at IS NULL
+      WHERE c.parent_id IS NULL
+      GROUP BY c.id, c.name
+      HAVING COUNT(DISTINCT ic.item_id) > 0
+      ORDER BY COUNT(DISTINCT ic.item_id) DESC
+    `)
+
+    const anomalies: CategoryAnomaly[] = []
+
+    for (const root of rogueRoots) {
+      if (CANONICAL_ROOTS.has(root.name)) continue
+
+      // Preview items — up to 5, from the entire subtree
+      const { rows: previewRows } = await pool.query<{
+        id: string; title: string; type: string
+      }>(`
+        WITH RECURSIVE subtree AS (
+          SELECT id FROM categories WHERE id = $1
+          UNION ALL
+          SELECT c.id FROM categories c JOIN subtree s ON c.parent_id = s.id
+        )
+        SELECT DISTINCT i.id, i.title, i.type
+        FROM items i
+        JOIN item_categories ic ON ic.item_id = i.id
+        WHERE ic.category_id IN (SELECT id FROM subtree)
+          AND i.deleted_at IS NULL
+        LIMIT 5
+      `, [root.id])
+
+      anomalies.push({
+        id: root.id,
+        name: root.name,
+        itemCount: parseInt(root.item_count, 10),
+        suggestedPath: normalizeCategories([root.name]),
+        previewItems: previewRows,
+      })
+    }
+
+    res.json(anomalies)
+  } catch (err) {
+    console.error('GET /api/categories/anomalies error:', err)
+    res.status(500).json({ error: 'Failed to fetch category anomalies' })
+  }
+})
+
+// ── POST /api/categories/remap — bulk reassign rogue category items ───────────
+
+const remapSchema = z.object({
+  fromRootId: z.string().uuid(),
+  toPath: z.array(z.string().min(1)).min(1),
+})
+
+router.post('/remap', async (req, res) => {
+  const parsed = remapSchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() })
+    return
+  }
+
+  const { fromRootId, toPath } = parsed.data
+  const client = await pool.connect()
+
+  try {
+    await client.query('BEGIN')
+
+    // Verify the root exists and is not canonical
+    const { rows: rootRows } = await client.query<{ name: string }>(
+      'SELECT name FROM categories WHERE id = $1 AND parent_id IS NULL',
+      [fromRootId]
+    )
+    if (rootRows.length === 0) {
+      await client.query('ROLLBACK')
+      res.status(404).json({ error: 'Rogue root category not found' })
+      return
+    }
+    if (CANONICAL_ROOTS.has(rootRows[0].name)) {
+      await client.query('ROLLBACK')
+      res.status(400).json({ error: 'Cannot remap a canonical root category' })
+      return
+    }
+
+    // Get all items in the subtree
+    const { rows: itemRows } = await client.query<{ id: string }>(`
+      WITH RECURSIVE subtree AS (
+        SELECT id FROM categories WHERE id = $1
+        UNION ALL
+        SELECT c.id FROM categories c JOIN subtree s ON c.parent_id = s.id
+      )
+      SELECT DISTINCT i.id
+      FROM items i
+      JOIN item_categories ic ON ic.item_id = i.id
+      WHERE ic.category_id IN (SELECT id FROM subtree)
+        AND i.deleted_at IS NULL
+    `, [fromRootId])
+
+    // Reassign each item to the target canonical path
+    for (const { id: itemId } of itemRows) {
+      await setItemCategories(client, itemId, toPath)
+    }
+
+    // Delete the rogue subtree bottom-up (deepest first to satisfy FK constraints)
+    const { rows: subtreeRows } = await client.query<{ id: string }>(`
+      WITH RECURSIVE subtree AS (
+        SELECT id, 0 AS depth FROM categories WHERE id = $1
+        UNION ALL
+        SELECT c.id, s.depth + 1 FROM categories c JOIN subtree s ON c.parent_id = s.id
+      )
+      SELECT id FROM subtree ORDER BY depth DESC
+    `, [fromRootId])
+
+    for (const { id } of subtreeRows) {
+      await client.query('DELETE FROM categories WHERE id = $1', [id])
+    }
+
+    await client.query('COMMIT')
+    res.json({ remapped: itemRows.length })
+  } catch (err) {
+    await client.query('ROLLBACK')
+    console.error('POST /api/categories/remap error:', err)
+    res.status(500).json({ error: 'Failed to remap category' })
+  } finally {
+    client.release()
   }
 })
 

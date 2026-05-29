@@ -42,16 +42,31 @@ async function migrate() {
 
       const sql = await readFile(resolve(migrationsDir, file), 'utf8')
 
-      await client.query('BEGIN')
-      try {
-        await client.query(sql)
-        await client.query('INSERT INTO _migrations (name) VALUES ($1)', [file])
-        await client.query('COMMIT')
-        console.log(`  ✓     ${file}`)
-        count++
-      } catch (err) {
-        await client.query('ROLLBACK')
-        throw new Error(`Migration ${file} failed: ${String(err)}`)
+      // ALTER TYPE ... ADD VALUE cannot run inside a transaction in PostgreSQL.
+      // Detect these and run them outside a transaction block.
+      const noTxn = /ALTER\s+TYPE\s+\S+\s+ADD\s+VALUE/i.test(sql)
+
+      if (noTxn) {
+        try {
+          await client.query(sql)
+          await client.query('INSERT INTO _migrations (name) VALUES ($1)', [file])
+          console.log(`  ✓     ${file}  (no-txn)`)
+          count++
+        } catch (err) {
+          throw new Error(`Migration ${file} failed: ${String(err)}`)
+        }
+      } else {
+        await client.query('BEGIN')
+        try {
+          await client.query(sql)
+          await client.query('INSERT INTO _migrations (name) VALUES ($1)', [file])
+          await client.query('COMMIT')
+          console.log(`  ✓     ${file}`)
+          count++
+        } catch (err) {
+          await client.query('ROLLBACK')
+          throw new Error(`Migration ${file} failed: ${String(err)}`)
+        }
       }
     }
 

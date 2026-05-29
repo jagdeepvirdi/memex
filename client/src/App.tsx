@@ -16,6 +16,7 @@ import MediaView from './pages/MediaView'
 import SemanticGraph from './pages/SemanticGraph'
 import Welcome from './pages/Welcome'
 import AskMemex from './pages/AskMemex'
+import CategoryReview from './pages/CategoryReview'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated)
@@ -71,6 +72,9 @@ export default function App() {
             } />
             <Route path="/settings" element={
               <ProtectedRoute><Settings /></ProtectedRoute>
+            } />
+            <Route path="/categories/review" element={
+              <ProtectedRoute><CategoryReview /></ProtectedRoute>
             } />
             
             <Route path="*" element={<Navigate to="/" replace />} />

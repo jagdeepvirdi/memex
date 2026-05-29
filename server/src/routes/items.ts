@@ -18,7 +18,7 @@ const router = Router()
 
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 
-const ITEM_TYPES = ['note', 'recipe', 'media', 'spec', 'stock', 'password', 'link', 'book'] as const
+const ITEM_TYPES = ['note', 'recipe', 'media', 'spec', 'stock', 'password', 'link', 'book', 'place'] as const
 const ITEM_SOURCES = ['keep', 'manual', 'url', 'youtube', 'instagram'] as const
 
 const createItemSchema = z.object({
@@ -74,6 +74,7 @@ interface ItemRow {
   deleted_at: Date | null
   categories: string[] | null
   tags: string[] | null
+  confidence: number | null
 }
 
 // ── GET /api/items ────────────────────────────────────────────────────────────
@@ -146,7 +147,7 @@ router.get('/', async (req, res) => {
       const listSql = `
         SELECT
           i.id, i.title, i.type, i.content, i.structured,
-          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at,
+          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at, i.confidence,
           COALESCE(
             (SELECT array_agg(c.name ORDER BY ic2.depth)
              FROM item_categories ic2
@@ -348,14 +349,36 @@ router.post('/enrich', async (_req, res) => {
         const client = await pool.connect()
         try {
           await client.query('BEGIN')
-          await client.query(
-            `UPDATE items SET type=$1, title=$2, structured=$3, updated_at=NOW() WHERE id=$4`,
-            [result.type, result.title, JSON.stringify({ ...result.structured, summary: result.summary }), row.id]
+
+          // Check reviewed status — protect manually-confirmed items from auto-overwrite
+          const { rows: meta } = await client.query<{ reviewed: boolean }>(
+            'SELECT reviewed FROM items WHERE id = $1', [row.id]
           )
-          if (result.tags.length > 0) await setItemTags(client, row.id, result.tags)
-          if (result.categories.length > 0) await setItemCategories(client, row.id, result.categories)
+          const isReviewed = meta[0]?.reviewed ?? false
+          const structuredWithSummary = { ...result.structured, summary: result.summary }
+
+          // Always write to provenance log
+          await client.query(
+            `INSERT INTO item_extractions
+               (item_id, model, type, title, summary, structured, categories, tags, confidence, applied)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [row.id, result.model ?? 'unknown', result.type, result.title, result.summary,
+             JSON.stringify(structuredWithSummary), result.categories, result.tags,
+             result.confidence, !isReviewed]
+          )
+
+          if (!isReviewed) {
+            await client.query(
+              `UPDATE items SET type=$1, title=$2, structured=$3, extraction_model=$4, updated_at=NOW(), confidence=$5 WHERE id=$6`,
+              [result.type, result.title, JSON.stringify(structuredWithSummary),
+               result.model ?? 'unknown', result.confidence, row.id]
+            )
+            if (result.tags.length > 0) await setItemTags(client, row.id, result.tags)
+            if (result.categories.length > 0) await setItemCategories(client, row.id, result.categories)
+          }
+
           await client.query('COMMIT')
-          console.log(`[Re-enrich] OK: ${result.title} → ${result.type}`)
+          console.log(`[Re-enrich] OK: ${result.title} → ${result.type}${isReviewed ? ' (extraction only)' : ''}`)
         } catch (err) {
           await client.query('ROLLBACK')
           console.error(`[Re-enrich] DB update failed for ${row.id}:`, err)
@@ -363,7 +386,6 @@ router.post('/enrich', async (_req, res) => {
           client.release()
         }
       } catch {
-        // Leave structured={} so it stays pending and can be retried
         console.error(`[Re-enrich] Classify failed for ${row.id}, leaving as pending`)
       }
 
@@ -446,6 +468,70 @@ router.get('/:id/related', async (req, res) => {
     res.json(rows.map(rowToItem))
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch related items' })
+  }
+})
+
+// ── GET /api/items/:id/extractions ───────────────────────────────────────────
+
+router.get('/:id/extractions', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      `SELECT id, model, type, title, summary, structured, categories, tags, confidence, applied, created_at
+       FROM item_extractions
+       WHERE item_id = $1
+       ORDER BY created_at DESC`,
+      [req.params.id]
+    )
+    res.json(rows)
+  } catch (err) {
+    console.error('GET /api/items/:id/extractions error:', err)
+    res.status(500).json({ error: 'Failed to fetch extraction history' })
+  }
+})
+
+// ── POST /api/items/:id/apply-extraction/:extractionId ───────────────────────
+
+router.post('/:id/apply-extraction/:extractionId', async (req, res) => {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    // Load extraction
+    const { rows: extRows } = await client.query(
+      `SELECT * FROM item_extractions WHERE id = $1 AND item_id = $2`,
+      [req.params.extractionId, req.params.id]
+    )
+    if (extRows.length === 0) {
+      await client.query('ROLLBACK')
+      res.status(404).json({ error: 'Extraction not found' })
+      return
+    }
+    const ext = extRows[0]
+
+    // Apply to item
+    await client.query(
+      `UPDATE items
+       SET type=$1, title=$2, structured=$3, extraction_model=$4, confidence=$5, updated_at=NOW()
+       WHERE id=$6`,
+      [ext.type, ext.title, JSON.stringify(ext.structured), ext.model, ext.confidence, req.params.id]
+    )
+    if (ext.tags?.length > 0) await setItemTags(client, req.params.id, ext.tags)
+    if (ext.categories?.length > 0) await setItemCategories(client, req.params.id, ext.categories)
+
+    // Update applied flags
+    await client.query('UPDATE item_extractions SET applied = FALSE WHERE item_id = $1', [req.params.id])
+    await client.query('UPDATE item_extractions SET applied = TRUE  WHERE id = $1', [req.params.extractionId])
+
+    await client.query('COMMIT')
+
+    const updated = await fetchItem(client, req.params.id)
+    res.json(updated)
+  } catch (err) {
+    await client.query('ROLLBACK')
+    console.error('POST /api/items/:id/apply-extraction error:', err)
+    res.status(500).json({ error: 'Failed to apply extraction' })
+  } finally {
+    client.release()
   }
 })
 

@@ -36,7 +36,8 @@ declare global {
 
 export const app = express()
 const PORT = process.env.PORT ?? 3002
-const JWT_SECRET = process.env.JWT_SECRET || 'memex-default-secret'
+const JWT_SECRET = process.env.JWT_SECRET
+if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable must be set — see .env.example')
 
 // ── Security Middleware ──────────────────────────────────────────────────────
 

@@ -17,7 +17,8 @@ import {
   Clapperboard,
   Wifi,
   WifiOff,
-  MessageSquare
+  MessageSquare,
+  FolderSync,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchCategories, fetchTags, apiFetch } from '../../lib/api';
@@ -25,7 +26,7 @@ import { useAuthStore } from '../../store/authStore';
 import type { Category, Tag } from '../../../../shared/types';
 
 interface SidebarProps {
-  activeSection: 'dashboard' | 'categories' | 'vault' | 'tags' | 'settings' | 'trash' | 'table' | 'places' | 'media' | 'ask';
+  activeSection: 'dashboard' | 'categories' | 'vault' | 'tags' | 'settings' | 'trash' | 'table' | 'places' | 'media' | 'ask' | 'category-review';
 }
 
 export default function Sidebar({ activeSection }: SidebarProps) {
@@ -184,10 +185,16 @@ export default function Sidebar({ activeSection }: SidebarProps) {
           active={activeSection === 'trash'} 
           onClick={() => navigate('/trash')}
         />
-        <NavItem 
-          icon={<SettingsIcon size={18} />} 
-          label="Settings" 
-          active={activeSection === 'settings'} 
+        <NavItem
+          icon={<FolderSync size={18} />}
+          label="Category Review"
+          active={activeSection === 'category-review'}
+          onClick={() => navigate('/categories/review')}
+        />
+        <NavItem
+          icon={<SettingsIcon size={18} />}
+          label="Settings"
+          active={activeSection === 'settings'}
           onClick={() => navigate('/settings')}
         />
       </nav>

@@ -1,13 +1,16 @@
-import type { 
-  IngestUrlRequest, 
-  IngestUrlResponse, 
-  CreateItemRequest, 
+import type {
+  IngestUrlRequest,
+  IngestUrlResponse,
+  CreateItemRequest,
   Item,
   StatsResponse,
   Insight,
   AskRequest,
   AskResponse,
-  RediscoveryItem
+  RediscoveryItem,
+  CategoryAnomaly,
+  RemapCategoryResponse,
+  ItemExtraction,
 } from '../../../shared/types'
 import { useAuthStore } from '../store/authStore'
 
@@ -142,4 +145,27 @@ export async function askKnowledge(question: string): Promise<AskResponse> {
 
 export async function fetchRediscovery(): Promise<RediscoveryItem[]> {
   return apiFetch<RediscoveryItem[]>('/items/rediscover')
+}
+
+export async function fetchVisionHealth(): Promise<{ available: boolean; model: string | null }> {
+  return apiFetch<{ available: boolean; model: string | null }>('/ingest/vision/health')
+}
+
+export async function fetchCategoryAnomalies(): Promise<CategoryAnomaly[]> {
+  return apiFetch<CategoryAnomaly[]>('/categories/anomalies')
+}
+
+export async function remapCategory(fromRootId: string, toPath: string[]): Promise<RemapCategoryResponse> {
+  return apiFetch<RemapCategoryResponse>('/categories/remap', {
+    method: 'POST',
+    body: JSON.stringify({ fromRootId, toPath }),
+  })
+}
+
+export async function fetchItemExtractions(itemId: string): Promise<ItemExtraction[]> {
+  return apiFetch<ItemExtraction[]>(`/items/${itemId}/extractions`)
+}
+
+export async function applyExtraction(itemId: string, extractionId: string): Promise<Item> {
+  return apiFetch<Item>(`/items/${itemId}/apply-extraction/${extractionId}`, { method: 'POST' })
 }

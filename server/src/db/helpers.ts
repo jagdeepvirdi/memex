@@ -102,13 +102,13 @@ export async function createItem(
   },
 ): Promise<Item> {
   const { rows } = await client.query<{ id: string }>(
-    `INSERT INTO items (title, type, content, structured, source, source_url, reviewed, confidence)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO items (title, type, content, raw_content, structured, source, source_url, reviewed, confidence)
+     VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8)
      RETURNING id`,
     [
       item.title,
       item.type,
-      item.content,
+      item.content,       // $3 used for both content and raw_content
       item.structured || {},
       item.source,
       item.sourceUrl || null,

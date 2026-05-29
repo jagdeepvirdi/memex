@@ -38,7 +38,7 @@ export async function getRediscoveryItems(): Promise<RediscoveryItem[]> {
     
     if (onThisDayRows.length > 0) {
       const item = rowToItem(onThisDayRows[0])
-      const yearsAgo = new Date().getFullYear() - new Date(item.created_at).getFullYear()
+      const yearsAgo = new Date().getFullYear() - new Date(item.createdAt).getFullYear()
       results.push({
         type: 'on-this-day',
         reason: `Saved ${yearsAgo} year${yearsAgo > 1 ? 's' : ''} ago today`,

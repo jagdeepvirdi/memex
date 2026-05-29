@@ -86,31 +86,12 @@ markitdown --help
 
 ## 🐛 Known Bugs / Planned Improvements
 
-- [ ] **Category staging area — review AI-suggested categories before DB commit**
-  - **Problem:** Ollama returns free-form category names ("book", "books", "travel", "Bangkok")
-    that get created as new DB rows instead of mapping to the canonical seeded tree.
-  - **Canonical tree (from `002_seed_categories.sql`) that must be preserved:**
-    ```
-    Food        → Bakery → Cakes / Cookies / Bread
-                → Savory → Indian / Italian / Thai / Chinese
-    Media       → Movies → Action / Drama / Horror / Comedy
-                → Books  → Fiction / Non-Fiction / Technical
-    Tech        → Laptops / Cameras / Phones / Specs
-    Finance     → Stocks / Crypto / Notes
-    Personal    → Numbers / Contacts
-    Links       → YouTube / Instagram / Articles / Docs
-    Travel      → Destinations / Hotels / Restaurants / Attractions
-    ```
-  - **Proposed fix — two-step approach:**
-    1. **Fuzzy-map at classify time:** After Ollama returns `categories`, normalise them against
-       the canonical tree (case-insensitive, singular/plural, e.g. "book" → "Media > Books",
-       "travel" → "Travel"). Fall back to `mapToCategories(type, structured)` when no match.
-    2. **Staging area in UI:** New "Review Categories" page — shows all items with AI-assigned
-       categories that don't match the canonical tree. User can bulk-remap before commit,
-       or approve and let a new root category be created intentionally.
-  - **Immediate workaround:** Run a DB cleanup migration to delete rogue root categories
-    (those not in the canonical list) and reassign their items to the correct canonical node.
-  - **Do after enrichment completes** — running it mid-process would cause conflicts.
+- [x] **Category staging area — review AI-suggested categories before DB commit** ✅
+  - **Done:** Added `GET /api/categories/anomalies` (finds rogue root categories with preview items
+    and suggested remapping) and `POST /api/categories/remap` (bulk reassigns all items in a rogue
+    subtree to a canonical path, then deletes the subtree bottom-up). New `/categories/review` page
+    in the sidebar lists all anomalies, pre-populates the AI suggestion, and supports per-card or
+    "Remap All" actions. Also fixed missing `PlaceData` import in `classifier.ts`.
 
 - [x] **"Move to Vault" action on sensitive notes** ✅
   - **Problem:** Google Keep notes often contain sensitive data — bank account numbers, UPI IDs,
@@ -143,16 +124,9 @@ markitdown --help
 
 ---
 
-- [ ] **"Mark All as Reviewed" bulk action for enriched Keep notes**
-  - **Problem:** Every Keep note imports with `reviewed=false`. After Ollama enriches them the
-    badge stays — clicking 764 individual REVIEW badges is impractical.
-  - **Where to add it:** Button on the `/items/enriched` page header — "Mark All as Reviewed".
-  - **Server:** `PUT /api/items/review-all` — sets `reviewed=true` WHERE `source='keep'`
-    AND `structured != '{}'::jsonb` (only enriched notes, not pending ones).
-  - **Optional quality gate:** Only auto-approve notes that have at least one category AND a
-    non-empty summary — leaves genuinely poor classifications still flagged for manual review.
-  - **What "reviewed" means:** User has confirmed the AI's type/categories/tags are correct.
-    It only controls the pulsing amber REVIEW badge on item cards — no other functional impact.
+- [x] **"Mark All as Reviewed" bulk action for enriched Keep notes** ✅
+  - **Done:** `PUT /api/items/review-all` implemented; "Mark All Reviewed" button wired in
+    TableView (`/items/table`). Marks only Keep notes with non-empty structured data as reviewed.
 
 ---
 
@@ -254,15 +228,159 @@ markitdown --help
   - **Done:** Added `confidence` column to schema, updated AI prompts to return a 0-100 score, 
     and added a color-coded "Score" column to the Table View for easy curation of low-confidence items.
 
-- [ ] **Data Provenance & Re-processing**
-  - **Requirement:** Keep the raw imported note immutable. Treat structured extractions as a derived, versioned layer.
-  - **Why:** Allows re-running the entire library through a newer, smarter model (e.g., Gemma 4) later without losing the original context or manual edits.
+- [x] **Data Provenance & Re-processing** ✅
+  - **Done:** Added `raw_content TEXT` (immutable, set once at import — backfilled from `content` for existing items)
+    and `extraction_model TEXT` to `items` (migration 009). New `item_extractions` table logs every AI run:
+    model, type, title, summary, structured, categories, tags, confidence, applied flag.
+  - Enrichment pipeline (`classifyAndUpdateBatch` in ingest + `/enrich` in items) now writes to
+    `item_extractions` on every run. Auto-applies to `items` only when `reviewed = false` — manually
+    confirmed items are protected from overwrite; their extraction is saved for user review.
+  - `classify()` now stamps `result.model` from `getAiConfig()` so every extraction is traceable.
+  - New endpoints: `GET /api/items/:id/extractions` (history), `POST /api/items/:id/apply-extraction/:id`
+    (roll forward/back to any past extraction).
+  - `Item.tsx` shows collapsible "Extraction History" panel — model name, date, confidence, active badge,
+    per-extraction "Apply" button. "newer available" badge when a more recent extraction isn't active.
 
-- [ ] **Multi-modal Capture (Vision & Audio)**
-  - **Requirement:** Support image OCR (local vision model) and voice memos (local Whisper).
+- [x] **Multi-modal Capture — Vision** ✅
+  - **Done:** Added `visionService.ts` — auto-detects the best installed Ollama vision model
+    (`llama3.2-vision:11b` → `llava:7b` → `llava` priority order), converts image buffer to base64,
+    calls Ollama `/api/chat` with the image and a structured extraction prompt.
+  - `POST /api/ingest/file` now branches: images → vision pipeline, documents → MarkItDown.
+    Returns HTTP 503 with pull instructions if no vision model is installed.
+  - `GET /api/ingest/vision/health` — returns `{ available, model }`.
+  - `FileIngestPanel.tsx` updated: image thumbnail preview on drop, purple "Vision AI · model-name"
+    badge when available, yellow warning + pull instructions when no vision model found, smart
+    button label ("Analyse with Vision AI" vs "Convert & Classify with AI").
+  - Audio (Whisper) not yet implemented.
 
 ---
 
 - [x] PWA: test offline mode and share-target flow ✅
   - Done: Configured Workbox runtime caching (NetworkFirst) for API routes, registered SW,
     and implemented share-target intent handling in the Dashboard IngestPanel.
+
+---
+
+## 🚀 GitHub Release Checklist
+
+- [ ] **Commit 3 untracked files**
+  - `client/src/pages/CategoryReview.tsx`
+  - `server/src/db/migrations/009_data_provenance.sql`
+  - `server/src/services/visionService.ts`
+  - Also commit migration 010 (`010_place_type.sql`) and all other modified files from this session
+
+- [ ] **Fix ~20 unused import warnings in client**
+  - Pre-existing `TS6133`/`TS6196` errors across: `ItemCard.tsx`, `VaultCard.tsx`, `Editor.tsx`,
+    `ErrorBoundary.tsx`, `KeepImportPanel.tsx`, `Sidebar.tsx` (Wifi/WifiOff/isOnline),
+    `AskMemex.tsx`, `Category.tsx`, `Dashboard.tsx`, `EnrichedItems.tsx`, `MediaView.tsx`,
+    `PlacesView.tsx`, `vaultStore.ts`
+  - Harmless at runtime but messy; clean up before public release
+
+- [ ] **Add timeout to insightService Ollama call**
+  - `server/src/services/insightService.ts`: no timeout on `aiChat()` — if Ollama is slow or
+    unresponsive the Dashboard hangs indefinitely on first load
+  - Fix: wrap in `Promise.race` with a 15s timeout; return `[]` on timeout
+
+---
+
+## 🐞 Known Weaknesses (from full code review)
+
+- [ ] **`crypto.ts` base64 encoding is unsafe on large payloads**
+  - `btoa(String.fromCharCode(...new Uint8Array(encrypted)))` — the spread into `String.fromCharCode`
+    hits the JS call stack limit (~125k bytes) on large vault items; silently corrupts data
+  - Fix: replace with a loop-based encoder:
+    ```ts
+    const bytes = new Uint8Array(encrypted)
+    let binary = ''
+    for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+    return btoa(binary)
+    ```
+
+- [ ] **`auth.ts` SELECT * leaks password_hash to application memory**
+  - Line 20: `SELECT * FROM users WHERE email = $1` loads all columns including `password_hash`
+  - Fix: `SELECT id, email, password_hash FROM users WHERE email = $1` (explicit columns)
+
+- [ ] **CORS is wide open with no documentation comment**
+  - `server/src/index.ts`: `app.use(cors())` — allows all origins, all methods, all headers
+  - Correct for local-first use but should have an explicit comment:
+    `// Local-first tool — restrict origins if ever deployed to a shared server`
+
+- [ ] **`Skeleton.tsx` has a framer-motion type mismatch**
+  - `TS2322` on `Skeleton.tsx:5` — `HTMLMotionProps<"div">` type incompatibility
+  - Pre-existing Gemini code, not caught because `noEmit` doesn't run in strict mode for this component
+
+---
+
+## 🌟 Feature Backlog
+
+### High Value / Reasonable Effort
+
+- [ ] **Browser extension / bookmarklet — one-click "Save to Memex" from any page**
+  - The ingest API already exists; needs a small browser extension (or simple bookmarklet) that
+    sends the current tab's URL to `POST /api/ingest/url` and shows a confirmation popup
+  - This is what makes a PKM get used daily — friction-free capture
+  - Start with a bookmarklet (no browser store needed): a `javascript:` URL that POSTs to localhost
+  - Extension version: Chrome/Firefox WebExtension, manifest v3, single popup UI
+
+- [ ] **Duplicate / near-duplicate detection at ingest time**
+  - `pgvector` already stores embeddings for all items
+  - At `POST /api/ingest/file|url|text`: after classify, run a cosine similarity query against
+    existing embeddings with threshold ~0.92; if matches found, show "You may have already saved
+    this" warning with links to the similar items
+  - Server: `GET /api/items/similar?itemId=...` (or inline in ingest response as `{ preview, similarItems }`)
+  - Client: add a "Similar items found" warning card in the preview step
+
+- [ ] **Remind me later — actionable dates on any item**
+  - Add `remind_at TIMESTAMPTZ` column to items (migration 011)
+  - Item page: calendar/date picker to set a reminder
+  - Background worker: poll every hour for `remind_at <= NOW()`, push a browser Notification API
+    alert (works because it's a PWA)
+  - Table View: "Remind" column, filterable by upcoming reminders
+
+- [ ] **Natural language filter on Table View**
+  - Text input: "Thai restaurants I haven't visited" → send to Ollama with system prompt asking
+    it to return a JSON filter: `{ type: "place", structured.cuisine: "Thai", structured.visitStatus: "want-to-visit" }`
+  - Server: `POST /api/items/nl-filter` — runs NL→query conversion, returns same shape as
+    `GET /api/items` so Table View can consume it directly
+  - Client: replace or augment the search box in TableView with a "Ask a filter" mode
+
+- [ ] **Export to Obsidian / Markdown vault**
+  - Each item → `[title].md` with YAML frontmatter:
+    ```yaml
+    ---
+    title: Pad Thai Recipe
+    type: recipe
+    categories: [Food, Savory, Thai]
+    tags: [thai, noodles]
+    source: keep
+    created: 2024-03-15
+    ---
+    ```
+  - Content goes below the frontmatter
+  - Structured data → additional YAML keys (ingredients, director, visitStatus, etc.)
+  - Export: ZIP download via `GET /api/items/export/obsidian`
+  - Client: "Export as Obsidian Vault" button in Settings
+
+### Medium Term
+
+- [ ] **Weekly digest — local summary of your knowledge activity**
+  - A new `/digest` page (or auto-shown on Mondays): what you saved this week, one "On this day"
+    memory, one AI-generated connection between two unrelated notes you haven't seen together
+  - Server: `GET /api/items/digest` — last 7 days + random older item + Ollama-generated connection
+  - No email needed — just a dedicated page that Memex opens to on Monday morning
+
+- [ ] **Sharing — opt-in public links for items or collections**
+  - Add `public_token TEXT UNIQUE` column to items (migration 012)
+  - `POST /api/items/:id/share` — generates a random token, sets `public_token`
+  - `GET /api/share/:token` — unauthenticated read-only endpoint returns the item
+  - Client: "Share" button on Item page copies the `http://localhost:3002/api/share/[token]` link
+  - Use case: "Here's my Bangkok restaurant list" shared with a friend
+
+- [ ] **Voice memo ingestion (Whisper)**
+  - Ollama ships `whisper:base` (145 MB) — transcribes audio to text locally
+  - New "Voice" tab in Quick Add: record in-browser (`MediaRecorder` API → WAV blob)
+    or upload an audio file (MP3/WAV/M4A)
+  - Server: `POST /api/ingest/voice` — sends audio to Ollama Whisper, gets transcript,
+    passes to `classify()`, returns preview
+  - Completes the multi-modal capture story alongside vision
+  - `GET /api/ingest/whisper/health` — checks if whisper model is pulled

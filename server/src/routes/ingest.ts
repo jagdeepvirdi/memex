@@ -7,6 +7,7 @@ import { summarizeAndClassify } from '../services/summarizer.js';
 import { parseKeepZip } from '../services/keepImporter.js';
 import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
+import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
 import { pool } from '../db/client.js';
 import { setItemCategories, setItemTags, createItem } from '../db/helpers.js';
 import { extractAndLinkEntities } from '../services/entityService.js';
@@ -53,9 +54,15 @@ async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: st
       try {
         await client.query('BEGIN');
 
+        // Check if user has manually reviewed this item — if so, record extraction but don't auto-apply
+        const { rows: itemMeta } = await client.query<{ reviewed: boolean }>(
+          'SELECT reviewed FROM items WHERE id = $1', [id]
+        );
+        const isReviewed = itemMeta[0]?.reviewed ?? false;
+
         if (result.multiEntity && result.entities && result.entities.length > 0) {
           console.log(`[Classify] Multi-entity detected for ${id}: ${result.entities.length} entities`);
-          
+
           for (const entity of result.entities) {
             const newItem = await createItem(client, {
               title: (entity.title as string) || (entity.name as string) || 'Untitled Entity',
@@ -68,38 +75,49 @@ async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: st
               reviewed: false,
               confidence: result.confidence
             });
-            // Extract entities for each split item
             await extractAndLinkEntities(client, newItem.id, newItem.type, newItem.structured);
           }
-          
-          // Mark original note as "processed" by reflecting it was split
+
+          // Mark original note as split regardless of reviewed status
           await client.query(
             `UPDATE items SET title=$1, structured=$2, updated_at=NOW(), confidence=$3 WHERE id=$4`,
-            [`[Split] ${note?.title || 'Untitled'}`, 
-             JSON.stringify({ summary: `Split into ${result.entities.length} items.`, originalType: result.type }), 
+            [`[Split] ${note?.title || 'Untitled'}`,
+             JSON.stringify({ summary: `Split into ${result.entities.length} items.`, originalType: result.type }),
              result.confidence, id]
           );
         } else {
-          // Normal single-item update
           if (!result.title || result.title === 'Untitled') {
             result.title = note?.title || note?.content?.split('\n')[0]?.slice(0, 80) || 'Untitled';
           }
-
-          const structuredWithSummary = { ...result.structured, summary: result.summary };
-          await client.query(
-            `UPDATE items SET type=$1, title=$2, structured=$3, updated_at=NOW(), confidence=$4 WHERE id=$5`,
-            [result.type, result.title,
-             JSON.stringify(structuredWithSummary), result.confidence, id]
-          );
           const allTags = Array.from(new Set([...result.tags, ...(note?.labels || [])]));
-          if (allTags.length > 0) await setItemTags(client, id, allTags);
-          if (result.categories.length > 0) await setItemCategories(client, id, result.categories);
+          const structuredWithSummary = { ...result.structured, summary: result.summary };
 
-          // Extract entities for the updated single item
-          await extractAndLinkEntities(client, id, result.type, structuredWithSummary);
+          // Always record extraction in provenance log
+          await client.query(
+            `INSERT INTO item_extractions
+               (item_id, model, type, title, summary, structured, categories, tags, confidence, applied)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+            [id, result.model ?? 'unknown', result.type, result.title, result.summary,
+             JSON.stringify(structuredWithSummary), result.categories, allTags,
+             result.confidence, !isReviewed]
+          );
+
+          if (!isReviewed) {
+            // Apply extraction to live item
+            await client.query(
+              `UPDATE items SET type=$1, title=$2, structured=$3, extraction_model=$4, updated_at=NOW(), confidence=$5 WHERE id=$6`,
+              [result.type, result.title, JSON.stringify(structuredWithSummary),
+               result.model ?? 'unknown', result.confidence, id]
+            );
+            if (allTags.length > 0) await setItemTags(client, id, allTags);
+            if (result.categories.length > 0) await setItemCategories(client, id, result.categories);
+            await extractAndLinkEntities(client, id, result.type, structuredWithSummary);
+          } else {
+            console.log(`[Classify] Skipped applying to reviewed item ${id} — extraction saved for review`);
+          }
         }
         await client.query('COMMIT');
-        console.log(`[Classify] OK: ${result.title} → ${result.type}`);
+        console.log(`[Classify] OK: ${result.title} → ${result.type}${isReviewed ? ' (extraction only — item reviewed)' : ''}`);
       } catch (err) {
         await client.query('ROLLBACK');
         console.error(`[Classify] DB update failed for ${id}:`, err);
@@ -107,7 +125,6 @@ async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: st
         client.release();
       }
     } catch (err) {
-      // Classification failed — leave structured={} so it stays pending and can be retried
       console.error(`[Classify] Failed for ${id}, leaving as pending`);
     }
 
@@ -162,10 +179,11 @@ router.post('/keep/bulk', async (req, res) => {
   try {
     await client.query('BEGIN');
     for (const note of notes) {
+      const content = note.content || ''
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO items (title, type, content, structured, source, reviewed)
-         VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-        [note.title || 'Untitled', 'note', note.content || '', JSON.stringify({}), 'keep', false]
+        `INSERT INTO items (title, type, content, raw_content, structured, source, reviewed)
+         VALUES ($1, $2, $3, $3, $4, $5, $6) RETURNING id`,
+        [note.title || 'Untitled', 'note', content, JSON.stringify({}), 'keep', false]
       );
       const itemId = rows[0].id;
       savedIds.push(itemId);
@@ -190,32 +208,6 @@ router.post('/keep/bulk', async (req, res) => {
   res.json({ saved: savedIds.length, jobId });
 });
 
-router.post('/keep/classify', async (req, res) => {
-  try {
-    const { notes } = req.body;
-    if (!Array.isArray(notes)) return res.status(400).json({ error: 'Notes array required' });
-
-    const jobId = uuidv4();
-    jobs[jobId] = { status: 'processing', progress: 0 };
-
-    // Start processing in background
-    classifyNotesBatch(notes, (p) => {
-      jobs[jobId].progress = Math.round((p.completed / p.total) * 100);
-    }).then(results => {
-      jobs[jobId].status = 'completed';
-      jobs[jobId].results = results;
-    }).catch(err => {
-      jobs[jobId].status = 'failed';
-      jobs[jobId].error = err.message;
-    });
-
-    res.json({ jobId });
-  } catch (error) {
-    console.error('Batch classification error:', error);
-    res.status(500).json({ error: 'Failed to start classification' });
-  }
-});
-
 router.get('/jobs/:id', (req, res) => {
   const job = jobs[req.params.id];
   if (!job) return res.status(404).json({ error: 'Job not found' });
@@ -232,13 +224,52 @@ router.get('/markitdown/health', async (_req, res) => {
   res.json({ installed });
 });
 
-// ── POST /api/ingest/file — convert any document to Markdown → classify ───────
+// ── GET /api/ingest/vision/health — is a vision model available in Ollama? ────
+
+router.get('/vision/health', async (_req, res) => {
+  const model = await getAvailableVisionModel();
+  res.json({ available: !!model, model: model ?? null });
+});
+
+// ── POST /api/ingest/file — image → vision model | document → MarkItDown ──────
 
 router.post('/file', upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const { originalname, buffer, mimetype } = req.file;
+  const baseName = originalname.replace(/\.[^.]+$/, '');
 
+  // ── Image: run through Ollama vision model ──────────────────────────────────
+  if (isImageMime(mimetype)) {
+    try {
+      const description = await describeImage(buffer, originalname);
+      const classification = await classify(description);
+
+      if (!classification.title || classification.title === 'Untitled') {
+        classification.title = baseName;
+      }
+
+      return res.json({
+        preview: {
+          title: classification.title,
+          type: classification.type,
+          content: description,
+          structured: { ...classification.structured, summary: classification.summary },
+          categories: classification.categories,
+          tags: classification.tags,
+          source: 'manual',
+          visionModel: await getAvailableVisionModel(),
+        },
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Vision analysis failed';
+      console.error('Vision ingest error:', err);
+      const status = msg.includes('No vision model') ? 503 : 500;
+      return res.status(status).json({ error: msg, code: status === 503 ? 'NO_VISION_MODEL' : undefined });
+    }
+  }
+
+  // ── Document: run through MarkItDown ────────────────────────────────────────
   if (!SUPPORTED_MIME_TYPES.includes(mimetype) && !originalname.match(/\.(pdf|docx?|pptx?|xlsx?|csv|jpe?g|png|gif|webp|bmp|html?|xml|json|epub|txt|md)$/i)) {
     return res.status(415).json({ error: `Unsupported file type: ${mimetype}` });
   }
@@ -250,15 +281,13 @@ router.post('/file', upload.single('file'), async (req, res) => {
       return res.status(422).json({ error: 'No text could be extracted from this file.' });
     }
 
-    // Classify using first 3000 chars — enough context without overwhelming Ollama
     const classification = await classify(markdown.slice(0, 3000));
 
-    // Fall back to filename (without extension) if AI didn't infer a title
     if (!classification.title || classification.title === 'Untitled') {
-      classification.title = originalname.replace(/\.[^.]+$/, '');
+      classification.title = baseName;
     }
 
-    res.json({
+    return res.json({
       preview: {
         title: classification.title,
         type: classification.type,
@@ -267,7 +296,6 @@ router.post('/file', upload.single('file'), async (req, res) => {
         categories: classification.categories,
         tags: classification.tags,
         source: 'manual',
-        sourceUrl: undefined,
       },
     });
   } catch (err) {
@@ -276,7 +304,7 @@ router.post('/file', upload.single('file'), async (req, res) => {
     if (msg.includes('not found')) {
       return res.status(503).json({ error: msg });
     }
-    res.status(500).json({ error: msg });
+    return res.status(500).json({ error: msg });
   }
 });
 

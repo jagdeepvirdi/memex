@@ -23,6 +23,7 @@ export async function summarizeAndClassify(scraped: ScrapedContent): Promise<Ing
     categories: result.categories,
     tags: result.tags,
     source: scraped.source,
-    sourceUrl: scraped.sourceUrl
+    sourceUrl: scraped.sourceUrl,
+    reviewed: false,
   };
 }

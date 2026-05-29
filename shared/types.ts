@@ -108,6 +108,23 @@ export interface Category {
   children?: Category[]
 }
 
+export interface CategoryAnomaly {
+  id: string
+  name: string
+  itemCount: number
+  suggestedPath: string[]
+  previewItems: Array<{ id: string; title: string; type: string }>
+}
+
+export interface RemapCategoryRequest {
+  fromRootId: string
+  toPath: string[]
+}
+
+export interface RemapCategoryResponse {
+  remapped: number
+}
+
 // ── Tags ──────────────────────────────────────────────────────────────────────
 
 export interface Tag {
@@ -199,6 +216,23 @@ export interface StatsResponse {
   itemsByType: Record<ItemType, number>
   totalVaultItems: number
   recentActivity: number
+}
+
+// ── Data Provenance ───────────────────────────────────────────────────────────
+
+export interface ItemExtraction {
+  id: string
+  item_id: string
+  model: string
+  type: ItemType
+  title: string
+  summary?: string
+  structured: Record<string, unknown>
+  categories: string[]
+  tags: string[]
+  confidence?: number
+  applied: boolean
+  created_at: string
 }
 
 // ── RAG Q&A ───────────────────────────────────────────────────────────────────

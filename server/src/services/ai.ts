@@ -52,6 +52,6 @@ export async function aiEmbed(text: string): Promise<number[]> {
   return ollamaEmbed(text)
 }
 
-export function activeProvider(): 'claude' | 'ollama' {
-  return useClaude() ? 'claude' : 'ollama'
+export async function activeProvider(): Promise<'claude' | 'ollama'> {
+  return (await useClaude()) ? 'claude' : 'ollama'
 }
