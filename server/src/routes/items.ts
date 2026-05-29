@@ -14,6 +14,7 @@ import {
 import { classify, mapToCategories } from '../services/classifier.js'
 import { embedItem } from '../services/embedder.js'
 import { extractAndLinkEntities } from '../services/entityService.js'
+import { generateDigest } from '../services/digestService.js'
 import type { ItemType, ItemSource } from '../../../shared/types.js'
 
 const router = Router()
@@ -458,6 +459,20 @@ router.get('/stats', async (_req, res) => {
   }
 })
 
+// ── GET /api/items/digest — weekly digest ────────────────────────────────────
+// NOTE: must be registered before the parametric '/:id' route below, otherwise
+// Express matches '/:id' with id="digest" and fails on the UUID lookup.
+
+router.get('/digest', async (_req, res) => {
+  try {
+    const digest = await generateDigest()
+    res.json(digest)
+  } catch (err) {
+    console.error('GET /api/items/digest error:', err)
+    res.status(500).json({ error: 'Failed to generate digest' })
+  }
+})
+
 router.get('/:id/related', async (req, res) => {
   try {
     const { rows: itemRows } = await pool.query('SELECT embedding FROM items WHERE id = $1 AND deleted_at IS NULL', [req.params.id])
@@ -692,19 +707,6 @@ router.delete('/:id', async (req, res) => {
   }
 })
 
-// ── GET /api/items/digest — weekly digest ────────────────────────────────────
-
-import { generateDigest } from '../services/digestService.js'
-
-router.get('/digest', async (_req, res) => {
-  try {
-    const digest = await generateDigest()
-    res.json(digest)
-  } catch (err) {
-    console.error('GET /api/items/digest error:', err)
-    res.status(500).json({ error: 'Failed to generate digest' })
-  }
-})
 
 // ── POST /api/items/nl-filter — natural-language query → structured filter → items ──
 
