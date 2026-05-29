@@ -228,6 +228,20 @@ export interface StatsResponse {
   recentActivity: number
 }
 
+// ── NL Filter ─────────────────────────────────────────────────────────────────
+
+export interface ParsedFilter {
+  type: ItemType | null
+  searchQuery: string
+  structuredFilters: Record<string, string>
+}
+
+export interface NLFilterResponse {
+  items: Item[]
+  total: number
+  parsedFilter: ParsedFilter
+}
+
 // ── Data Provenance ───────────────────────────────────────────────────────────
 
 export interface ItemExtraction {

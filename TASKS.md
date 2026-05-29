@@ -347,12 +347,19 @@ markitdown --help
     "Has Reminder" filter toggle and bell icon on rows. Dashboard shows an "Upcoming Reminders"
     widget listing items with reminders in the next 7 days with relative time labels.
 
-- [ ] **Natural language filter on Table View**
+- [x] **Natural language filter on Table View** ✅
   - Text input: "Thai restaurants I haven't visited" → send to Ollama with system prompt asking
     it to return a JSON filter: `{ type: "place", structured.cuisine: "Thai", structured.visitStatus: "want-to-visit" }`
   - Server: `POST /api/items/nl-filter` — runs NL→query conversion, returns same shape as
     `GET /api/items` so Table View can consume it directly
   - Client: replace or augment the search box in TableView with a "Ask a filter" mode
+  - **Done:** `nlFilterService.ts` parses NL queries into `{ type, searchQuery, structuredFilters }`
+    using Ollama with JSON mode + temperature 0. Field names validated against a SAFE_FIELDS
+    whitelist to prevent JSONB injection. `POST /api/items/nl-filter` builds a dynamic WHERE clause
+    and returns `{ items, total, parsedFilter }`. TableView has an "Ask AI" sparkle toggle: switches
+    the search input to a purple NL mode (fires on Enter or Send button). Below the filter bar,
+    "Interpreted as:" badges show each parsed filter component (type, search terms, structured
+    fields). Clicking ✕ or Reset returns to normal filter mode.
 
 - [x] **Export to Obsidian / Markdown vault** ✅
   - Each item → `[title].md` with YAML frontmatter:

@@ -690,6 +690,80 @@ router.delete('/:id', async (req, res) => {
   }
 })
 
+// ── POST /api/items/nl-filter — natural-language query → structured filter → items ──
+
+import { parseNLFilter } from '../services/nlFilterService.js'
+
+router.post('/nl-filter', async (req, res) => {
+  const { query } = req.body
+  if (!query || typeof query !== 'string') {
+    return res.status(400).json({ error: 'query is required' })
+  }
+
+  try {
+    const parsedFilter = await parseNLFilter(query)
+
+    const conditions: string[] = ['i.deleted_at IS NULL']
+    const params: unknown[] = []
+    let p = 1
+
+    if (parsedFilter.type) {
+      conditions.push(`i.type = $${p++}`)
+      params.push(parsedFilter.type)
+    }
+
+    if (parsedFilter.searchQuery) {
+      conditions.push(`(i.title ILIKE $${p} OR i.content ILIKE $${p})`)
+      params.push(`%${parsedFilter.searchQuery}%`)
+      p++
+    }
+
+    for (const [field, value] of Object.entries(parsedFilter.structuredFilters)) {
+      conditions.push(`i.structured->>'${field}' ILIKE $${p++}`)
+      params.push(`%${value}%`)
+    }
+
+    const where = conditions.join(' AND ')
+
+    const { rows: countRows } = await pool.query<{ total: string }>(
+      `SELECT COUNT(*) AS total FROM items i WHERE ${where}`,
+      params,
+    )
+    const total = parseInt(countRows[0].total, 10)
+
+    const { rows } = await pool.query(
+      `SELECT
+         i.id, i.title, i.type, i.content, i.structured,
+         i.source, i.source_url, i.encrypted, i.reviewed,
+         i.created_at, i.updated_at, i.confidence, i.remind_at,
+         COALESCE(
+           (SELECT array_agg(c.name ORDER BY ic2.depth)
+            FROM item_categories ic2
+            JOIN categories c ON c.id = ic2.category_id
+            WHERE ic2.item_id = i.id),
+           '{}'::text[]
+         ) AS categories,
+         COALESCE(
+           (SELECT array_agg(t.name ORDER BY t.name)
+            FROM item_tags it2
+            JOIN tags t ON t.id = it2.tag_id
+            WHERE it2.item_id = i.id),
+           '{}'::text[]
+         ) AS tags
+       FROM items i
+       WHERE ${where}
+       ORDER BY i.created_at DESC
+       LIMIT 50`,
+      params,
+    )
+
+    res.json({ items: rows.map(rowToItem), total, parsedFilter })
+  } catch (err) {
+    console.error('POST /api/items/nl-filter error:', err)
+    res.status(500).json({ error: 'NL filter failed' })
+  }
+})
+
 // ── GET /api/items/reminders/due — items whose reminder has fired ─────────────
 
 router.get('/reminders/due', async (_req, res) => {

@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Loader2, Check, ExternalLink, Filter, Search, RotateCcw, Shield, Download, Bell } from 'lucide-react'
+import { ArrowLeft, Loader2, Check, ExternalLink, Filter, Search, RotateCcw, Shield, Download, Bell, Sparkles, X, Send } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
-import { fetchItems, updateItem, migrateToVault } from '../lib/api'
+import { fetchItems, updateItem, migrateToVault, nlFilter } from '../lib/api'
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
 import { itemsToCsv, downloadCsv } from '../lib/export'
-import type { Item, ItemType } from '../../../shared/types'
+import type { Item, ItemType, ParsedFilter } from '../../../shared/types'
 
 const TYPE_OPTIONS: { label: string; value: ItemType | 'all' }[] = [
   { label: 'All Types', value: 'all' },
@@ -38,6 +38,12 @@ export default function TableView() {
   const [bulkReviewing, setBulkReviewing] = useState(false)
   const [migratingId, setMigratingId] = useState<string | null>(null)
   const { vaultKey, isLocked } = useVaultStore()
+
+  // NL filter mode
+  const [nlMode, setNlMode] = useState(false)
+  const [nlQuery, setNlQuery] = useState('')
+  const [nlLoading, setNlLoading] = useState(false)
+  const [parsedFilter, setParsedFilter] = useState<ParsedFilter | null>(null)
 
   // Filters from URL
   const type = (searchParams.get('type') as ItemType | 'all') || 'all'
@@ -145,6 +151,44 @@ export default function TableView() {
     toast.success('CSV exported')
   }
 
+  const handleNLFilter = async () => {
+    if (!nlQuery.trim() || nlLoading) return
+    setNlLoading(true)
+    setParsedFilter(null)
+    try {
+      const result = await nlFilter(nlQuery.trim())
+      setItems(result.items)
+      setTotal(result.total)
+      setParsedFilter(result.parsedFilter)
+    } catch (err) {
+      toast.error('Natural language filter failed')
+      console.error(err)
+    } finally {
+      setNlLoading(false)
+    }
+  }
+
+  const clearNLMode = () => {
+    setNlMode(false)
+    setNlQuery('')
+    setParsedFilter(null)
+    // Re-run normal filter
+    setLoading(true)
+    fetchItems({
+      type: type === 'all' ? undefined : type,
+      unreviewed: status === 'unreviewed' ? true : undefined,
+      pendingEnrichment: status === 'pendingEnrichment' ? true : undefined,
+      enriched: status === 'enriched' ? true : undefined,
+      hasReminder: hasReminder || undefined,
+      q: q || undefined,
+      limit,
+      offset,
+    })
+      .then(res => { setItems(res.items); setTotal(res.total) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }
+
   return (
     <div className="min-h-screen bg-bg flex text-ink">
       <Sidebar activeSection="dashboard" />
@@ -182,18 +226,46 @@ export default function TableView() {
 
         <div className="p-8 flex-1 flex flex-col gap-6 overflow-hidden">
           {/* Filters Bar */}
+          <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/5">
-            <div className="flex items-center gap-2 flex-1 min-w-[200px]">
-              <Search size={16} className="text-ink-muted" />
-              <input 
-                type="text" 
-                placeholder="Search title or content..."
-                value={q}
-                onChange={(e) => handleUpdateFilter('q', e.target.value)}
-                className="bg-transparent border-none outline-none text-sm w-full placeholder:text-ink-muted/50"
-              />
-            </div>
-            
+            {nlMode ? (
+              /* NL filter input */
+              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                <Sparkles size={16} className="text-purple-400 shrink-0" />
+                <input
+                  type="text"
+                  autoFocus
+                  placeholder={'e.g. "Thai restaurants I haven\'t visited" or "movies I want to watch"'}
+                  value={nlQuery}
+                  onChange={e => setNlQuery(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleNLFilter()}
+                  className="bg-transparent border-none outline-none text-sm w-full placeholder:text-ink-muted/40 text-purple-100"
+                />
+                <button
+                  onClick={handleNLFilter}
+                  disabled={nlLoading || !nlQuery.trim()}
+                  className="shrink-0 p-1.5 text-purple-400 hover:text-purple-300 disabled:opacity-30 transition-colors"
+                >
+                  {nlLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                </button>
+                <button onClick={clearNLMode} className="shrink-0 p-1.5 text-ink-muted hover:text-ink transition-colors">
+                  <X size={16} />
+                </button>
+              </div>
+            ) : (
+              /* Normal search */
+              <div className="flex items-center gap-2 flex-1 min-w-[200px]">
+                <Search size={16} className="text-ink-muted" />
+                <input
+                  type="text"
+                  placeholder="Search title or content..."
+                  value={q}
+                  onChange={(e) => handleUpdateFilter('q', e.target.value)}
+                  className="bg-transparent border-none outline-none text-sm w-full placeholder:text-ink-muted/50"
+                />
+              </div>
+            )}
+
             <div className="h-4 w-px bg-white/10 mx-2 hidden sm:block" />
 
             <div className="flex items-center gap-3">
@@ -234,13 +306,50 @@ export default function TableView() {
               </button>
 
               <button
-                onClick={() => setSearchParams({})}
+                onClick={() => { if (nlMode) clearNLMode(); else setNlMode(true) }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  nlMode
+                    ? 'bg-purple-500/20 text-purple-300 border border-purple-500/30'
+                    : 'bg-white/5 text-ink-muted border border-white/10 hover:text-ink'
+                }`}
+                title="Ask a natural language filter"
+              >
+                <Sparkles size={13} />
+                Ask AI
+              </button>
+
+              <button
+                onClick={() => { clearNLMode(); setSearchParams({}) }}
                 className="p-1.5 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-colors"
                 title="Reset Filters"
               >
                 <RotateCcw size={16} />
               </button>
             </div>
+          </div>
+
+          {/* Parsed filter interpretation badge */}
+          {parsedFilter && (
+            <div className="flex flex-wrap items-center gap-2 px-1">
+              <span className="text-[10px] text-purple-400 uppercase tracking-widest font-bold">Interpreted as:</span>
+              {parsedFilter.type && (
+                <span className="text-[10px] bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded-full">
+                  type: {parsedFilter.type}
+                </span>
+              )}
+              {parsedFilter.searchQuery && (
+                <span className="text-[10px] bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded-full">
+                  search: "{parsedFilter.searchQuery}"
+                </span>
+              )}
+              {Object.entries(parsedFilter.structuredFilters).map(([k, v]) => (
+                <span key={k} className="text-[10px] bg-purple-500/10 text-purple-300 border border-purple-500/20 px-2 py-0.5 rounded-full">
+                  {k}: {v}
+                </span>
+              ))}
+              <span className="text-[10px] text-ink-muted">{total} result{total !== 1 ? 's' : ''}</span>
+            </div>
+          )}
           </div>
 
           {/* Table Container */}

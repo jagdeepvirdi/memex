@@ -12,6 +12,7 @@ import type {
   RemapCategoryResponse,
   ItemExtraction,
   SimilarItem,
+  NLFilterResponse,
 } from '../../../shared/types'
 import { useAuthStore } from '../store/authStore'
 
@@ -176,6 +177,13 @@ export async function applyExtraction(itemId: string, extractionId: string): Pro
 
 export async function fetchDueReminders(): Promise<Item[]> {
   return apiFetch<Item[]>('/items/reminders/due')
+}
+
+export async function nlFilter(query: string): Promise<NLFilterResponse> {
+  return apiFetch<NLFilterResponse>('/items/nl-filter', {
+    method: 'POST',
+    body: JSON.stringify({ query }),
+  })
 }
 
 export async function setReminder(itemId: string, remindAt: string | null): Promise<Item> {
