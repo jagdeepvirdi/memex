@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Loader2, Star, Film, Book, ExternalLink, Filter, Search, RotateCcw, Clapperboard, Download } from 'lucide-react'
+import { ArrowLeft, Star, Book, ExternalLink, Search, RotateCcw, Clapperboard, Download } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
 import { fetchItems, updateItem } from '../lib/api'
 import { itemsToCsv, downloadCsv } from '../lib/export'
-import type { Item, MediaData, BookData } from '../../../shared/types'
+import type { Item } from '../../../shared/types'
 
 export default function MediaView() {
   const [searchParams, setSearchParams] = useSearchParams()

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Loader2, Star, MapPin, ExternalLink, Filter, Search, RotateCcw, Download } from 'lucide-react'
+import { ArrowLeft, Star, MapPin, ExternalLink, Search, RotateCcw, Download } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'

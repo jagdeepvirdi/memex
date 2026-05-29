@@ -15,8 +15,6 @@ import {
   Table,
   MapPin,
   Clapperboard,
-  Wifi,
-  WifiOff,
   MessageSquare,
   FolderSync,
 } from 'lucide-react';
@@ -37,8 +35,6 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   const [enrichment, setEnrichment] = useState<{ pending: number; total: number } | null>(null);
   const [eta, setEta] = useState<string | null>(null);
   const [rate, setRate] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-
   const startTimeRef = useRef<number | null>(null);
   const startPendingRef = useRef<number | null>(null);
 
@@ -46,11 +42,6 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   const { logout, user } = useAuthStore();
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
     Promise.all([fetchCategories(), fetchTags()])
       .then(([cats, tgs]) => {
         setCategories(cats);

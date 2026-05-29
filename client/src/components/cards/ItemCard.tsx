@@ -7,7 +7,6 @@ import NoteCard from './NoteCard'
 import LinkCard from './LinkCard'
 import StockCard from './StockCard'
 import SpecCard from './SpecCard'
-import VaultCard from './VaultCard'
 import { apiFetch } from '../../lib/api'
 import { toast } from 'sonner'
 

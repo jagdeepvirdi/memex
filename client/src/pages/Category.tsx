@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, Loader2, Filter, SortAsc } from 'lucide-react'
+import { ArrowLeft, Filter, SortAsc } from 'lucide-react'
 import Sidebar from '../components/sidebar/Sidebar'
 import ItemCard from '../components/cards/ItemCard'
 import { CardSkeleton } from '../components/Skeleton'

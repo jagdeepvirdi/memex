@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Edit2, Trash2, ExternalLink, Eye, EyeOff, Check, Copy } from 'lucide-react'
 import type { VaultItem } from '@shared/types'
-import { CardBase, TypeBadge, Muted } from './CardBase'
+import { CardBase, TypeBadge } from './CardBase'
 import { decryptVaultItem } from '../../lib/crypto'
 import { useVaultStore } from '../../store/vaultStore'
 

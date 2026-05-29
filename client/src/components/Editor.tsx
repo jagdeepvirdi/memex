@@ -14,7 +14,6 @@ import {
   Heading2, 
   Code,
   CheckSquare,
-  Link as LinkIcon
 } from 'lucide-react';
 
 interface EditorProps {

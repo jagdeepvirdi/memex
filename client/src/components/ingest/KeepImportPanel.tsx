@@ -21,7 +21,7 @@ export default function KeepImportPanel() {
   const [isSaving, setIsSaving] = useState(false);
   const [importComplete, setImportComplete] = useState(false);
   const [savedCount, setSavedCount] = useState(0);
-  const [jobId, setJobId] = useState<string | null>(null);
+  const [, setJobId] = useState<string | null>(null);
   const [jobProgress, setJobProgress] = useState(0);
   const [jobElapsed, setJobElapsed] = useState('0');
   const fileInputRef = useRef<HTMLInputElement>(null);

@@ -1,10 +1,10 @@
 import { useState, useRef, useEffect } from 'react'
 import { ArrowLeft, Loader2, Send, Brain, Bot, User, Sparkles, ExternalLink, Bookmark } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import Sidebar from '../components/sidebar/Sidebar'
 import { askKnowledge } from '../lib/api'
-import type { Item, AskResponse } from '../../../shared/types'
+import type { Item } from '../../../shared/types'
 
 interface Message {
   id: string

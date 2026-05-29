@@ -246,7 +246,7 @@ export default function Dashboard() {
                 <h3 className="font-display text-xl text-ink">Rediscover</h3>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {rediscovery.map(({ type, reason, item }) => (
+                {rediscovery.map(({ reason, item }) => (
                   <div key={item.id} className="relative group">
                     <div className="absolute -top-3 left-4 px-3 py-1 bg-surface border border-purple-500/30 text-[9px] uppercase tracking-widest font-bold text-purple-400 rounded-lg shadow-lg z-10">
                       {reason}
