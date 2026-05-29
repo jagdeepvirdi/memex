@@ -11,21 +11,20 @@
 
 ### 🔴 Action Items — High Priority
 
-- [ ] **Test coverage for Phase-2/3 services (the big gap)**
-  - Zero tests exist for: `nlFilterService` (has injection-prevention logic — MUST test the
-    SAFE_FIELDS whitelist + fallback), `duplicateService` (threshold logic), `digestService`,
-    `entityService` (getOrCreate/link dedup), `share.ts` routes, `settings.ts` routes,
-    `tags.ts` routes, `ragService`, `insightService`, `rediscoveryService`, `visionService`
-    (model priority selection), `whisperService`.
-  - Priority order: `nlFilterService` (security-relevant) → `share.ts` (public endpoint) →
-    `duplicateService` → `entityService` → the rest.
-  - Add route tests for the new `items.ts` endpoints: `/digest`, `/nl-filter`, `/reminders/due`,
-    `/:id/share`, `/:id/extractions`, `/export/obsidian`.
+- [~] **Test coverage for Phase-2/3 services (the big gap)** — IN PROGRESS
+  - ✅ Done: `nlFilterService` (10 tests — whitelist, type validation, fallback),
+    `share.ts` route (6 tests — public access, 400/404/500, query safety),
+    `duplicateService` (6 tests — threshold, empty-embedding guard, never-throws),
+    `entityService` (11 tests — getOrCreate dedup, embedding-failure path, role mapping).
+    Server test count: 118 → 154.
+  - ⬜ Still untested: `digestService`, `settings.ts` routes, `tags.ts` routes, `ragService`,
+    `insightService`, `rediscoveryService`, `visionService` (model priority selection),
+    `whisperService`. Plus route tests for `/nl-filter`, `/:id/share` (POST/DELETE), `/:id/extractions`.
 
-- [ ] **Add a route-ordering regression guard**
-  - The `/digest` bug class (literal route shadowed by `/:id`) is invisible to `tsc` and unit
-    tests that hit handlers directly. Add a supertest that asserts `GET /api/items/digest`,
-    `/reminders/due`, `/export/obsidian` return 200 (not a UUID-parse 500) through the real router.
+- [x] **Add a route-ordering regression guard** ✅
+  - `items.routing.test.ts` asserts `GET /api/items/digest` hits the digest handler (distinctive
+    `period` shape), and `/reminders/due` + `/export/obsidian` return 200 through the real router —
+    catching the `/:id` shadowing bug class that `tsc` and handler-level unit tests miss.
 
 - [ ] **Auth rate-limiting**
   - `POST /api/auth/login` has no throttle — brute-forceable. Add `express-rate-limit`
@@ -48,10 +47,6 @@
   - Only `ItemCard` and `crypto` are tested. Add tests for `lib/api.ts` (request shaping),
     `lib/export.ts` (CSV/escaping), `store/vaultStore` (auto-lock timing), and the
     `ReminderPoller` / `MondayDigestRedirect` logic in `App.tsx`.
-
-- [ ] **`insightService` / `digestService` have no Ollama timeout**
-  - A slow/hung Ollama call blocks the Dashboard and Digest. Wrap `aiChat` calls in a
-    `Promise.race` timeout (~15s) returning `[]` / null.
 
 ### 🟢 Action Items — Low Priority / Polish
 
@@ -326,23 +321,15 @@ markitdown --help
 
 ## 🚀 GitHub Release Checklist
 
-- [ ] **Commit 3 untracked files**
-  - `client/src/pages/CategoryReview.tsx`
-  - `server/src/db/migrations/009_data_provenance.sql`
-  - `server/src/services/visionService.ts`
-  - Also commit migration 010 (`010_place_type.sql`) and all other modified files from this session
+- [x] **Commit 3 untracked files** ✅ (done in commit 38d0225)
 
-- [ ] **Fix ~20 unused import warnings in client**
-  - Pre-existing `TS6133`/`TS6196` errors across: `ItemCard.tsx`, `VaultCard.tsx`, `Editor.tsx`,
-    `ErrorBoundary.tsx`, `KeepImportPanel.tsx`, `Sidebar.tsx` (Wifi/WifiOff/isOnline),
-    `AskMemex.tsx`, `Category.tsx`, `Dashboard.tsx`, `EnrichedItems.tsx`, `MediaView.tsx`,
-    `PlacesView.tsx`, `vaultStore.ts`
-  - Harmless at runtime but messy; clean up before public release
+- [x] **Fix ~20 unused import warnings in client** ✅ (done in commit 2c43f25)
 
-- [ ] **Add timeout to insightService Ollama call**
-  - `server/src/services/insightService.ts`: no timeout on `aiChat()` — if Ollama is slow or
-    unresponsive the Dashboard hangs indefinitely on first load
-  - Fix: wrap in `Promise.race` with a 15s timeout; return `[]` on timeout
+- [ ] **Add timeout to insightService / digestService Ollama calls**
+  - `insightService.ts` and `digestService.ts` have no timeout on `aiChat()` — a slow/hung
+    Ollama blocks the Dashboard and Digest on first load.
+  - Fix: wrap in `Promise.race` with a ~15s timeout; return `[]` / null on timeout.
+  - (Tracked once here — was previously duplicated in the review action items above.)
 
 ---
 
