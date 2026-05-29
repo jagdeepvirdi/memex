@@ -3,6 +3,21 @@
 
 export type VaultKey = CryptoKey
 
+// Safe base64 helpers — avoid btoa(String.fromCharCode(...array)) which hits
+// the JS argument stack limit (~65k args) and throws RangeError on large payloads.
+function toBase64(bytes: Uint8Array): string {
+  let binary = ''
+  for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i])
+  return btoa(binary)
+}
+
+function fromBase64(b64: string) {
+  const binary = atob(b64)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+  return bytes
+}
+
 /**
  * Derives an AES-256-GCM key from a master password and salt using PBKDF2.
  */
@@ -55,8 +70,8 @@ export async function encryptVaultItem(
   )
 
   return {
-    ciphertext: btoa(String.fromCharCode(...new Uint8Array(encrypted))),
-    iv: btoa(String.fromCharCode(...iv))
+    ciphertext: toBase64(new Uint8Array(encrypted)),
+    iv: toBase64(iv),
   }
 }
 
@@ -68,8 +83,8 @@ export async function decryptVaultItem(
   iv: string,
   key: VaultKey,
 ): Promise<string> {
-  const ciphertextData = new Uint8Array(atob(ciphertext).split('').map(c => c.charCodeAt(0)))
-  const ivData = new Uint8Array(atob(iv).split('').map(c => c.charCodeAt(0)))
+  const ciphertextData = fromBase64(ciphertext)
+  const ivData = fromBase64(iv)
 
   const decrypted = await window.crypto.subtle.decrypt(
     { name: 'AES-GCM', iv: ivData },
@@ -85,12 +100,12 @@ export async function decryptVaultItem(
  * Utility to convert base64 to Uint8Array (useful for salt)
  */
 export function base64ToUint8Array(base64: string): Uint8Array {
-  return new Uint8Array(atob(base64).split('').map(c => c.charCodeAt(0)))
+  return fromBase64(base64)
 }
 
 /**
  * Utility to convert Uint8Array to base64
  */
 export function uint8ArrayToBase64(arr: Uint8Array): string {
-  return btoa(String.fromCharCode(...arr))
+  return toBase64(arr)
 }
