@@ -11,15 +11,16 @@
 
 ### 🔴 Action Items — High Priority
 
-- [~] **Test coverage for Phase-2/3 services (the big gap)** — IN PROGRESS
-  - ✅ Done: `nlFilterService` (10 tests — whitelist, type validation, fallback),
-    `share.ts` route (6 tests — public access, 400/404/500, query safety),
-    `duplicateService` (6 tests — threshold, empty-embedding guard, never-throws),
-    `entityService` (11 tests — getOrCreate dedup, embedding-failure path, role mapping).
-    Server test count: 118 → 154.
-  - ⬜ Still untested: `digestService`, `settings.ts` routes, `tags.ts` routes, `ragService`,
-    `insightService`, `rediscoveryService`, `visionService` (model priority selection),
-    `whisperService`. Plus route tests for `/nl-filter`, `/:id/share` (POST/DELETE), `/:id/extractions`.
+- [x] **Test coverage for Phase-2/3 services (the big gap)** ✅
+  - Covered: `nlFilterService` (whitelist/type/fallback), `share.ts` route, `duplicateService`,
+    `entityService` (dedup, embedding-failure, role mapping), `visionService` (model priority +
+    preference), `insightService` (threshold, JSON parse, cap-at-3), `ragService` (embed,
+    synthesis, empty short-circuit), `rediscoveryService`, `digestService` (counts, connection
+    pairing, graceful AI failure), `settings.ts` route (GET/PUT/bookmarklet-key), `tags.ts` route
+    (list/add/remove), `whisperService` (mime + install check).
+  - Server test count: 118 → **204**. Total with client: **221**.
+  - ⬜ Remaining (lower value): route tests for `/nl-filter`, `/:id/share` POST/DELETE,
+    `/:id/extractions` — services behind them are unit-tested; deferring to client coverage work.
 
 - [x] **Add a route-ordering regression guard** ✅
   - `items.routing.test.ts` asserts `GET /api/items/digest` hits the digest handler (distinctive

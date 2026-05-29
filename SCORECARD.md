@@ -36,6 +36,20 @@ Complete review across design, architecture, code, tests, and security. Verified
 - **Everything else** scores well: the architecture is coherent, docs are current, and the
   design system is consistent end to end.
 
+### Update — 2026-05-30 (post-review remediation)
+
+Acted on the High-priority items the same day:
+
+- **Test Coverage: 5.0 → ~7.0.** Added tests for every previously-untested Phase-2/3 service
+  and route (nlFilter, share, duplicate, entity, vision, insight, rag, rediscovery, digest,
+  settings, tags, whisper) plus a route-ordering regression guard. **Server tests 51→204**
+  (the 51 was itself a broken-suite artifact; real prior baseline was ~118). Total **221**.
+- **Security: 7.5 → ~8.0.** Added `express-rate-limit` on `/auth/login` and `/auth/setup`.
+- Two latent bugs fixed (test-suite JWT guard, `/digest` route shadowing).
+
+Still open: client test coverage, share-token expiry, structured logger, Ollama timeouts,
+CI pipeline. See **TASKS.md** for the live, prioritized list.
+
 ### Action items
 
 The prioritized, checkable action items from this review live in **TASKS.md** under
