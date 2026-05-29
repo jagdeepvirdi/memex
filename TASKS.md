@@ -2,27 +2,12 @@
 
 ---
 
-## 📋 Full Code Review — 2026-05-30
+## 📋 Code Review Action Items — 2026-05-30
 
-Complete review across design, architecture, code, tests, security. Verified via
-`npm test` (135 tests pass: 118 server + 17 client) and a live end-to-end smoke test.
-
-### Scorecard
-
-| Dimension | Score | Notes |
-|---|---|---|
-| Design / UX | 8.5 / 10 | Consistent dark design system, thoughtful flows (onboarding, digest, rediscover). Mobile/responsive unverified. |
-| Architecture | 8.0 / 10 | Clean client/server/shared split; solid migration runner; elegant `ai.ts` provider routing. Footguns: Express route-ordering (already bit us on `/digest`), some routes skip a service layer. |
-| Code Quality | 7.5 / 10 | TS strict, zero `tsc` errors, Zod validation, only 5 `any` in server. Minus: 99 `console.*` calls (no real logger), some mid-file imports, in-memory job store won't survive restart. |
-| Test Coverage | 5.0 / 10 | **Weakest area.** 135 tests but concentrated on Phase-1 surface. Every Phase-2/3 service is untested (see below). Client has 2 test files for ~45 source files. |
-| Security | 7.5 / 10 | Client-side AES vault is sound; parameterized SQL everywhere; JWT guard; NL-filter field whitelist. Gaps: no auth rate-limiting, share tokens never expire, open CORS (documented). |
-| Docs | 9.0 / 10 | CLAUDE.md / README.md / TASKS.md thorough and current. |
-| **Overall** | **~7.5 / 10** | Feature-complete, runs, zero known broken paths after this review. Test coverage is the ceiling. |
-
-### Fixed during this review
-- ✅ **Server test suite was broken** — JWT_SECRET guard threw at import, failing 6/10 test
-  files (only 51 of 118 tests were actually running). Added `vitest.config.ts` + test setup.
-- ✅ **`/digest` route shadowed by `/:id`** — found in smoke test, moved above parametric route.
+> Full scores, rationale, and review narrative are in **[SCORECARD.md](SCORECARD.md)**
+> (overall ~7.5/10; test coverage is the identified ceiling). Two bugs were fixed during
+> the review: the server test suite (JWT_SECRET guard broke 6/10 files) and the `/digest`
+> route shadowing. The remaining action items are below.
 
 ### 🔴 Action Items — High Priority
 
