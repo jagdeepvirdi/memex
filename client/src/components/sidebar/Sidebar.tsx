@@ -16,6 +16,8 @@ import {
   MapPin,
   Clapperboard,
   MessageSquare,
+  Wifi,
+  WifiOff,
   FolderSync,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -35,6 +37,8 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   const [enrichment, setEnrichment] = useState<{ pending: number; total: number } | null>(null);
   const [eta, setEta] = useState<string | null>(null);
   const [rate, setRate] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
   const startTimeRef = useRef<number | null>(null);
   const startPendingRef = useRef<number | null>(null);
 
@@ -42,6 +46,11 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   const { logout, user } = useAuthStore();
 
   useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     Promise.all([fetchCategories(), fetchTags()])
       .then(([cats, tgs]) => {
         setCategories(cats);
@@ -111,6 +120,8 @@ export default function Sidebar({ activeSection }: SidebarProps) {
     return () => {
       clearInterval(interval);
       clearInterval(enrichInterval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -292,18 +303,29 @@ export default function Sidebar({ activeSection }: SidebarProps) {
                <p className="text-[9px] text-ink-muted uppercase tracking-widest font-bold">Local Intelligence</p>
                <Brain size={10} className={aiStatus === 'ok' ? 'text-accent' : 'text-ink-muted'} />
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between mb-1.5">
                <div className="flex items-center gap-2">
                   <div className={`w-1.5 h-1.5 rounded-full ${
-                    aiStatus === 'ok' ? 'bg-green-500 animate-pulse' : 
+                    aiStatus === 'ok' ? 'bg-green-500 animate-pulse' :
                     aiStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500'
                   }`} />
-                  <span className="text-[10px] text-ink font-mono">Ollama: llama3.2</span>
+                  <span className="text-[10px] text-ink font-mono">Ollama</span>
                </div>
                <span className={`text-[10px] font-bold ${
                  aiStatus === 'ok' ? 'text-accent' : 'text-ink-muted'
                }`}>
-                 {aiStatus === 'ok' ? 'ONLINE' : aiStatus === 'error' ? 'OFFLINE' : 'WAIT'}
+                 {aiStatus === 'ok' ? 'READY' : aiStatus === 'error' ? 'OFFLINE' : 'WAIT'}
+               </span>
+            </div>
+            <div className="flex items-center justify-between">
+               <div className="flex items-center gap-2">
+                  {isOnline
+                    ? <Wifi size={10} className="text-green-400" />
+                    : <WifiOff size={10} className="text-orange-400" />}
+                  <span className="text-[10px] text-ink font-mono">Network</span>
+               </div>
+               <span className={`text-[10px] font-bold ${isOnline ? 'text-green-400' : 'text-orange-400'}`}>
+                 {isOnline ? 'ONLINE' : 'OFFLINE'}
                </span>
             </div>
          </div>
