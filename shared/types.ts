@@ -29,6 +29,7 @@ export interface Item {
   encrypted?: boolean
   reviewed: boolean
   confidence?: number
+  remindAt?: Date | null
 }
 
 // ── Structured data per type ──────────────────────────────────────────────────
@@ -166,6 +167,7 @@ export interface UpdateItemRequest {
   content?: string
   categories?: string[]
   tags?: string[]
+  remindAt?: string | null  // ISO datetime string, null to clear
 }
 
 export interface IngestUrlRequest {

@@ -11,6 +11,18 @@ import { CardSkeleton } from '../components/Skeleton'
 import { fetchItems, fetchStats, fetchInsights, fetchRediscovery } from '../lib/api'
 import type { Item, StatsResponse, Insight, RediscoveryItem } from '../../../shared/types'
 
+// Local helper: format a reminder date relative to now
+function formatReminder(date: Date): string {
+  const diff = date.getTime() - Date.now()
+  const mins = Math.round(diff / 60000)
+  if (mins < 60) return `in ${mins}m`
+  const hrs = Math.round(diff / 3600000)
+  if (hrs < 24) return `in ${hrs}h`
+  const days = Math.round(diff / 86400000)
+  if (days === 1) return 'tomorrow'
+  return `in ${days}d`
+}
+
 export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -28,6 +40,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [insights, setInsights] = useState<Insight[]>([])
   const [rediscovery, setRediscovery] = useState<RediscoveryItem[]>([])
+  const [upcomingReminders, setUpcomingReminders] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingInsights, setLoadingInsights] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -42,11 +55,18 @@ export default function Dashboard() {
     setLoadingInsights(true)
     setOffset(0)
     try {
+      // Fire upcoming reminders check in background (non-blocking)
+      fetchItems({ hasReminder: true, limit: 5 })
+        .then(r => setUpcomingReminders(
+          r.items.filter(i => i.remindAt && new Date(i.remindAt) > new Date())
+        ))
+        .catch(() => {})
+
       const [itemsRes, statsRes, insightsRes, rediscoveryRes] = await Promise.all([
         fetchItems({ limit: 12, offset: 0 }),
         fetchStats(),
         fetchInsights().catch(() => []),
-        fetchRediscovery().catch(() => [])
+        fetchRediscovery().catch(() => []),
       ])
       setItems(itemsRes.items)
       setTotal(itemsRes.total)
@@ -237,6 +257,37 @@ export default function Dashboard() {
                />
             </div>
           </section>
+
+          {/* Upcoming Reminders */}
+          {upcomingReminders.length > 0 && (
+            <section className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="flex items-center gap-3">
+                <Clock size={20} className="text-accent" />
+                <h3 className="font-display text-xl text-ink">Upcoming Reminders</h3>
+              </div>
+              <div className="flex flex-col gap-2">
+                {upcomingReminders.map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => navigate(`/item/${item.id}`)}
+                    className="flex items-center gap-4 px-5 py-3 bg-accent/5 border border-accent/15 rounded-xl hover:border-accent/30 transition-all text-left"
+                  >
+                    <div className="text-center shrink-0">
+                      <p className="text-lg font-bold text-accent leading-none">
+                        {item.remindAt ? formatReminder(new Date(item.remindAt)) : ''}
+                      </p>
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm text-ink font-medium truncate">{item.title}</p>
+                      <p className="text-xs text-ink-muted mt-0.5">
+                        {item.remindAt ? new Date(item.remindAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : ''}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Rediscovery / Serendipity */}
           {rediscovery.length > 0 && (

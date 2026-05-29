@@ -43,6 +43,7 @@ const updateItemSchema = z.object({
   deleted: z.boolean().optional(),
   reviewed: z.boolean().optional(),
   confidence: z.number().nullable().optional(),
+  remindAt: z.string().datetime().nullable().optional(),
 })
 
 const listQuerySchema = z.object({
@@ -54,6 +55,7 @@ const listQuerySchema = z.object({
   unreviewed: z.coerce.boolean().default(false),
   pendingEnrichment: z.coerce.boolean().default(false),
   enriched: z.coerce.boolean().default(false),
+  hasReminder: z.coerce.boolean().default(false),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 })
@@ -76,6 +78,7 @@ interface ItemRow {
   categories: string[] | null
   tags: string[] | null
   confidence: number | null
+  remind_at: Date | null
 }
 
 // ── GET /api/items ────────────────────────────────────────────────────────────
@@ -87,7 +90,7 @@ router.get('/', async (req, res) => {
     return
   }
 
-  const { type, category, tag, q, deleted, unreviewed, pendingEnrichment, enriched, limit, offset } = parsed.data
+  const { type, category, tag, q, deleted, unreviewed, pendingEnrichment, enriched, hasReminder, limit, offset } = parsed.data
 
   const conditions: string[] = deleted ? ['i.deleted_at IS NOT NULL'] : ['i.deleted_at IS NULL']
   const params: unknown[] = []
@@ -108,6 +111,10 @@ router.get('/', async (req, res) => {
 
   if (enriched) {
     conditions.push(`i.structured != '{}'::jsonb`)
+  }
+
+  if (hasReminder) {
+    conditions.push(`i.remind_at IS NOT NULL`)
   }
 
   if (category) {
@@ -148,7 +155,7 @@ router.get('/', async (req, res) => {
       const listSql = `
         SELECT
           i.id, i.title, i.type, i.content, i.structured,
-          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at, i.confidence,
+          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at, i.confidence, i.remind_at,
           COALESCE(
             (SELECT array_agg(c.name ORDER BY ic2.depth)
              FROM item_categories ic2
@@ -567,7 +574,7 @@ router.put('/:id', async (req, res) => {
     return
   }
 
-  const { title, content, categories, tags, structured, deleted, reviewed, confidence } = parsed.data
+  const { title, content, categories, tags, structured, deleted, reviewed, confidence, remindAt } = parsed.data
   const client = await pool.connect()
 
   try {
@@ -592,6 +599,7 @@ router.put('/:id', async (req, res) => {
     if (structured !== undefined) { updates.push(`structured = $${p++}`); params.push(JSON.stringify(structured)) }
     if (reviewed !== undefined) { updates.push(`reviewed = $${p++}`); params.push(reviewed) }
     if (confidence !== undefined) { updates.push(`confidence = $${p++}`); params.push(confidence) }
+    if (remindAt !== undefined) { updates.push(`remind_at = $${p++}`); params.push(remindAt ?? null) }
     if (deleted === false) { updates.push(`deleted_at = NULL`) }
 
     if (updates.length > 0) {
@@ -679,6 +687,42 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('DELETE /api/items/:id error:', err)
     res.status(500).json({ error: 'Failed to delete item' })
+  }
+})
+
+// ── GET /api/items/reminders/due — items whose reminder has fired ─────────────
+
+router.get('/reminders/due', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        i.id, i.title, i.type, i.content, i.structured,
+        i.source, i.source_url, i.encrypted, i.reviewed,
+        i.created_at, i.updated_at, i.confidence, i.remind_at,
+        COALESCE(
+          (SELECT array_agg(c.name ORDER BY ic2.depth)
+           FROM item_categories ic2
+           JOIN categories c ON c.id = ic2.category_id
+           WHERE ic2.item_id = i.id),
+          '{}'::text[]
+        ) AS categories,
+        COALESCE(
+          (SELECT array_agg(t.name ORDER BY t.name)
+           FROM item_tags it2
+           JOIN tags t ON t.id = it2.tag_id
+           WHERE it2.item_id = i.id),
+          '{}'::text[]
+        ) AS tags
+      FROM items i
+      WHERE i.deleted_at IS NULL
+        AND i.remind_at IS NOT NULL
+        AND i.remind_at <= NOW()
+      ORDER BY i.remind_at ASC
+    `)
+    res.json(rows.map(rowToItem))
+  } catch (err) {
+    console.error('GET /api/items/reminders/due error:', err)
+    res.status(500).json({ error: 'Failed to fetch due reminders' })
   }
 })
 

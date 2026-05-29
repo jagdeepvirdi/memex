@@ -1,6 +1,8 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useAuthStore } from './store/authStore'
+import { fetchDueReminders, setReminder } from './lib/api'
 import Dashboard from './pages/Dashboard'
 import Category from './pages/Category'
 import Item from './pages/Item'
@@ -24,9 +26,51 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>
 }
 
+function ReminderPoller() {
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+
+    // Request notification permission once on mount
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+
+    const fire = async () => {
+      if (!isAuthenticated || Notification.permission !== 'granted') return
+      try {
+        const due = await fetchDueReminders()
+        for (const item of due) {
+          const n = new Notification('Memex Reminder', {
+            body: item.title,
+            icon: '/pwa-192x192.png',
+            tag: item.id,
+          })
+          n.onclick = () => {
+            window.focus()
+            window.location.href = `/item/${item.id}`
+          }
+          // Clear the reminder so it doesn't fire again
+          setReminder(item.id, null).catch(() => {})
+        }
+      } catch {
+        // Never crash the app over a reminder poll failure
+      }
+    }
+
+    fire() // check immediately on mount
+    const interval = setInterval(fire, 60_000) // then every minute
+    return () => clearInterval(interval)
+  }, [isAuthenticated])
+
+  return null
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
+      <ReminderPoller />
       <BrowserRouter>
         <div className="min-h-screen w-full bg-bg text-ink font-body">
           <Routes>

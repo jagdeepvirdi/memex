@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield, Plus, History, ChevronDown, ChevronUp, Check, Bot } from 'lucide-react'
+import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield, Plus, History, ChevronDown, ChevronUp, Check, Bot, Bell, BellOff } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
 import ItemCard from '../components/cards/ItemCard'
 import Editor from '../components/Editor'
-import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction } from '../lib/api'
+import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, setReminder } from '../lib/api'
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
 import type { Item, ItemExtraction } from '../../../shared/types'
@@ -28,6 +28,8 @@ export default function ItemPage() {
   const [extractions, setExtractions] = useState<ItemExtraction[]>([])
   const [showExtractions, setShowExtractions] = useState(false)
   const [applyingId, setApplyingId] = useState<string | null>(null)
+  const [reminderInput, setReminderInput] = useState('')
+  const [settingReminder, setSettingReminder] = useState(false)
   const tagInputRef = useRef<HTMLInputElement>(null)
   const { vaultKey, isLocked } = useVaultStore()
 
@@ -148,6 +150,35 @@ export default function ItemPage() {
       console.error(err)
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleSetReminder = async () => {
+    if (!id || !reminderInput) return
+    setSettingReminder(true)
+    try {
+      const updated = await setReminder(id, new Date(reminderInput).toISOString())
+      setItem(updated)
+      toast.success('Reminder set')
+      setReminderInput('')
+    } catch {
+      toast.error('Failed to set reminder')
+    } finally {
+      setSettingReminder(false)
+    }
+  }
+
+  const handleClearReminder = async () => {
+    if (!id) return
+    setSettingReminder(true)
+    try {
+      const updated = await setReminder(id, null)
+      setItem(updated)
+      toast.success('Reminder cleared')
+    } catch {
+      toast.error('Failed to clear reminder')
+    } finally {
+      setSettingReminder(false)
     }
   }
 
@@ -363,6 +394,49 @@ export default function ItemPage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Remind Me */}
+          {!isEditing && (
+            <div className="flex flex-col gap-3">
+              <h3 className="text-[10px] text-ink-muted uppercase tracking-widest font-bold flex items-center gap-2">
+                <Bell size={12} /> Reminder
+              </h3>
+              {item.remindAt ? (
+                <div className="flex items-center gap-3 px-4 py-3 bg-accent/5 border border-accent/20 rounded-xl">
+                  <Bell size={14} className="text-accent shrink-0" />
+                  <span className="text-sm text-ink flex-1">
+                    {new Date(item.remindAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
+                  </span>
+                  <button
+                    onClick={handleClearReminder}
+                    disabled={settingReminder}
+                    className="text-xs text-ink-muted hover:text-red-400 flex items-center gap-1 transition-colors"
+                  >
+                    {settingReminder ? <Loader2 size={12} className="animate-spin" /> : <BellOff size={12} />}
+                    Clear
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={reminderInput}
+                    onChange={e => setReminderInput(e.target.value)}
+                    min={new Date().toISOString().slice(0, 16)}
+                    className="flex-1 bg-bg border border-white/10 rounded-lg px-3 py-1.5 text-xs text-ink focus:outline-none focus:border-accent/50 transition-all"
+                  />
+                  <button
+                    onClick={handleSetReminder}
+                    disabled={settingReminder || !reminderInput}
+                    className="flex items-center gap-1.5 text-xs bg-accent/10 hover:bg-accent/20 text-accent px-3 py-1.5 rounded-lg font-semibold disabled:opacity-40 transition-all"
+                  >
+                    {settingReminder ? <Loader2 size={12} className="animate-spin" /> : <Bell size={12} />}
+                    Remind me
+                  </button>
+                </div>
+              )}
             </div>
           )}
 

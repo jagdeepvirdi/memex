@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Loader2, Check, ExternalLink, Filter, Search, RotateCcw, Shield, Download } from 'lucide-react'
+import { ArrowLeft, Loader2, Check, ExternalLink, Filter, Search, RotateCcw, Shield, Download, Bell } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
@@ -43,6 +43,7 @@ export default function TableView() {
   const type = (searchParams.get('type') as ItemType | 'all') || 'all'
   const status = searchParams.get('status') || 'all'
   const q = searchParams.get('q') || ''
+  const hasReminder = searchParams.get('hasReminder') === 'true'
   const offset = parseInt(searchParams.get('offset') || '0', 10)
   const limit = 50
 
@@ -53,6 +54,7 @@ export default function TableView() {
       unreviewed: status === 'unreviewed' ? true : undefined,
       pendingEnrichment: status === 'pendingEnrichment' ? true : undefined,
       enriched: status === 'enriched' ? true : undefined,
+      hasReminder: hasReminder || undefined,
       q: q || undefined,
       limit,
       offset,
@@ -66,7 +68,7 @@ export default function TableView() {
         toast.error('Failed to load items')
       })
       .finally(() => setLoading(false))
-  }, [type, status, q, offset])
+  }, [type, status, q, hasReminder, offset])
 
   const handleUpdateFilter = (key: string, value: string) => {
     const newParams = new URLSearchParams(searchParams)
@@ -212,7 +214,26 @@ export default function TableView() {
                 {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
 
-              <button 
+              <button
+                onClick={() => {
+                  const p = new URLSearchParams(searchParams)
+                  if (hasReminder) p.delete('hasReminder')
+                  else p.set('hasReminder', 'true')
+                  p.set('offset', '0')
+                  setSearchParams(p)
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  hasReminder
+                    ? 'bg-accent/20 text-accent border border-accent/30'
+                    : 'bg-white/5 text-ink-muted border border-white/10 hover:text-ink'
+                }`}
+                title="Filter items with reminders"
+              >
+                <Bell size={13} />
+                Has Reminder
+              </button>
+
+              <button
                 onClick={() => setSearchParams({})}
                 className="p-1.5 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-colors"
                 title="Reset Filters"
@@ -260,7 +281,14 @@ export default function TableView() {
                     items.map(item => (
                       <tr key={item.id} className="hover:bg-white/[0.03] transition-colors group">
                         <td className="px-6 py-4 truncate font-medium text-ink/90 group-hover:text-ink cursor-pointer" onClick={() => navigate(`/item/${item.id}`)}>
-                          {item.title}
+                          <div className="flex items-center gap-2">
+                            {item.remindAt && (
+                              <span title={`Reminder: ${new Date(item.remindAt).toLocaleString()}`}>
+                                <Bell size={11} className="text-accent shrink-0" />
+                              </span>
+                            )}
+                            {item.title}
+                          </div>
                         </td>
                         <td className="px-4 py-4">
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 uppercase font-bold text-ink-muted">

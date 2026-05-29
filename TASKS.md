@@ -333,12 +333,19 @@ markitdown --help
   - `IngestPanel` and `FileIngestPanel` show an amber warning card in the preview step listing
     each match with type badge, title, similarity %, and a link to the existing item.
 
-- [ ] **Remind me later — actionable dates on any item**
+- [x] **Remind me later — actionable dates on any item** ✅
   - Add `remind_at TIMESTAMPTZ` column to items (migration 011)
   - Item page: calendar/date picker to set a reminder
   - Background worker: poll every hour for `remind_at <= NOW()`, push a browser Notification API
     alert (works because it's a PWA)
   - Table View: "Remind" column, filterable by upcoming reminders
+  - **Done:** Migration 011 adds `remind_at TIMESTAMPTZ`. `PUT /api/items/:id` accepts `remindAt`
+    (ISO string or null). `GET /api/items/reminders/due` returns items with `remind_at <= NOW()`.
+    `GET /api/items?hasReminder=true` filter added. `ReminderPoller` in `App.tsx` requests
+    notification permission on mount, polls every 60s, fires `Notification` for due items and
+    clears `remind_at`. Item page has a datetime picker + "Remind me" / "Clear" UI. Table View has
+    "Has Reminder" filter toggle and bell icon on rows. Dashboard shows an "Upcoming Reminders"
+    widget listing items with reminders in the next 7 days with relative time labels.
 
 - [ ] **Natural language filter on Table View**
   - Text input: "Thai restaurants I haven't visited" → send to Ollama with system prompt asking
