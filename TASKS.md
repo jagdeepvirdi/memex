@@ -1,5 +1,83 @@
 # Memex — Task Backlog
 
+---
+
+## 📋 Full Code Review — 2026-05-30
+
+Complete review across design, architecture, code, tests, security. Verified via
+`npm test` (135 tests pass: 118 server + 17 client) and a live end-to-end smoke test.
+
+### Scorecard
+
+| Dimension | Score | Notes |
+|---|---|---|
+| Design / UX | 8.5 / 10 | Consistent dark design system, thoughtful flows (onboarding, digest, rediscover). Mobile/responsive unverified. |
+| Architecture | 8.0 / 10 | Clean client/server/shared split; solid migration runner; elegant `ai.ts` provider routing. Footguns: Express route-ordering (already bit us on `/digest`), some routes skip a service layer. |
+| Code Quality | 7.5 / 10 | TS strict, zero `tsc` errors, Zod validation, only 5 `any` in server. Minus: 99 `console.*` calls (no real logger), some mid-file imports, in-memory job store won't survive restart. |
+| Test Coverage | 5.0 / 10 | **Weakest area.** 135 tests but concentrated on Phase-1 surface. Every Phase-2/3 service is untested (see below). Client has 2 test files for ~45 source files. |
+| Security | 7.5 / 10 | Client-side AES vault is sound; parameterized SQL everywhere; JWT guard; NL-filter field whitelist. Gaps: no auth rate-limiting, share tokens never expire, open CORS (documented). |
+| Docs | 9.0 / 10 | CLAUDE.md / README.md / TASKS.md thorough and current. |
+| **Overall** | **~7.5 / 10** | Feature-complete, runs, zero known broken paths after this review. Test coverage is the ceiling. |
+
+### Fixed during this review
+- ✅ **Server test suite was broken** — JWT_SECRET guard threw at import, failing 6/10 test
+  files (only 51 of 118 tests were actually running). Added `vitest.config.ts` + test setup.
+- ✅ **`/digest` route shadowed by `/:id`** — found in smoke test, moved above parametric route.
+
+### 🔴 Action Items — High Priority
+
+- [ ] **Test coverage for Phase-2/3 services (the big gap)**
+  - Zero tests exist for: `nlFilterService` (has injection-prevention logic — MUST test the
+    SAFE_FIELDS whitelist + fallback), `duplicateService` (threshold logic), `digestService`,
+    `entityService` (getOrCreate/link dedup), `share.ts` routes, `settings.ts` routes,
+    `tags.ts` routes, `ragService`, `insightService`, `rediscoveryService`, `visionService`
+    (model priority selection), `whisperService`.
+  - Priority order: `nlFilterService` (security-relevant) → `share.ts` (public endpoint) →
+    `duplicateService` → `entityService` → the rest.
+  - Add route tests for the new `items.ts` endpoints: `/digest`, `/nl-filter`, `/reminders/due`,
+    `/:id/share`, `/:id/extractions`, `/export/obsidian`.
+
+- [ ] **Add a route-ordering regression guard**
+  - The `/digest` bug class (literal route shadowed by `/:id`) is invisible to `tsc` and unit
+    tests that hit handlers directly. Add a supertest that asserts `GET /api/items/digest`,
+    `/reminders/due`, `/export/obsidian` return 200 (not a UUID-parse 500) through the real router.
+
+- [ ] **Auth rate-limiting**
+  - `POST /api/auth/login` has no throttle — brute-forceable. Add `express-rate-limit`
+    (e.g. 10 attempts / 15 min / IP) on the auth router.
+
+### 🟡 Action Items — Medium Priority
+
+- [ ] **Share tokens never expire**
+  - `public_token` is permanent until manually revoked. Add optional `share_expires_at` and
+    filter it out in `GET /api/share/:token`. Consider a "share expires in 7 days" default.
+
+- [ ] **Replace in-memory ingest job store with something restart-safe**
+  - `jobs` object in `ingest.ts` is lost on server restart — a Keep import in progress becomes
+    unobservable. Either persist job state in a table or document the limitation in the UI.
+
+- [ ] **Structured logger instead of 99 raw `console.*` calls**
+  - Adopt `pino` (or similar) with levels. Keeps prod logs parseable and lets tests silence output.
+
+- [ ] **Client test coverage**
+  - Only `ItemCard` and `crypto` are tested. Add tests for `lib/api.ts` (request shaping),
+    `lib/export.ts` (CSV/escaping), `store/vaultStore` (auto-lock timing), and the
+    `ReminderPoller` / `MondayDigestRedirect` logic in `App.tsx`.
+
+- [ ] **`insightService` / `digestService` have no Ollama timeout**
+  - A slow/hung Ollama call blocks the Dashboard and Digest. Wrap `aiChat` calls in a
+    `Promise.race` timeout (~15s) returning `[]` / null.
+
+### 🟢 Action Items — Low Priority / Polish
+
+- [ ] **CI pipeline** — GitHub Action running `npm test` + `tsc --noEmit` on push (nothing exists today).
+- [ ] **Coverage reporting** — `vitest --coverage` with a threshold gate once coverage improves.
+- [ ] **`schema.sql` drift guard** — a test that diffs `schema.sql` against applied migrations.
+- [ ] **Accessibility pass** — keyboard nav, focus traps in modals, aria labels on icon-only buttons.
+- [ ] **Rate-limit / size-cap file & voice uploads** — `multer` currently has no fileSize limit.
+
+---
+
 ## ✅ Critical: Test Coverage (DONE — 65 tests passing)
 
 ### 1. `server/src/services/keepImporter.ts` ✅
