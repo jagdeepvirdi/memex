@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import pLimit from 'p-limit'
 import AdmZip from 'adm-zip'
+import { randomBytes } from 'crypto'
 import { pool } from '../db/client.js'
 import {
   fetchItem,
@@ -79,6 +80,7 @@ interface ItemRow {
   tags: string[] | null
   confidence: number | null
   remind_at: Date | null
+  public_token: string | null
 }
 
 // ── GET /api/items ────────────────────────────────────────────────────────────
@@ -155,7 +157,7 @@ router.get('/', async (req, res) => {
       const listSql = `
         SELECT
           i.id, i.title, i.type, i.content, i.structured,
-          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at, i.confidence, i.remind_at,
+          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at, i.confidence, i.remind_at, i.public_token,
           COALESCE(
             (SELECT array_agg(c.name ORDER BY ic2.depth)
              FROM item_categories ic2
@@ -811,6 +813,39 @@ router.get('/reminders/due', async (_req, res) => {
   } catch (err) {
     console.error('GET /api/items/reminders/due error:', err)
     res.status(500).json({ error: 'Failed to fetch due reminders' })
+  }
+})
+
+// ── POST /api/items/:id/share — generate a public share token ────────────────
+
+router.post('/:id/share', async (req, res) => {
+  try {
+    const token = randomBytes(20).toString('hex')
+    const { rowCount } = await pool.query(
+      'UPDATE items SET public_token = $1 WHERE id = $2 AND deleted_at IS NULL',
+      [token, req.params.id],
+    )
+    if (rowCount === 0) return res.status(404).json({ error: 'Item not found' })
+    res.json({ token })
+  } catch (err) {
+    console.error('POST /api/items/:id/share error:', err)
+    res.status(500).json({ error: 'Failed to generate share token' })
+  }
+})
+
+// ── DELETE /api/items/:id/share — revoke sharing ──────────────────────────────
+
+router.delete('/:id/share', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      'UPDATE items SET public_token = NULL WHERE id = $1 AND deleted_at IS NULL',
+      [req.params.id],
+    )
+    if (rowCount === 0) return res.status(404).json({ error: 'Item not found' })
+    res.status(204).send()
+  } catch (err) {
+    console.error('DELETE /api/items/:id/share error:', err)
+    res.status(500).json({ error: 'Failed to revoke sharing' })
   }
 })
 

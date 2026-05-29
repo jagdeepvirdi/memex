@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield, Plus, History, ChevronDown, ChevronUp, Check, Bot, Bell, BellOff } from 'lucide-react'
+import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield, Plus, History, ChevronDown, ChevronUp, Check, Bot, Bell, BellOff, Share2, Copy, Link as LinkIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
 import ItemCard from '../components/cards/ItemCard'
 import Editor from '../components/Editor'
-import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, setReminder } from '../lib/api'
+import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, setReminder, shareItem, unshareItem } from '../lib/api'
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
 import type { Item, ItemExtraction } from '../../../shared/types'
@@ -30,6 +30,8 @@ export default function ItemPage() {
   const [applyingId, setApplyingId] = useState<string | null>(null)
   const [reminderInput, setReminderInput] = useState('')
   const [settingReminder, setSettingReminder] = useState(false)
+  const [sharing, setSharing] = useState(false)
+  const [copiedShare, setCopiedShare] = useState(false)
   const tagInputRef = useRef<HTMLInputElement>(null)
   const { vaultKey, isLocked } = useVaultStore()
 
@@ -180,6 +182,43 @@ export default function ItemPage() {
     } finally {
       setSettingReminder(false)
     }
+  }
+
+  const shareUrl = (token: string) => `${window.location.origin}/share/${token}`
+
+  const handleShare = async () => {
+    if (!id) return
+    setSharing(true)
+    try {
+      const { token } = await shareItem(id)
+      setItem(prev => prev ? { ...prev, publicToken: token } : prev)
+      toast.success('Public link created')
+    } catch {
+      toast.error('Failed to create share link')
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  const handleUnshare = async () => {
+    if (!id) return
+    setSharing(true)
+    try {
+      await unshareItem(id)
+      setItem(prev => prev ? { ...prev, publicToken: null } : prev)
+      toast.success('Sharing revoked')
+    } catch {
+      toast.error('Failed to revoke sharing')
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  const handleCopyShare = () => {
+    if (!item?.publicToken) return
+    navigator.clipboard.writeText(shareUrl(item.publicToken))
+    setCopiedShare(true)
+    setTimeout(() => setCopiedShare(false), 2000)
   }
 
   const startEditing = () => {
@@ -394,6 +433,47 @@ export default function ItemPage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Share */}
+          {!isEditing && !item.encrypted && (
+            <div className="flex flex-col gap-3">
+              <h3 className="text-[10px] text-ink-muted uppercase tracking-widest font-bold flex items-center gap-2">
+                <Share2 size={12} /> Public Share
+              </h3>
+              {item.publicToken ? (
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-2 px-4 py-3 bg-sky-500/5 border border-sky-500/20 rounded-xl">
+                    <LinkIcon size={14} className="text-sky-400 shrink-0" />
+                    <span className="text-xs text-ink font-mono flex-1 truncate">{shareUrl(item.publicToken)}</span>
+                    <button
+                      onClick={handleCopyShare}
+                      className="shrink-0 flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300 transition-colors"
+                    >
+                      {copiedShare ? <Check size={12} /> : <Copy size={12} />}
+                      {copiedShare ? 'Copied' : 'Copy'}
+                    </button>
+                  </div>
+                  <button
+                    onClick={handleUnshare}
+                    disabled={sharing}
+                    className="self-start text-xs text-ink-muted hover:text-red-400 flex items-center gap-1 transition-colors"
+                  >
+                    {sharing ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                    Revoke public access
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={handleShare}
+                  disabled={sharing}
+                  className="self-start flex items-center gap-2 text-xs bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/20 px-3 py-1.5 rounded-lg font-semibold transition-all disabled:opacity-40"
+                >
+                  {sharing ? <Loader2 size={12} className="animate-spin" /> : <Share2 size={12} />}
+                  Create public link
+                </button>
+              )}
             </div>
           )}
 

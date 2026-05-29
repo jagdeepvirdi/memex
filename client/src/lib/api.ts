@@ -180,6 +180,21 @@ export async function fetchDueReminders(): Promise<Item[]> {
   return apiFetch<Item[]>('/items/reminders/due')
 }
 
+export async function shareItem(itemId: string): Promise<{ token: string }> {
+  return apiFetch<{ token: string }>(`/items/${itemId}/share`, { method: 'POST' })
+}
+
+export async function unshareItem(itemId: string): Promise<void> {
+  await apiFetch<void>(`/items/${itemId}/share`, { method: 'DELETE' })
+}
+
+export async function fetchSharedItem(token: string): Promise<Item> {
+  // Public endpoint — no auth header needed
+  const res = await fetch(`/api/share/${token}`)
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'Not found')
+  return res.json()
+}
+
 export async function fetchDigest(): Promise<DigestResponse> {
   return apiFetch<DigestResponse>('/items/digest')
 }

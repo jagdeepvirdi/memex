@@ -30,6 +30,7 @@ export interface Item {
   reviewed: boolean
   confidence?: number
   remindAt?: Date | null
+  publicToken?: string | null
 }
 
 // ── Structured data per type ──────────────────────────────────────────────────

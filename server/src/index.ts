@@ -21,6 +21,7 @@ import vaultRouter from './routes/vault.js'
 import searchRouter from './routes/search.js'
 import authRouter from './routes/auth.js'
 import settingsRouter from './routes/settings.js'
+import shareRouter from './routes/share.js'
 import { itemCategoriesHandler } from './routes/categories.js'
 import { itemTagsHandler } from './routes/tags.js'
 import { checkOllamaHealth } from './services/ollama.js'
@@ -53,6 +54,8 @@ const PUBLIC_PATHS = [
   '/api/health',
   '/api/ingest/markitdown/health',
   '/api/ingest/vision/health',
+  '/api/ingest/whisper/health',
+  '/api/share/',
 ]
 
 const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
@@ -108,6 +111,7 @@ app.use('/api/vault', vaultRouter)
 app.use('/api/search', searchRouter)
 app.use('/api/auth', authRouter)
 app.use('/api/settings', settingsRouter)
+app.use('/api/share', shareRouter)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 

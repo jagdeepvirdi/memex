@@ -20,6 +20,7 @@ import Welcome from './pages/Welcome'
 import AskMemex from './pages/AskMemex'
 import CategoryReview from './pages/CategoryReview'
 import Digest from './pages/Digest'
+import PublicItem from './pages/PublicItem'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated)
@@ -94,6 +95,7 @@ export default function App() {
         <div className="min-h-screen w-full bg-bg text-ink font-body">
           <Routes>
             <Route path="/login" element={<Login />} />
+            <Route path="/share/:token" element={<PublicItem />} />
             <Route path="/welcome" element={
               <ProtectedRoute><Welcome /></ProtectedRoute>
             } />

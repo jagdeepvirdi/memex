@@ -19,6 +19,7 @@ interface ItemRow {
   tags: string[] | null
   confidence: number | null
   remind_at: Date | null
+  public_token: string | null
 }
 
 /**
@@ -41,6 +42,7 @@ export function rowToItem(row: ItemRow): Item {
     tags: row.tags || [],
     confidence: row.confidence ?? undefined,
     remindAt: row.remind_at ?? undefined,
+    publicToken: row.public_token ?? undefined,
   }
 }
 
@@ -196,7 +198,7 @@ export async function fetchItem(client: PoolClient, id: string): Promise<Item | 
 export const ITEM_SELECT_SQL = `
   SELECT
     i.id, i.title, i.type, i.content, i.structured,
-    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence, i.remind_at,
+    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence, i.remind_at, i.public_token,
     COALESCE(
       (SELECT array_agg(c.name ORDER BY ic2.depth)
        FROM item_categories ic2
