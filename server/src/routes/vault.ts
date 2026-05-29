@@ -73,6 +73,52 @@ router.post('/', async (req, res) => {
 });
 
 /**
+ * POST /api/vault/migrate/:itemId
+ * Moves a regular item to the secure vault by inserting it into vault_items 
+ * and hard-deleting the original item.
+ */
+router.post('/migrate/:itemId', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { itemId } = req.params;
+    const { service, url, username, ciphertext, iv } = req.body;
+
+    if (!service || !ciphertext || !iv) {
+      return res.status(400).json({ error: 'Service, ciphertext, and iv are required' });
+    }
+
+    await client.query('BEGIN');
+
+    // 1. Check if item exists
+    const { rows: itemRows } = await client.query('SELECT id FROM items WHERE id = $1', [itemId]);
+    if (itemRows.length === 0) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'Original item not found' });
+    }
+
+    // 2. Insert into vault_items
+    const { rows: vaultRows } = await client.query<VaultItem>(
+      `INSERT INTO vault_items (service, url, username, ciphertext, iv)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id`,
+      [service, url, username, ciphertext, iv]
+    );
+
+    // 3. Delete from items (hard delete because it's now sensitive and moved)
+    await client.query('DELETE FROM items WHERE id = $1', [itemId]);
+
+    await client.query('COMMIT');
+    res.status(201).json(vaultRows[0]);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Vault migration error:', error);
+    res.status(500).json({ error: 'Failed to migrate item to vault' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
  * PUT /api/vault/:id
  * Updates an existing encrypted vault item.
  */

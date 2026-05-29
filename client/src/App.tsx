@@ -10,7 +10,12 @@ import Login from './pages/Login'
 import Trash from './pages/Trash'
 import PendingItems from './pages/PendingItems'
 import EnrichedItems from './pages/EnrichedItems'
+import TableView from './pages/TableView'
+import PlacesView from './pages/PlacesView'
+import MediaView from './pages/MediaView'
 import SemanticGraph from './pages/SemanticGraph'
+import Welcome from './pages/Welcome'
+import AskMemex from './pages/AskMemex'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated)
@@ -25,7 +30,12 @@ export default function App() {
         <div className="min-h-screen w-full bg-bg text-ink font-body">
           <Routes>
             <Route path="/login" element={<Login />} />
-            
+            <Route path="/welcome" element={
+              <ProtectedRoute><Welcome /></ProtectedRoute>
+            } />
+            <Route path="/ask" element={
+              <ProtectedRoute><AskMemex /></ProtectedRoute>
+            } />
             <Route path="/" element={
               <ProtectedRoute><Dashboard /></ProtectedRoute>
             } />
@@ -43,6 +53,15 @@ export default function App() {
             } />
             <Route path="/items/enriched" element={
               <ProtectedRoute><EnrichedItems /></ProtectedRoute>
+            } />
+            <Route path="/items/table" element={
+              <ProtectedRoute><TableView /></ProtectedRoute>
+            } />
+            <Route path="/places" element={
+              <ProtectedRoute><PlacesView /></ProtectedRoute>
+            } />
+            <Route path="/media" element={
+              <ProtectedRoute><MediaView /></ProtectedRoute>
             } />
             <Route path="/trash" element={
               <ProtectedRoute><Trash /></ProtectedRoute>

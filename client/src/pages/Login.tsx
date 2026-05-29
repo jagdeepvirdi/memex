@@ -56,7 +56,7 @@ export default function LoginPage() {
 
       login(data.user, data.token);
       toast.success(isSetup ? 'Account created' : 'Welcome back');
-      navigate('/');
+      navigate(isSetup ? '/welcome' : '/');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Authentication failed');
     } finally {

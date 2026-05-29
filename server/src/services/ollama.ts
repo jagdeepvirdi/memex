@@ -10,13 +10,24 @@ interface OllamaEmbedResponse {
   embedding: number[]
 }
 
-export async function ollamaChat(prompt: string, system?: string): Promise<string> {
+export async function ollamaChat(
+  prompt: string, 
+  system?: string, 
+  model?: string,
+  format?: string | object,
+  options?: Record<string, any>
+): Promise<string> {
   const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      model: CHAT_MODEL,
+      model: model || CHAT_MODEL,
       stream: false,
+      format,
+      options: {
+        temperature: 0, // Default to deterministic for extraction
+        ...options
+      },
       messages: [
         ...(system ? [{ role: 'system', content: system }] : []),
         { role: 'user', content: prompt },

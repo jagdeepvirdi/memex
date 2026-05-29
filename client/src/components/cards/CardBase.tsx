@@ -12,6 +12,7 @@ const TYPE_BADGE: Record<ItemType, { label: string; color: string }> = {
   stock:    { label: 'Stock',    color: '#F59E0B' },
   spec:     { label: 'Spec',     color: '#8C8472' },
   password: { label: 'Vault',    color: '#5EEAD4' },
+  place:    { label: 'Place',    color: '#FBBF24' },
 }
 
 interface TypeBadgeProps {

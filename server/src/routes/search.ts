@@ -2,9 +2,27 @@ import { Router } from 'express';
 import { pool } from '../db/client.js';
 import { rowToItem } from '../db/helpers.js';
 import { embedQuery } from '../services/embedder.js';
+import { askKnowledge } from '../services/ragService.js';
 import type { ItemType } from '../../../shared/types.js';
 
 const router = Router();
+
+// ── POST /api/ask ────────────────────────────────────────────────────────────
+
+router.post('/ask', async (req, res) => {
+  try {
+    const { question } = req.body;
+    if (!question || typeof question !== 'string') {
+      return res.status(400).json({ error: 'Question is required' });
+    }
+
+    const response = await askKnowledge(question);
+    res.json(response);
+  } catch (error) {
+    console.error('Ask knowledge error:', error);
+    res.status(500).json({ error: 'Failed to answer question' });
+  }
+});
 
 router.post('/', async (req, res) => {
   try {

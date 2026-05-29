@@ -117,6 +117,48 @@ describe('classify', () => {
     const result = await classify('\n\nMy Important Note\nSome content here')
     expect(result.title).toBe('My Important Note')
   })
+
+  it('normalises rogue AI categories to the canonical tree', async () => {
+    const rogueJson = JSON.stringify({
+      type: 'note',
+      title: 'Travel plans',
+      categories: ['travel', 'Thailand'], // 'travel' matches CANONICAL_MAPPING
+      tags: [],
+      summary: '',
+      structured: {}
+    })
+    mockAI(rogueJson)
+    const result = await classify('I want to go to Thailand')
+    expect(result.categories).toEqual(['Travel'])
+  })
+
+  it('prefers specific sub-categories from AI if they match canonical tree', async () => {
+    const rogueJson = JSON.stringify({
+      type: 'note',
+      title: 'Cake recipe',
+      categories: ['Food', 'bakery', 'cake'], // 'cake' matches CANONICAL_MAPPING (most specific)
+      tags: [],
+      summary: '',
+      structured: {}
+    })
+    mockAI(rogueJson)
+    const result = await classify('How to bake a cake')
+    expect(result.categories).toEqual(['Food', 'Bakery', 'Cakes'])
+  })
+
+  it('falls back to mapToCategories if AI categories are rogue and unknown', async () => {
+    const rogueJson = JSON.stringify({
+      type: 'media',
+      title: 'Unknown Film',
+      categories: ['something-random'], // Not in CANONICAL_MAPPING
+      tags: [],
+      summary: '',
+      structured: {}
+    })
+    mockAI(rogueJson)
+    const result = await classify('A movie about nothing')
+    expect(result.categories).toEqual(['Media', 'Movies']) // Falls back to Media > Movies because type=media
+  })
 })
 
 // ── mapToCategories() ─────────────────────────────────────────────────────────
@@ -176,5 +218,40 @@ describe('mapToCategories', () => {
 
   it('maps note → [] (no default category)', () => {
     expect(mapToCategories('note', {})).toEqual([])
+  })
+})
+
+// ── classifyBatch() ──────────────────────────────────────────────────────────
+
+import { classifyBatch } from './classifier'
+
+describe('classifyBatch', () => {
+  it('normalises categories for multiple items', async () => {
+    const batchJson = JSON.stringify([
+      { type: 'note', title: 'Note 1', categories: ['travel'], tags: [], summary: '' },
+      { type: 'media', title: 'Movie 1', categories: ['movie'], tags: [], summary: '' }
+    ])
+    mockAI(batchJson)
+
+    const items = [
+      { id: '1', title: 'Title 1', content: 'Content 1' },
+      { id: '2', title: 'Title 2', content: 'Content 2' }
+    ]
+    const results = await classifyBatch(items)
+
+    expect(results[0].categories).toEqual(['Travel'])
+    expect(results[1].categories).toEqual(['Media', 'Movies'])
+  })
+
+  it('falls back to mapToCategories in batch when AI returns unknown categories', async () => {
+    const batchJson = JSON.stringify([
+      { type: 'recipe', title: 'Recipe 1', categories: ['unknown'], tags: [], summary: '', structured: { cuisine: 'thai' } }
+    ])
+    mockAI(batchJson)
+
+    const items = [{ id: '1', title: 'Thai Curry', content: 'Make green curry' }]
+    const results = await classifyBatch(items)
+
+    expect(results[0].categories).toEqual(['Food', 'Savory', 'Thai'])
   })
 })

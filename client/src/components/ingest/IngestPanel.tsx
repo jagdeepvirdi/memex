@@ -11,12 +11,16 @@ import type { Item, ItemType, CreateItemRequest } from '../../../../shared/types
 interface IngestPanelProps {
   onSuccess?: (item: Item) => void;
   onCancel?: () => void;
+  initialUrl?: string;
+  initialText?: string;
 }
 
-export default function IngestPanel({ onSuccess, onCancel }: IngestPanelProps) {
-  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual' | 'file'>('url');
-  const [url, setUrl] = useState('');
-  const [manualText, setManualText] = useState('');
+export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialText }: IngestPanelProps) {
+  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual' | 'file'>(
+    initialUrl ? 'url' : initialText ? 'manual' : 'url'
+  );
+  const [url, setUrl] = useState(initialUrl || '');
+  const [manualText, setManualText] = useState(initialText || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'embedding'> | null>(null);

@@ -1,23 +1,37 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, Settings, Loader2, Zap, Database, Key, Clock, HelpCircle, X, Sparkles } from 'lucide-react'
+import { Plus, Search, Settings, Loader2, Zap, Database, Key, Clock, HelpCircle, X, Sparkles, Calendar, TrendingUp, Lightbulb, Link2, Compass } from 'lucide-react'
 import { toast } from 'sonner'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import IngestPanel from '../components/ingest/IngestPanel'
 import SearchModal from '../components/search/SearchModal'
 import Sidebar from '../components/sidebar/Sidebar'
 import ItemCard from '../components/cards/ItemCard'
 import { CardSkeleton } from '../components/Skeleton'
-import { fetchItems, fetchStats } from '../lib/api'
-import type { Item, StatsResponse } from '../../../shared/types'
+import { fetchItems, fetchStats, fetchInsights, fetchRediscovery } from '../lib/api'
+import type { Item, StatsResponse, Insight, RediscoveryItem } from '../../../shared/types'
 
 export default function Dashboard() {
-  const [showIngest, setShowIngest] = useState(false)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+  
+  const share = searchParams.get('share') === 'true'
+  const sharedTitle = searchParams.get('title') || ''
+  const sharedText = searchParams.get('text') || ''
+  const sharedUrl = searchParams.get('url') || ''
+
+  const [showIngest, setShowIngest] = useState(share)
   const [showSearch, setShowSearch] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [items, setItems] = useState<Item[]>([])
+  const [total, setTotal] = useState(0)
   const [stats, setStats] = useState<StatsResponse | null>(null)
+  const [insights, setInsights] = useState<Insight[]>([])
+  const [rediscovery, setRediscovery] = useState<RediscoveryItem[]>([])
   const [loading, setLoading] = useState(true)
-  const navigate = useNavigate()
+  const [loadingInsights, setLoadingInsights] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [offset, setOffset] = useState(0)
 
   useEffect(() => {
     loadData()
@@ -25,18 +39,40 @@ export default function Dashboard() {
 
   const loadData = async () => {
     setLoading(true)
+    setLoadingInsights(true)
+    setOffset(0)
     try {
-      const [itemsRes, statsRes] = await Promise.all([
-        fetchItems({ limit: 12 }),
-        fetchStats()
+      const [itemsRes, statsRes, insightsRes, rediscoveryRes] = await Promise.all([
+        fetchItems({ limit: 12, offset: 0 }),
+        fetchStats(),
+        fetchInsights().catch(() => []),
+        fetchRediscovery().catch(() => [])
       ])
       setItems(itemsRes.items)
+      setTotal(itemsRes.total)
       setStats(statsRes)
+      setInsights(insightsRes)
+      setRediscovery(rediscoveryRes)
     } catch (err) {
       console.error(err)
       toast.error('Failed to load dashboard data')
     } finally {
       setLoading(false)
+      setLoadingInsights(false)
+    }
+  }
+
+  const loadMoreItems = async () => {
+    const nextOffset = offset + 12
+    setLoadingMore(true)
+    try {
+      const res = await fetchItems({ limit: 12, offset: nextOffset })
+      setItems(prev => [...prev, ...res.items])
+      setOffset(nextOffset)
+    } catch (err) {
+      toast.error('Failed to load more items')
+    } finally {
+      setLoadingMore(false)
     }
   }
 
@@ -121,6 +157,59 @@ export default function Dashboard() {
               </button>
             </div>
 
+            {/* Actionable Insights */}
+            <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-3">
+                <Sparkles size={16} className="text-accent" />
+                <h3 className="font-display text-lg text-ink">Actionable Insights</h3>
+              </div>
+              
+              {loadingInsights ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="h-24 bg-white/5 rounded-2xl animate-pulse" />
+                  ))}
+                </div>
+              ) : insights.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <AnimatePresence mode="popLayout">
+                    {insights.map((insight, idx) => (
+                      <motion.div 
+                        key={insight.id || idx}
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: idx * 0.1 }}
+                        className="bg-gradient-to-br from-accent/5 to-transparent border border-accent/20 p-4 rounded-2xl hover:border-accent/40 transition-all group"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-accent/10 flex items-center justify-center shrink-0 text-accent">
+                            {insight.type === 'event' && <Calendar size={16} />}
+                            {insight.type === 'habit' && <TrendingUp size={16} />}
+                            {insight.type === 'suggestion' && <Lightbulb size={16} />}
+                            {insight.type === 'connection' && <Link2 size={16} />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="text-sm font-bold text-ink group-hover:text-accent transition-colors truncate">
+                              {insight.title}
+                            </h4>
+                            <p className="text-xs text-ink-muted mt-1 leading-relaxed">
+                              {insight.description}
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
+              ) : (
+                <div className="p-6 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl text-center">
+                  <p className="text-xs text-ink-muted italic">
+                    Keep adding notes. AI will surface patterns and insights here.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* Quick Stats */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                <StatCard 
@@ -149,11 +238,31 @@ export default function Dashboard() {
             </div>
           </section>
 
+          {/* Rediscovery / Serendipity */}
+          {rediscovery.length > 0 && (
+            <section className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-4">
+              <div className="flex items-center gap-3">
+                <Compass size={20} className="text-purple-400" />
+                <h3 className="font-display text-xl text-ink">Rediscover</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {rediscovery.map(({ type, reason, item }) => (
+                  <div key={item.id} className="relative group">
+                    <div className="absolute -top-3 left-4 px-3 py-1 bg-surface border border-purple-500/30 text-[9px] uppercase tracking-widest font-bold text-purple-400 rounded-lg shadow-lg z-10">
+                      {reason}
+                    </div>
+                    <ItemCard item={item} onClick={() => navigate(`/item/${item.id}`)} />
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
           {/* Recent Items */}
-          <section className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+          <section className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-xl text-ink">Recent Additions</h3>
-              <button onClick={() => setShowSearch(true)} className="text-xs text-accent hover:underline font-medium">View All Items</button>
+              <button onClick={() => navigate('/items/table')} className="text-xs text-accent hover:underline font-medium">View All (Table)</button>
             </div>
             
             {loading ? (
@@ -161,11 +270,25 @@ export default function Dashboard() {
                 {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
               </div>
             ) : items.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {items.map(item => (
-                  <ItemCard key={item.id} item={item} onClick={() => navigate(`/item/${item.id}`)} />
-                ))}
-              </div>
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {items.map(item => (
+                    <ItemCard key={item.id} item={item} onClick={() => navigate(`/item/${item.id}`)} />
+                  ))}
+                </div>
+                {items.length < total && (
+                  <div className="flex justify-center mt-8">
+                    <button 
+                      onClick={loadMoreItems}
+                      disabled={loadingMore}
+                      className="px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/5 rounded-2xl text-sm font-bold text-ink-muted hover:text-ink transition-all flex items-center gap-3 disabled:opacity-50"
+                    >
+                      {loadingMore && <Loader2 size={16} className="animate-spin" />}
+                      {loadingMore ? 'Loading...' : 'Load More Additions'}
+                    </button>
+                  </div>
+                )}
+              </>
             ) : (
               <div className="h-48 rounded-2xl border-2 border-dashed border-white/5 flex flex-col items-center justify-center text-ink-muted gap-3 grayscale opacity-50">
                 <p className="text-sm italic">No items yet. Add something below!</p>
@@ -187,12 +310,19 @@ export default function Dashboard() {
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="w-full max-w-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
               <IngestPanel 
+                initialUrl={sharedUrl || (sharedText.startsWith('http') ? sharedText : undefined)}
+                initialText={sharedUrl ? undefined : sharedText || sharedTitle}
                 onSuccess={(newItem) => {
                   setItems([newItem, ...items].slice(0, 12))
+                  setTotal(prev => prev + 1)
                   setShowIngest(false)
+                  setSearchParams(new URLSearchParams())
                   fetchStats().then(setStats).catch(console.error)
                 }} 
-                onCancel={() => setShowIngest(false)} 
+                onCancel={() => {
+                  setShowIngest(false)
+                  setSearchParams(new URLSearchParams())
+                }} 
               />
             </div>
           </div>

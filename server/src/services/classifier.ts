@@ -6,13 +6,16 @@ import type { ItemType, RecipeData, MediaData, BookData, StockData } from '../..
 
 const classificationSchema = z.object({
   type: z
-    .enum(['note', 'recipe', 'media', 'spec', 'stock', 'link', 'book'])
+    .enum(['note', 'recipe', 'media', 'spec', 'stock', 'link', 'book', 'place'])
     .catch('note'),
   title: z.string().min(1).catch('Untitled'),
   categories: z.array(z.string()).catch([]),
   tags: z.array(z.string()).catch([]),
   summary: z.string().catch(''),
   structured: z.record(z.unknown()).catch({}),
+  multiEntity: z.boolean().optional(),
+  entities: z.array(z.record(z.unknown())).optional(),
+  confidence: z.number().min(0).max(100).catch(80),
 })
 
 export type ClassificationResult = {
@@ -22,37 +25,58 @@ export type ClassificationResult = {
   tags: string[]
   summary: string
   structured: Record<string, unknown>
+  multiEntity?: boolean
+  entities?: any[]
+  confidence: number
 }
 
 // ── System prompts ────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a knowledge classifier. Given raw text or a note, return ONLY valid JSON with no preamble:
+const CANONICAL_LEAVES = [
+  'Cakes', 'Cookies', 'Bread', 'Indian', 'Italian', 'Thai', 'Chinese',
+  'Action', 'Drama', 'Horror', 'Comedy', 'Fiction', 'Non-Fiction', 'Technical',
+  'Laptops', 'Cameras', 'Phones', 'Specs', 'Stocks', 'Crypto', 'Notes',
+  'Destinations', 'Hotels', 'Restaurants', 'Attractions',
+  'YouTube', 'Instagram', 'Articles', 'Docs', 'Numbers', 'Contacts'
+]
+
+const SYSTEM_PROMPT = `You are a knowledge classifier. Given raw text or a note, return ONLY valid JSON with no preamble.
+
+Detection:
+If the note lists MULTIPLE distinct entities (e.g. 5 movies, 3 restaurants, or a list of books), set "multiEntity": true and provide an "entities" array.
+
 {
-  "type": "note|recipe|media|spec|stock|link|book",
+  "type": "note|recipe|media|spec|stock|link|book|place",
   "title": "<inferred title, max 80 chars>",
   "categories": ["<top-level>", "<mid>", "<leaf>"],
   "tags": ["<tag1>", "<tag2>", "<tag3>"],
-  "summary": "<2-3 sentences describing the content>",
-  "structured": {}
+  "summary": "<2-3 sentences TL;DR>",
+  "structured": {},
+  "multiEntity": false,
+  "entities": [],
+  "confidence": 0-100
 }
 
+Category Rule: 
+You MUST pick the most specific <leaf> from this list for the last element of "categories":
+${CANONICAL_LEAVES.join(', ')}
+
 Type rules:
-- recipe: any food recipe with ingredients or steps
-- media: movie, TV show, film — structured: { "genre": "", "year": 0, "director": "", "watched": false }
-- book: any book — structured: { "author": "", "genre": "", "year": 0, "status": "want-to-read" }
-- stock: stock ticker or investment — structured: { "ticker": "", "exchange": "" }
-- spec: technical specifications, product details — structured key-value pairs
-- link: saved URL, article, video, social post
+- recipe: food recipe with ingredients/steps
+- media: movie, TV show, film — structured: { "genre": "", "year": 0, "director": "", "cast": [], "watchStatus": "watched|want-to-watch", "userRating": 1-5 }
+- book: any book — structured: { "author": "", "genre": "", "year": 0, "status": "want-to-read|read", "userRating": 1-5 }
+- place: restaurant, cafe, hotel, city — structured: { "name": "", "type": "restaurant|hotel|destination", "city": "", "visitStatus": "visited|want-to-visit", "userRating": 1-5 }
+- stock: stock ticker — structured: { "ticker": "", "exchange": "" }
+- spec: technical specs — structured key-value pairs
+- link: saved URL, video, social post
 - note: everything else
 
-Recipe structured schema: { "ingredients": [], "steps": [], "servings": "", "prepTime": "", "cookTime": "", "cuisine": "", "mealType": "" }
+Provide a "confidence" score (0-100) indicating how certain you are of this extraction.
+Return ONLY JSON. No explanation.`
 
-Return ONLY the JSON object. No explanation. No markdown fences.`
-
-const STRICT_SYSTEM_PROMPT = `Return ONLY a valid JSON object. Nothing else. No explanation. No markdown. No code fences. No newlines outside strings.
-Start your response with { and end with }.
-Use this exact shape: {"type":"note","title":"","categories":[],"tags":[],"summary":"","structured":{}}
-Valid types: note, recipe, media, spec, stock, link, book`
+const STRICT_SYSTEM_PROMPT = `Return ONLY a valid JSON object. Nothing else. No explanation. No markdown.
+Shape: {"type":"note","title":"","categories":[],"tags":[],"summary":"","structured":{},"multiEntity":false,"entities":[],"confidence":90}
+Valid types: note, recipe, media, spec, stock, link, book, place`
 
 // ── JSON extraction helpers ───────────────────────────────────────────────────
 
@@ -80,10 +104,133 @@ function parseClassification(raw: string): ClassificationResult {
     tags: validated.tags,
     summary: validated.summary,
     structured: validated.structured,
+    multiEntity: validated.multiEntity,
+    entities: validated.entities,
+    confidence: validated.confidence,
   }
 }
 
 // ── Category mapping — maps type + structured data to the known tree ──────────
+
+export const CANONICAL_MAPPING: Record<string, string[]> = {
+  // Food
+  food: ['Food'],
+  recipe: ['Food'],
+  bakery: ['Food', 'Bakery'],
+  cake: ['Food', 'Bakery', 'Cakes'],
+  cakes: ['Food', 'Bakery', 'Cakes'],
+  cookie: ['Food', 'Bakery', 'Cookies'],
+  cookies: ['Food', 'Bakery', 'Cookies'],
+  bread: ['Food', 'Bakery', 'Bread'],
+  savory: ['Food', 'Savory'],
+  indian: ['Food', 'Savory', 'Indian'],
+  italian: ['Food', 'Savory', 'Italian'],
+  thai: ['Food', 'Savory', 'Thai'],
+  chinese: ['Food', 'Savory', 'Chinese'],
+
+  // Media
+  media: ['Media'],
+  movie: ['Media', 'Movies'],
+  movies: ['Media', 'Movies'],
+  film: ['Media', 'Movies'],
+  cinema: ['Media', 'Movies'],
+  book: ['Media', 'Books'],
+  books: ['Media', 'Books'],
+  action: ['Media', 'Movies', 'Action'],
+  drama: ['Media', 'Movies', 'Drama'],
+  horror: ['Media', 'Movies', 'Horror'],
+  comedy: ['Media', 'Movies', 'Comedy'],
+  fiction: ['Media', 'Books', 'Fiction'],
+  'non-fiction': ['Media', 'Books', 'Non-Fiction'],
+  nonfiction: ['Media', 'Books', 'Non-Fiction'],
+  technical: ['Media', 'Books', 'Technical'],
+
+  // Tech
+  tech: ['Tech'],
+  technology: ['Tech'],
+  laptop: ['Tech', 'Laptops'],
+  laptops: ['Tech', 'Laptops'],
+  camera: ['Tech', 'Cameras'],
+  cameras: ['Tech', 'Cameras'],
+  phone: ['Tech', 'Phones'],
+  phones: ['Tech', 'Phones'],
+  spec: ['Tech', 'Specs'],
+  specs: ['Tech', 'Specs'],
+  tutorial: ['Tech'],
+  course: ['Tech'],
+  learning: ['Tech'],
+  education: ['Tech'],
+  design: ['Tech'],
+  development: ['Tech'],
+  programming: ['Tech'],
+
+  // Finance
+  finance: ['Finance'],
+  money: ['Finance'],
+  stock: ['Finance', 'Stocks'],
+  stocks: ['Finance', 'Stocks'],
+  crypto: ['Finance', 'Crypto'],
+  cryptocurrency: ['Finance', 'Crypto'],
+  note: ['Finance', 'Notes'],
+  notes: ['Finance', 'Notes'],
+  bank: ['Finance', 'Notes'],
+  account: ['Finance', 'Notes'],
+  financial: ['Finance'],
+
+  // Personal
+  personal: ['Personal'],
+  number: ['Personal', 'Numbers'],
+  numbers: ['Personal', 'Numbers'],
+  contact: ['Personal', 'Contacts'],
+  contacts: ['Personal', 'Contacts'],
+  shopping: ['Personal'],
+  todo: ['Personal'],
+  work: ['Personal'],
+  health: ['Personal'],
+  family: ['Personal'],
+  children: ['Personal'],
+
+  // Links
+  link: ['Links'],
+  links: ['Links'],
+  url: ['Links'],
+  youtube: ['Links', 'YouTube'],
+  instagram: ['Links', 'Instagram'],
+  article: ['Links', 'Articles'],
+  articles: ['Links', 'Articles'],
+  doc: ['Links', 'Docs'],
+  docs: ['Links', 'Docs'],
+  video: ['Links'],
+  social: ['Links'],
+
+  // Travel
+  travel: ['Travel'],
+  destination: ['Travel', 'Destinations'],
+  destinations: ['Travel', 'Destinations'],
+  hotel: ['Travel', 'Hotels'],
+  hotels: ['Travel', 'Hotels'],
+  restaurant: ['Travel', 'Restaurants'],
+  restaurants: ['Travel', 'Restaurants'],
+  attraction: ['Travel', 'Attractions'],
+  attractions: ['Travel', 'Attractions'],
+  cafe: ['Travel', 'Restaurants'],
+  cafes: ['Travel', 'Restaurants'],
+}
+
+/**
+ * Normalises AI-suggested categories against the canonical tree.
+ * Returns the first match found, or an empty array if no match.
+ */
+export function normalizeCategories(aiCategories: string[]): string[] {
+  // Reverse search — AI often puts specific sub-categories at the end
+  for (let i = aiCategories.length - 1; i >= 0; i--) {
+    const lower = aiCategories[i].toLowerCase().trim()
+    if (CANONICAL_MAPPING[lower]) {
+      return CANONICAL_MAPPING[lower]
+    }
+  }
+  return []
+}
 
 const CUISINE_MAP: Record<string, string> = {
   indian: 'Indian',
@@ -168,9 +315,19 @@ export function mapToCategories(
       return ['Tech', 'Specs']
     case 'link':
       return ['Links']
+    case 'place':
+      return mapPlaceCategories(structured as unknown as PlaceData)
     default:
       return []
   }
+}
+
+function mapPlaceCategories(s: PlaceData): string[] {
+  if (s.type === 'restaurant' || s.type === 'cafe') return ['Travel', 'Restaurants']
+  if (s.type === 'hotel') return ['Travel', 'Hotels']
+  if (s.type === 'attraction') return ['Travel', 'Attractions']
+  if (s.type === 'destination') return ['Travel', 'Destinations']
+  return ['Travel']
 }
 
 // ── Main classify function ────────────────────────────────────────────────────
@@ -184,19 +341,19 @@ function fallback(text: string): ClassificationResult {
     tags: [],
     summary: '',
     structured: {},
+    confidence: 0,
   }
 }
 
 export async function classify(text: string): Promise<ClassificationResult> {
   // ── Attempt 1: normal prompt ──────────────────────────────────────────────
   try {
-    const raw = await aiChat(text, SYSTEM_PROMPT)
+    const raw = await aiChat(text, SYSTEM_PROMPT, 'json', { temperature: 0 })
     const result = parseClassification(raw)
 
-    // Override categories with canonical tree mapping if AI's guess is empty
-    if (result.categories.length === 0) {
-      result.categories = mapToCategories(result.type, result.structured)
-    }
+    // Normalize categories against canonical tree, or fall back to structured mapping
+    const normalized = normalizeCategories(result.categories)
+    result.categories = normalized.length > 0 ? normalized : mapToCategories(result.type, result.structured)
 
     return result
   } catch {
@@ -208,12 +365,14 @@ export async function classify(text: string): Promise<ClassificationResult> {
     const raw = await aiChat(
       `Classify this text and return ONLY JSON:\n\n${text.slice(0, 2000)}`,
       STRICT_SYSTEM_PROMPT,
+      'json',
+      { temperature: 0 }
     )
     const result = parseClassification(raw)
 
-    if (result.categories.length === 0) {
-      result.categories = mapToCategories(result.type, result.structured)
-    }
+    // Normalize categories against canonical tree, or fall back to structured mapping
+    const normalized = normalizeCategories(result.categories)
+    result.categories = normalized.length > 0 ? normalized : mapToCategories(result.type, result.structured)
 
     return result
   } catch {
@@ -226,9 +385,11 @@ export async function classify(text: string): Promise<ClassificationResult> {
 
 // ── Batch classify — one Ollama call for multiple notes ──────────────────────
 
-const BATCH_SYSTEM = `You are a knowledge classifier. Classify each note and return ONLY a JSON array, one object per note, same order.
-Each object: {"type":"note|recipe|media|spec|stock|link|book","title":"<title max 80 chars>","categories":["<top>","<mid>"],"tags":["<t1>","<t2>","<t3>"],"summary":"<one sentence>"}
-Return ONLY the JSON array. No explanation. No markdown.`
+const BATCH_SYSTEM = `You are a knowledge classifier. Classify each note and return ONLY a JSON array.
+Each object: {"type":"note|recipe|media|spec|stock|link|book|place","title":"","categories":[],"tags":[],"summary":"","confidence":90}
+Category Rule: You MUST pick the most specific <leaf> from this list for the last element of "categories":
+${CANONICAL_LEAVES.join(', ')}
+Return ONLY JSON array.`
 
 export async function classifyBatch(
   items: Array<{ id: string; title: string; content: string }>,
@@ -239,7 +400,7 @@ export async function classifyBatch(
 
   const prompt = `Classify these ${items.length} notes:\n\n${numbered}\n\nReturn ONLY the JSON array of ${items.length} objects:`
 
-  const raw = await aiChat(prompt, BATCH_SYSTEM)
+  const raw = await aiChat(prompt, BATCH_SYSTEM, 'json', { temperature: 0 })
 
   // Extract JSON array
   const start = raw.indexOf('[')
@@ -253,8 +414,9 @@ export async function classifyBatch(
 
   return parsed.map((obj, i) => {
     const validated = classificationSchema.safeParse(obj)
-    const result = validated.success ? validated.data : { type: 'note' as const, title: items[i].title || 'Untitled', categories: [], tags: [], summary: '', structured: {} }
-    const categories = result.categories.length > 0 ? result.categories : mapToCategories(result.type as ItemType, result.structured)
+    const result = validated.success ? validated.data : { type: 'note' as const, title: items[i].title || 'Untitled', categories: [], tags: [], summary: '', structured: {}, confidence: 0 }
+    const normalized = normalizeCategories(result.categories)
+    const categories = normalized.length > 0 ? normalized : mapToCategories(result.type as ItemType, result.structured)
     return {
       id: items[i].id,
       type: result.type as ItemType,
@@ -263,6 +425,7 @@ export async function classifyBatch(
       tags: result.tags,
       summary: result.summary,
       structured: result.structured,
+      confidence: result.confidence ?? 0,
     }
   })
 }

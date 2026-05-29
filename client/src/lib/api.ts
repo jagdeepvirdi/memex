@@ -3,7 +3,11 @@ import type {
   IngestUrlResponse, 
   CreateItemRequest, 
   Item,
-  StatsResponse
+  StatsResponse,
+  Insight,
+  AskRequest,
+  AskResponse,
+  RediscoveryItem
 } from '../../../shared/types'
 import { useAuthStore } from '../store/authStore'
 
@@ -59,7 +63,7 @@ export async function createItem(item: CreateItemRequest): Promise<Item> {
   })
 }
 
-export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number, pendingEnrichment?: boolean, enriched?: boolean } = {}): Promise<{ items: Item[], total: number }> {
+export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number, pendingEnrichment?: boolean, enriched?: boolean, q?: string, unreviewed?: boolean } = {}): Promise<{ items: Item[], total: number }> {
   const params = new URLSearchParams()
   if (options.type) params.append('type', options.type)
   if (options.category) params.append('category', options.category)
@@ -68,6 +72,8 @@ export async function fetchItems(options: { type?: string, category?: string, ta
   if (options.offset) params.append('offset', options.offset.toString())
   if (options.pendingEnrichment) params.append('pendingEnrichment', 'true')
   if (options.enriched) params.append('enriched', 'true')
+  if (options.unreviewed) params.append('unreviewed', 'true')
+  if (options.q) params.append('q', options.q)
 
   return apiFetch<{ items: Item[], total: number }>(`/items?${params.toString()}`)
 }
@@ -88,6 +94,52 @@ export async function fetchTags(): Promise<any[]> {
   return apiFetch<any[]>('/tags')
 }
 
+export async function fetchItem(id: string): Promise<Item> {
+  return apiFetch<Item>(`/items/${id}`)
+}
+
+export async function updateItem(id: string, updates: Partial<Item>): Promise<Item> {
+  return apiFetch<Item>(`/items/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(updates),
+  })
+}
+
+export async function deleteItem(id: string): Promise<void> {
+  await apiFetch<void>(`/items/${id}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function deleteItemsBulk(ids: string[]): Promise<{ count: number }> {
+  return apiFetch<{ count: number }>(`/items/bulk`, {
+    method: 'DELETE',
+    body: JSON.stringify({ ids }),
+  })
+}
+
+export async function migrateToVault(itemId: string, data: { service: string, url?: string, username?: string, ciphertext: string, iv: string }): Promise<any> {
+  return apiFetch<any>(`/vault/migrate/${itemId}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  })
+}
+
 export async function fetchStats(): Promise<StatsResponse> {
   return apiFetch<StatsResponse>('/items/stats')
+}
+
+export async function fetchInsights(): Promise<Insight[]> {
+  return apiFetch<Insight[]>('/items/insights')
+}
+
+export async function askKnowledge(question: string): Promise<AskResponse> {
+  return apiFetch<AskResponse>('/search/ask', {
+    method: 'POST',
+    body: JSON.stringify({ question } as AskRequest),
+  })
+}
+
+export async function fetchRediscovery(): Promise<RediscoveryItem[]> {
+  return apiFetch<RediscoveryItem[]>('/items/rediscover')
 }

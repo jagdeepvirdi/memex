@@ -1,4 +1,5 @@
 import { YoutubeTranscript } from 'youtube-transcript';
+import { getSetting } from './settings.js';
 
 export interface ScrapedContent {
   title: string;
@@ -8,6 +9,11 @@ export interface ScrapedContent {
 }
 
 export async function scrapeUrl(url: string): Promise<ScrapedContent> {
+  const isStrictLocal = await getSetting('strict_local_mode', false);
+  if (isStrictLocal) {
+    throw new Error('Strict Local Mode is enabled. External URL scraping is blocked.');
+  }
+
   const youtubeId = extractYoutubeId(url);
   if (youtubeId) {
     return scrapeYoutube(url, youtubeId);

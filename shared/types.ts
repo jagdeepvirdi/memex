@@ -9,6 +9,7 @@ export type ItemType =
   | 'password'
   | 'link'
   | 'book'
+  | 'place'
 
 export type ItemSource = 'keep' | 'manual' | 'url' | 'youtube' | 'instagram'
 
@@ -27,6 +28,7 @@ export interface Item {
   updatedAt: Date
   encrypted?: boolean
   reviewed: boolean
+  confidence?: number
 }
 
 // ── Structured data per type ──────────────────────────────────────────────────
@@ -37,6 +39,7 @@ export type StructuredData =
   | BookData
   | StockData
   | SpecData
+  | PlaceData
   | Record<string, unknown>  // note, link, password — freeform
 
 export interface RecipeData {
@@ -53,8 +56,13 @@ export interface MediaData {
   genre?: string
   year?: number
   director?: string
+  cast?: string[]
   rating?: number
   watched?: boolean
+  watchStatus?: 'watched' | 'want-to-watch' | 'watching'
+  userRating?: number // 1-5
+  streamingPlatform?: string
+  summary?: string
 }
 
 export interface BookData {
@@ -62,6 +70,23 @@ export interface BookData {
   genre?: string
   year?: number
   status?: 'want-to-read' | 'reading' | 'read'
+  userRating?: number // 1-5
+  highlights?: string[]
+  summary?: string
+}
+
+export interface PlaceData {
+  name: string
+  type: 'restaurant' | 'cafe' | 'hotel' | 'attraction' | 'destination' | 'other'
+  cuisine?: string
+  city?: string
+  country?: string
+  address?: string
+  visitStatus: 'visited' | 'want-to-visit' | 'want-to-revisit'
+  userRating?: number // 1-5
+  priceRange?: '$' | '$$' | '$$$'
+  notes?: string
+  mapsUrl?: string
 }
 
 export interface StockData {
@@ -158,6 +183,15 @@ export interface HealthResponse {
   timestamp: string
 }
 
+export interface Insight {
+  id: string
+  title: string
+  description: string
+  type: 'event' | 'habit' | 'suggestion' | 'connection'
+  icon?: string
+  priority: number // 1-5
+}
+
 export interface StatsResponse {
   totalItems: number
   aiEnriched: number   // items Ollama has classified (structured != {})
@@ -165,4 +199,43 @@ export interface StatsResponse {
   itemsByType: Record<ItemType, number>
   totalVaultItems: number
   recentActivity: number
+}
+
+// ── RAG Q&A ───────────────────────────────────────────────────────────────────
+
+export interface AskRequest {
+  question: string
+}
+
+export interface AskResponse {
+  answer: string
+  sources: Item[]
+}
+
+// ── Rediscovery ───────────────────────────────────────────────────────────────
+
+export interface RediscoveryItem {
+  type: 'on-this-day' | 'random' | 'forgotten'
+  reason: string
+  item: Item
+}
+
+// ── Entities ──────────────────────────────────────────────────────────────────
+
+export type EntityType = 'person' | 'place' | 'organization' | 'other'
+
+export interface Entity {
+  id: string
+  name: string
+  type: EntityType
+  metadata: Record<string, any>
+  created_at: string
+  updated_at: string
+}
+
+export interface ItemEntity {
+  item_id: string
+  entity_id: string
+  role: string
+  entity?: Entity // joined info
 }

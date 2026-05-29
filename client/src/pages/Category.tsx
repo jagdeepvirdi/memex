@@ -12,10 +12,13 @@ type SortOption = 'newest' | 'oldest' | 'alpha' | 'type'
 export default function CategoryPage() {
   const { id } = useParams<{ id: string }>()
   const [items, setItems] = useState<Item[]>([])
+  const [total, setTotal] = useState(0)
   const [category, setCategory] = useState<Category | null>(null)
   const [loading, setLoading] = useState(true)
   const [typeFilter, setTypeFilter] = useState<string | null>(null)
   const [sortBy, setSortBy] = useState<SortOption>('newest')
+  const [offset, setOffset] = useState(0)
+  const limit = 24
 
   useEffect(() => {
     if (!id) return;
@@ -38,7 +41,7 @@ export default function CategoryPage() {
         setCategory(cat);
         
         if (cat) {
-          return fetchItems({ category: cat.name, type: typeFilter || undefined })
+          return fetchItems({ category: cat.name, type: typeFilter || undefined, limit, offset })
         }
         return { items: [], total: 0 }
       })
@@ -48,10 +51,21 @@ export default function CategoryPage() {
         if (sortBy === 'alpha') sorted.sort((a, b) => a.title.localeCompare(b.title))
         if (sortBy === 'type') sorted.sort((a, b) => a.type.localeCompare(b.type))
         setItems(sorted)
+        setTotal(res.total)
       })
       .catch(console.error)
       .finally(() => setLoading(false))
-  }, [id, typeFilter, sortBy])
+  }, [id, typeFilter, sortBy, offset])
+
+  const handleUpdateFilter = (type: string | null) => {
+    setTypeFilter(type)
+    setOffset(0)
+  }
+
+  const handleUpdateSort = (sort: SortOption) => {
+    setSortBy(sort)
+    setOffset(0)
+  }
 
   return (
     <div className="min-h-screen bg-bg flex">
@@ -77,7 +91,7 @@ export default function CategoryPage() {
               <select 
                 className="bg-surface border border-white/10 rounded-lg px-3 py-1 text-xs text-ink outline-none focus:border-accent/50 cursor-pointer"
                 value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                onChange={(e) => handleUpdateSort(e.target.value as SortOption)}
               >
                 <option value="newest">Newest</option>
                 <option value="oldest">Oldest</option>
@@ -91,7 +105,7 @@ export default function CategoryPage() {
               <select 
                 className="bg-surface border border-white/10 rounded-lg px-3 py-1 text-xs text-ink outline-none focus:border-accent/50 cursor-pointer"
                 value={typeFilter || ''}
-                onChange={(e) => setTypeFilter(e.target.value || null)}
+                onChange={(e) => handleUpdateFilter(e.target.value || null)}
               >
                 <option value="">All Types</option>
                 <option value="note">Notes</option>
@@ -106,17 +120,42 @@ export default function CategoryPage() {
           </div>
         </header>
 
-        <div className="p-12 max-w-7xl mx-auto w-full flex-1">
+        <div className="p-12 max-w-7xl mx-auto w-full flex-1 flex flex-col">
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
                {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
             </div>
           ) : items.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
-              {items.map(item => (
-                <ItemCard key={item.id} item={item} />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500 flex-1">
+                {items.map(item => (
+                  <ItemCard key={item.id} item={item} />
+                ))}
+              </div>
+              
+              {/* Pagination */}
+              <div className="mt-12 pt-8 border-t border-white/5 flex items-center justify-between">
+                <p className="text-xs text-ink-muted">
+                  Showing {offset + 1} to {Math.min(offset + limit, total)} of {total} items
+                </p>
+                <div className="flex items-center gap-2">
+                  <button 
+                    disabled={offset === 0}
+                    onClick={() => setOffset(Math.max(0, offset - limit))}
+                    className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-bold text-ink-muted hover:text-ink transition-all disabled:opacity-30"
+                  >
+                    Previous
+                  </button>
+                  <button 
+                    disabled={offset + limit >= total}
+                    onClick={() => setOffset(offset + limit)}
+                    className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/5 rounded-xl text-xs font-bold text-ink-muted hover:text-ink transition-all disabled:opacity-30"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center py-32 border-2 border-dashed border-white/5 rounded-3xl gap-6 grayscale opacity-50">
               <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center text-ink-muted">

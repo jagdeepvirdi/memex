@@ -17,6 +17,7 @@ interface ItemRow {
   updated_at: Date
   categories: string[] | null
   tags: string[] | null
+  confidence: number | null
 }
 
 /**
@@ -37,6 +38,7 @@ export function rowToItem(row: ItemRow): Item {
     updatedAt: row.updated_at,
     categories: row.categories || [],
     tags: row.tags || [],
+    confidence: row.confidence ?? undefined,
   }
 }
 
@@ -79,6 +81,53 @@ export async function resolveCategoryPath(
   }
 
   return ids
+}
+
+/**
+ * Creates a new item with categories and tags.
+ */
+export async function createItem(
+  client: PoolClient,
+  item: {
+    title: string
+    type: ItemType
+    content: string
+    structured?: Record<string, unknown>
+    source: ItemSource
+    sourceUrl?: string
+    categories?: string[]
+    tags?: string[]
+    reviewed?: boolean
+    confidence?: number
+  },
+): Promise<Item> {
+  const { rows } = await client.query<{ id: string }>(
+    `INSERT INTO items (title, type, content, structured, source, source_url, reviewed, confidence)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+     RETURNING id`,
+    [
+      item.title,
+      item.type,
+      item.content,
+      item.structured || {},
+      item.source,
+      item.sourceUrl || null,
+      item.reviewed ?? false,
+      item.confidence ?? null,
+    ],
+  )
+  const id = rows[0].id
+
+  if (item.categories && item.categories.length > 0) {
+    await setItemCategories(client, id, item.categories)
+  }
+  if (item.tags && item.tags.length > 0) {
+    await setItemTags(client, id, item.tags)
+  }
+
+  const result = await fetchItem(client, id)
+  if (!result) throw new Error('Failed to fetch created item')
+  return result
 }
 
 /**
@@ -145,7 +194,7 @@ export async function fetchItem(client: PoolClient, id: string): Promise<Item | 
 export const ITEM_SELECT_SQL = `
   SELECT
     i.id, i.title, i.type, i.content, i.structured,
-    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at,
+    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence,
     COALESCE(
       (SELECT array_agg(c.name ORDER BY ic2.depth)
        FROM item_categories ic2

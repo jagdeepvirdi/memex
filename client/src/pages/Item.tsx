@@ -5,7 +5,9 @@ import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
 import ItemCard from '../components/cards/ItemCard'
 import Editor from '../components/Editor'
-import { apiFetch } from '../lib/api'
+import { apiFetch, migrateToVault } from '../lib/api'
+import { useVaultStore } from '../store/vaultStore'
+import { encryptVaultItem } from '../lib/crypto'
 import type { Item } from '../../../shared/types'
 
 export default function ItemPage() {
@@ -22,7 +24,9 @@ export default function ItemPage() {
   const [editedTags, setEditedTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState('')
   const [saving, setSaving] = useState(false)
+  const [migrating, setMigrating] = useState(false)
   const tagInputRef = useRef<HTMLInputElement>(null)
+  const { vaultKey, isLocked } = useVaultStore()
 
   useEffect(() => {
     if (!id) return;
@@ -58,6 +62,39 @@ export default function ItemPage() {
     } catch (err) {
       toast.error('Failed to delete item')
       console.error(err)
+    }
+  }
+
+  const handleMoveToVault = async () => {
+    if (!item) return
+    if (isLocked || !vaultKey) {
+      toast.error('Vault is locked. Unlock it from the Vault page first.')
+      navigate('/vault')
+      return
+    }
+
+    if (!confirm('This will encrypt the content and move it to your secure vault. The original plain-text note will be deleted. Continue?')) return
+
+    setMigrating(true)
+    try {
+      // 1. Encrypt content
+      const { ciphertext, iv } = await encryptVaultItem(item.content, vaultKey)
+
+      // 2. Call migration API
+      await migrateToVault(item.id, {
+        service: item.title,
+        url: item.sourceUrl || undefined,
+        ciphertext,
+        iv
+      })
+
+      toast.success('Item moved to secure vault')
+      navigate('/vault')
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to move item to vault')
+    } finally {
+      setMigrating(false)
     }
   }
 
@@ -159,6 +196,14 @@ export default function ItemPage() {
           <div className="flex items-center gap-3">
             {!isEditing ? (
               <>
+                <button
+                  onClick={handleMoveToVault}
+                  disabled={migrating}
+                  className="p-2 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all"
+                  title="Move to Secure Vault"
+                >
+                  {migrating ? <Loader2 size={18} className="animate-spin" /> : <Shield size={18} />}
+                </button>
                 <button
                   onClick={startEditing}
                   className="p-2 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all"

@@ -19,6 +19,7 @@ import ingestRouter from './routes/ingest.js'
 import vaultRouter from './routes/vault.js'
 import searchRouter from './routes/search.js'
 import authRouter from './routes/auth.js'
+import settingsRouter from './routes/settings.js'
 import { itemCategoriesHandler } from './routes/categories.js'
 import { itemTagsHandler } from './routes/tags.js'
 import { checkOllamaHealth } from './services/ollama.js'
@@ -92,6 +93,7 @@ app.use('/api/ingest', ingestRouter)
 app.use('/api/vault', vaultRouter)
 app.use('/api/search', searchRouter)
 app.use('/api/auth', authRouter)
+app.use('/api/settings', settingsRouter)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 

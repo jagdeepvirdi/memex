@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Home,
   Folder,
@@ -11,7 +11,13 @@ import {
   Brain,
   Trash2,
   Sparkles,
-  Check
+  Check,
+  Table,
+  MapPin,
+  Clapperboard,
+  Wifi,
+  WifiOff,
+  MessageSquare
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { fetchCategories, fetchTags, apiFetch } from '../../lib/api';
@@ -19,7 +25,7 @@ import { useAuthStore } from '../../store/authStore';
 import type { Category, Tag } from '../../../../shared/types';
 
 interface SidebarProps {
-  activeSection: 'dashboard' | 'categories' | 'vault' | 'tags' | 'settings' | 'trash';
+  activeSection: 'dashboard' | 'categories' | 'vault' | 'tags' | 'settings' | 'trash' | 'table' | 'places' | 'media' | 'ask';
 }
 
 export default function Sidebar({ activeSection }: SidebarProps) {
@@ -28,10 +34,22 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
   const [aiStatus, setAiStatus] = useState<'ok' | 'error' | 'loading'>('loading');
   const [enrichment, setEnrichment] = useState<{ pending: number; total: number } | null>(null);
+  const [eta, setEta] = useState<string | null>(null);
+  const [rate, setRate] = useState<string | null>(null);
+  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+  const startTimeRef = useRef<number | null>(null);
+  const startPendingRef = useRef<number | null>(null);
+
   const navigate = useNavigate();
   const { logout, user } = useAuthStore();
 
   useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
     Promise.all([fetchCategories(), fetchTags()])
       .then(([cats, tgs]) => {
         setCategories(cats);
@@ -55,6 +73,33 @@ export default function Sidebar({ activeSection }: SidebarProps) {
         const data = await apiFetch<{ pending: number; total: number }>('/items/enrichment');
         if (data.total > 0) {
           setEnrichment(data);
+
+          // Track progress for ETA
+          if (data.pending > 0) {
+            if (startTimeRef.current === null) {
+              startTimeRef.current = Date.now();
+              startPendingRef.current = data.pending;
+            } else {
+              const elapsedSec = (Date.now() - startTimeRef.current) / 1000;
+              const completedSinceStart = startPendingRef.current! - data.pending;
+              
+              if (completedSinceStart > 0 && elapsedSec > 0) {
+                const itemsPerSec = completedSinceStart / elapsedSec;
+                const itemsPerMin = itemsPerSec * 60;
+                const remainingSec = data.pending / itemsPerSec;
+
+                setRate(`${itemsPerMin.toFixed(1)} notes/min`);
+                setEta(formatDuration(remainingSec));
+              }
+            }
+          } else {
+            // Completed
+            startTimeRef.current = null;
+            startPendingRef.current = null;
+            setEta(null);
+            setRate(null);
+          }
+
           // Refresh categories whenever the pending count drops (new items got classified)
           if (prevPending > 0 && data.pending < prevPending) {
             fetchCategories().then(setCategories).catch(console.error);
@@ -102,6 +147,30 @@ export default function Sidebar({ activeSection }: SidebarProps) {
           label="Dashboard" 
           active={activeSection === 'dashboard'} 
           onClick={() => navigate('/')}
+        />
+        <NavItem 
+          icon={<MessageSquare size={18} />} 
+          label="Ask Knowledge" 
+          active={activeSection === 'ask'} 
+          onClick={() => navigate('/ask')}
+        />
+        <NavItem 
+          icon={<Table size={18} />} 
+          label="Table View" 
+          active={activeSection === 'table'} 
+          onClick={() => navigate('/items/table')}
+        />
+        <NavItem 
+          icon={<MapPin size={18} />} 
+          label="Places" 
+          active={activeSection === 'places'} 
+          onClick={() => navigate('/places')}
+        />
+        <NavItem 
+          icon={<Clapperboard size={18} />} 
+          label="Media & Books" 
+          active={activeSection === 'media'} 
+          onClick={() => navigate('/media')}
         />
         <NavItem 
           icon={<Shield size={18} />} 
@@ -201,12 +270,22 @@ export default function Sidebar({ activeSection }: SidebarProps) {
                  <span className="text-[10px] text-ink-muted">{enrichment.pending} left</span>
                )}
              </div>
-             <div className="h-1 bg-white/10 rounded-full overflow-hidden">
+             <div className="h-1 bg-white/10 rounded-full overflow-hidden mb-2">
                <div
                  className={`h-full rounded-full transition-all duration-500 ${enrichment.pending === 0 ? 'bg-green-400' : 'bg-accent'}`}
                  style={{ width: `${Math.round(((enrichment.total - enrichment.pending) / enrichment.total) * 100)}%` }}
                />
              </div>
+             {enrichment.pending > 0 && (eta || rate) && (
+               <div className="flex items-center justify-between mt-1">
+                 <span className="text-[8px] text-ink-muted uppercase font-bold tracking-tighter">
+                   {rate && `~${rate}`}
+                 </span>
+                 <span className="text-[8px] text-accent font-bold uppercase tracking-tighter">
+                   {eta && `ETA: ${eta}`}
+                 </span>
+               </div>
+             )}
            </div>
          )}
 
@@ -307,4 +386,13 @@ function CategoryItem({ cat, level, expanded, onToggle, onSelect }: {
       )}
     </div>
   );
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const mins = Math.floor(seconds / 60);
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.floor(mins / 60);
+  const remainingMins = mins % 60;
+  return `${hours}h ${remainingMins}m`;
 }

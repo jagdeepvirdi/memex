@@ -1,10 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { ollamaChat, ollamaEmbed } from './ollama.js'
+import { getAiConfig } from './settings.js'
 
 // Route through Claude API only when explicitly opted in.
 // Anthropic has no public embeddings endpoint, so aiEmbed always uses Ollama.
-function useClaude(): boolean {
-  return process.env.USE_CLAUDE === 'true' && !!process.env.ANTHROPIC_API_KEY
+async function useClaude(): Promise<boolean> {
+  const config = await getAiConfig()
+  return config.useClaude === true && !!process.env.ANTHROPIC_API_KEY
 }
 
 let _anthropic: Anthropic | null = null
@@ -16,10 +18,17 @@ function getAnthropicClient(): Anthropic {
   return _anthropic
 }
 
-export async function aiChat(prompt: string, system?: string): Promise<string> {
-  if (useClaude()) {
+export async function aiChat(
+  prompt: string, 
+  system?: string, 
+  format?: string | object,
+  options?: Record<string, any>
+): Promise<string> {
+  const config = await getAiConfig()
+
+  if (config.useClaude && !!process.env.ANTHROPIC_API_KEY) {
     const client = getAnthropicClient()
-    const model = process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6'
+    const model = process.env.CLAUDE_MODEL ?? 'claude-3-5-sonnet-20240620'
 
     const message = await client.messages.create({
       model,
@@ -35,7 +44,7 @@ export async function aiChat(prompt: string, system?: string): Promise<string> {
     return block.text
   }
 
-  return ollamaChat(prompt, system)
+  return ollamaChat(prompt, system, config.model, format, options)
 }
 
 // Embeddings always go through Ollama — Anthropic has no embeddings API.

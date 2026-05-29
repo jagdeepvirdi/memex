@@ -11,6 +11,7 @@ import {
 } from '../db/helpers.js'
 import { classify, mapToCategories } from '../services/classifier.js'
 import { embedItem } from '../services/embedder.js'
+import { extractAndLinkEntities } from '../services/entityService.js'
 import type { ItemType, ItemSource } from '../../../shared/types.js'
 
 const router = Router()
@@ -40,6 +41,7 @@ const updateItemSchema = z.object({
   structured: z.record(z.unknown()).optional(),
   deleted: z.boolean().optional(),
   reviewed: z.boolean().optional(),
+  confidence: z.number().nullable().optional(),
 })
 
 const listQuerySchema = z.object({
@@ -270,6 +272,52 @@ router.post('/', async (req, res) => {
 
 // ... (stats, related, versions, single-fetch routes) ...
 
+// ── PUT /api/items/review-all ────────────────────────────────────────────────
+
+router.put('/review-all', async (req, res) => {
+  try {
+    const { rowCount } = await pool.query(
+      `UPDATE items 
+       SET reviewed = TRUE, updated_at = NOW() 
+       WHERE reviewed = FALSE 
+         AND deleted_at IS NULL 
+         AND source = 'keep'
+         AND structured != '{}'::jsonb`
+    )
+    res.json({ count: rowCount })
+  } catch (err) {
+    console.error('PUT /api/items/review-all error:', err)
+    res.status(500).json({ error: 'Failed to review items' })
+  }
+})
+
+import { generateInsights } from '../services/insightService.js'
+import { getRediscoveryItems } from '../services/rediscoveryService.js'
+
+// ── GET /api/items/insights ──────────────────────────────────────────────────
+
+router.get('/insights', async (_req, res) => {
+  try {
+    const insights = await generateInsights()
+    res.json(insights)
+  } catch (err) {
+    console.error('GET /api/items/insights error:', err)
+    res.status(500).json({ error: 'Failed to generate insights' })
+  }
+})
+
+// ── GET /api/items/rediscover ────────────────────────────────────────────────
+
+router.get('/rediscover', async (_req, res) => {
+  try {
+    const items = await getRediscoveryItems()
+    res.json(items)
+  } catch (err) {
+    console.error('GET /api/items/rediscover error:', err)
+    res.status(500).json({ error: 'Failed to fetch rediscovery items' })
+  }
+})
+
 // ── GET /api/items/stats ───────────────────────────────────────────────────────
 
 // Re-queue all unclassified Keep items through Ollama
@@ -432,7 +480,7 @@ router.put('/:id', async (req, res) => {
     return
   }
 
-  const { title, content, categories, tags, structured, deleted, reviewed } = parsed.data
+  const { title, content, categories, tags, structured, deleted, reviewed, confidence } = parsed.data
   const client = await pool.connect()
 
   try {
@@ -456,6 +504,7 @@ router.put('/:id', async (req, res) => {
     if (content !== undefined) { updates.push(`content = $${p++}`); params.push(content) }
     if (structured !== undefined) { updates.push(`structured = $${p++}`); params.push(JSON.stringify(structured)) }
     if (reviewed !== undefined) { updates.push(`reviewed = $${p++}`); params.push(reviewed) }
+    if (confidence !== undefined) { updates.push(`confidence = $${p++}`); params.push(confidence) }
     if (deleted === false) { updates.push(`deleted_at = NULL`) }
 
     if (updates.length > 0) {
@@ -472,6 +521,14 @@ router.put('/:id', async (req, res) => {
     }
     if (tags !== undefined) {
       await setItemTags(client, req.params.id, tags)
+    }
+
+    // Update entity graph links if structured data changed
+    if (structured !== undefined) {
+       const updated = await fetchItem(client, req.params.id);
+       if (updated) {
+          await extractAndLinkEntities(client, req.params.id, updated.type, updated.structured);
+       }
     }
 
     await client.query('COMMIT')
@@ -496,6 +553,26 @@ router.put('/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to update item' })
   } finally {
     client.release()
+  }
+})
+
+// ── DELETE /api/items/bulk (soft delete) ───────────────────────────────────────
+
+router.delete('/bulk', async (req, res) => {
+  const { ids } = req.body
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ error: 'IDs array required' })
+    return
+  }
+  try {
+    const { rowCount } = await pool.query(
+      'UPDATE items SET deleted_at = NOW() WHERE id = ANY($1) AND deleted_at IS NULL',
+      [ids]
+    )
+    res.json({ count: rowCount })
+  } catch (err) {
+    console.error('DELETE /api/items/bulk error:', err)
+    res.status(500).json({ error: 'Failed to delete items' })
   }
 })
 

@@ -31,6 +31,11 @@ export default function SettingsPage() {
   const [enrichStatus, setEnrichStatus] = useState<{ pending: number; total: number } | null>(null)
   const [enriching, setEnriching] = useState(false)
   const [markitdownInstalled, setMarkitdownInstalled] = useState<boolean | null>(null)
+  const [settings, setSettings] = useState<Record<string, any>>({
+    ai_model: 'llama3.2',
+    use_claude: false,
+    auto_lock_timeout: '15'
+  })
 
   useEffect(() => {
     loadCategories()
@@ -40,7 +45,25 @@ export default function SettingsPage() {
     apiFetch<{ installed: boolean }>('/ingest/markitdown/health')
       .then(r => setMarkitdownInstalled(r.installed))
       .catch(() => setMarkitdownInstalled(false))
+    apiFetch<Record<string, any>>('/settings')
+      .then(setSettings)
+      .catch(console.error)
   }, [])
+
+  const handleUpdateSettings = async (newSettings: Record<string, any>) => {
+    const updated = { ...settings, ...newSettings }
+    setSettings(updated)
+    try {
+      await apiFetch('/settings', {
+        method: 'PUT',
+        body: JSON.stringify(newSettings)
+      })
+      setSuccess('Settings saved')
+      setTimeout(() => setSuccess(null), 2000)
+    } catch {
+      setError('Failed to save settings')
+    }
+  }
 
   const handleReEnrich = async () => {
     setEnriching(true)
@@ -163,9 +186,22 @@ export default function SettingsPage() {
                      <p className="text-sm text-ink font-medium">Primary Model</p>
                      <p className="text-xs text-ink-muted mt-0.5">Used for auto-classification and summarization.</p>
                   </div>
-                  <select className="bg-bg border border-white/10 rounded-lg px-3 py-1.5 text-xs text-ink outline-none">
+                  <select 
+                    className="bg-bg border border-white/10 rounded-lg px-3 py-1.5 text-xs text-ink outline-none cursor-pointer focus:border-accent/50 transition-colors"
+                    value={settings.use_claude ? 'claude-3-5-sonnet' : settings.ai_model}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      if (val === 'claude-3-5-sonnet') {
+                        handleUpdateSettings({ use_claude: true })
+                      } else {
+                        handleUpdateSettings({ use_claude: false, ai_model: val })
+                      }
+                    }}
+                  >
                      <option value="llama3.2">llama3.2 (Local)</option>
                      <option value="gemma2:2b">gemma2:2b (Local)</option>
+                     <option value="phi3:3.8b">phi3:3.8b (Local)</option>
+                     <option value="qwen2.5-coder:14b">qwen2.5-coder:14b (Heavy)</option>
                      <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Cloud)</option>
                   </select>
                </div>
@@ -337,12 +373,32 @@ export default function SettingsPage() {
                      <p className="text-sm text-ink font-medium">Auto-lock Timeout</p>
                      <p className="text-xs text-ink-muted mt-0.5">Duration of inactivity before vault locks.</p>
                   </div>
-                  <select className="bg-bg border border-white/10 rounded-lg px-3 py-1.5 text-xs text-ink outline-none">
+                  <select 
+                    className="bg-bg border border-white/10 rounded-lg px-3 py-1.5 text-xs text-ink outline-none cursor-pointer focus:border-accent/50 transition-colors"
+                    value={settings.auto_lock_timeout}
+                    onChange={(e) => handleUpdateSettings({ auto_lock_timeout: e.target.value })}
+                  >
                      <option value="5">5 Minutes</option>
-                     <option value="15" selected>15 Minutes</option>
+                     <option value="15">15 Minutes</option>
                      <option value="30">30 Minutes</option>
                      <option value="60">1 Hour</option>
                   </select>
+               </div>
+               
+               <div className="flex items-center justify-between">
+                  <div>
+                     <p className="text-sm text-ink font-medium">Strict Local Mode</p>
+                     <p className="text-xs text-ink-muted mt-0.5">Disable URL scraping and force local-only execution.</p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      className="sr-only peer" 
+                      checked={settings.strict_local_mode === 'true' || settings.strict_local_mode === true}
+                      onChange={(e) => handleUpdateSettings({ strict_local_mode: e.target.checked.toString() })}
+                    />
+                    <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent"></div>
+                  </label>
                </div>
             </div>
           </section>

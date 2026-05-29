@@ -14,9 +14,12 @@ import { toast } from 'sonner'
 interface Props {
   item: Item
   onClick?: () => void
+  selectable?: boolean
+  selected?: boolean
+  onToggleSelection?: (id: string) => void
 }
 
-export default function ItemCard({ item, onClick }: Props) {
+export default function ItemCard({ item, onClick, selectable, selected, onToggleSelection }: Props) {
   const handleReview = async (e: React.MouseEvent) => {
     e.stopPropagation()
     try {
@@ -46,9 +49,21 @@ export default function ItemCard({ item, onClick }: Props) {
   }
 
   return (
-    <div className="relative group">
+    <div className={`relative group transition-all ${selected ? 'ring-2 ring-accent ring-offset-4 ring-offset-bg rounded-xl' : ''}`}>
       {renderCard()}
       
+      {selectable && (
+        <div className="absolute top-2 right-2 z-10">
+          <input 
+            type="checkbox"
+            checked={selected}
+            onChange={() => onToggleSelection?.(item.id)}
+            className="w-4 h-4 rounded bg-surface border-white/20 text-accent focus:ring-accent cursor-pointer transition-all accent-accent"
+            onClick={e => e.stopPropagation()}
+          />
+        </div>
+      )}
+
       {!item.reviewed && item.id !== 'preview' && (
         <div className="absolute top-2 left-2 z-10">
            <button 

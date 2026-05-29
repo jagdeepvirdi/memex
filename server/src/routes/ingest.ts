@@ -8,7 +8,8 @@ import { parseKeepZip } from '../services/keepImporter.js';
 import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { pool } from '../db/client.js';
-import { setItemCategories, setItemTags } from '../db/helpers.js';
+import { setItemCategories, setItemTags, createItem } from '../db/helpers.js';
+import { extractAndLinkEntities } from '../services/entityService.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
 
 const router = Router();
@@ -48,22 +49,55 @@ async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: st
     try {
       const result = await classify(text);
 
-      // Only write to DB if classification produced something meaningful
-      if (!result.title || result.title === 'Untitled') {
-        result.title = note?.title || note?.content?.split('\n')[0]?.slice(0, 80) || 'Untitled';
-      }
-
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        await client.query(
-          `UPDATE items SET type=$1, title=$2, structured=$3, updated_at=NOW() WHERE id=$4`,
-          [result.type, result.title,
-           JSON.stringify({ ...result.structured, summary: result.summary }), id]
-        );
-        const allTags = Array.from(new Set([...result.tags, ...(note?.labels || [])]));
-        if (allTags.length > 0) await setItemTags(client, id, allTags);
-        if (result.categories.length > 0) await setItemCategories(client, id, result.categories);
+
+        if (result.multiEntity && result.entities && result.entities.length > 0) {
+          console.log(`[Classify] Multi-entity detected for ${id}: ${result.entities.length} entities`);
+          
+          for (const entity of result.entities) {
+            const newItem = await createItem(client, {
+              title: (entity.title as string) || (entity.name as string) || 'Untitled Entity',
+              type: result.type,
+              content: `Extracted from: ${note?.title || 'Untitled note'}\n\nSummary: ${result.summary}`,
+              structured: { ...entity, summary: result.summary },
+              source: 'keep',
+              categories: result.categories,
+              tags: result.tags,
+              reviewed: false,
+              confidence: result.confidence
+            });
+            // Extract entities for each split item
+            await extractAndLinkEntities(client, newItem.id, newItem.type, newItem.structured);
+          }
+          
+          // Mark original note as "processed" by reflecting it was split
+          await client.query(
+            `UPDATE items SET title=$1, structured=$2, updated_at=NOW(), confidence=$3 WHERE id=$4`,
+            [`[Split] ${note?.title || 'Untitled'}`, 
+             JSON.stringify({ summary: `Split into ${result.entities.length} items.`, originalType: result.type }), 
+             result.confidence, id]
+          );
+        } else {
+          // Normal single-item update
+          if (!result.title || result.title === 'Untitled') {
+            result.title = note?.title || note?.content?.split('\n')[0]?.slice(0, 80) || 'Untitled';
+          }
+
+          const structuredWithSummary = { ...result.structured, summary: result.summary };
+          await client.query(
+            `UPDATE items SET type=$1, title=$2, structured=$3, updated_at=NOW(), confidence=$4 WHERE id=$5`,
+            [result.type, result.title,
+             JSON.stringify(structuredWithSummary), result.confidence, id]
+          );
+          const allTags = Array.from(new Set([...result.tags, ...(note?.labels || [])]));
+          if (allTags.length > 0) await setItemTags(client, id, allTags);
+          if (result.categories.length > 0) await setItemCategories(client, id, result.categories);
+
+          // Extract entities for the updated single item
+          await extractAndLinkEntities(client, id, result.type, structuredWithSummary);
+        }
         await client.query('COMMIT');
         console.log(`[Classify] OK: ${result.title} → ${result.type}`);
       } catch (err) {

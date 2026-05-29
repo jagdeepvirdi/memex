@@ -112,23 +112,17 @@ markitdown --help
     (those not in the canonical list) and reassign their items to the correct canonical node.
   - **Do after enrichment completes** — running it mid-process would cause conflicts.
 
-- [ ] **"Move to Vault" action on sensitive notes**
+- [x] **"Move to Vault" action on sensitive notes** ✅
   - **Problem:** Google Keep notes often contain sensitive data — bank account numbers, UPI IDs,
     PINs, license keys, contact details — that should be encrypted in the vault, not stored as
     plain text in the items table.
   - **How to implement:**
     1. Add a **"Move to Vault"** button on the Item detail page (and item cards via context menu).
-    2. On click: open a small modal asking for the vault master password (to derive the AES key).
-    3. Encrypt `item.content` client-side using the existing `encryptVaultItem()` in `crypto.ts`.
-    4. `POST /api/vault` to save the encrypted blob, then `DELETE /api/items/:id` to remove the
-       plain-text version.
-  - **AI can help identify candidates:** During enrichment, flag notes whose content matches
-    patterns for bank details, PINs, license keys (regex on structured or content fields).
-    Show a "Sensitive?" badge on those item cards so the user notices them.
-  - **Vault fields mapping:** `service` = inferred label (e.g. "Bank — HDFC"), `username` = account
-    holder name if found, `ciphertext` + `iv` = encrypted content.
+    2. On click: check if vault is unlocked, then encrypt `item.content` client-side.
+    3. `POST /api/vault/migrate/:id` to save encrypted blob and hard-delete plain-text version.
+  - **Done:** Implemented migration endpoint and UI buttons in Item page and Table View.
 
-- [ ] **Category proliferation / duplicates during AI enrichment**
+- [x] **Category proliferation / duplicates during AI enrichment** ✅
   - **Observed:** After enrichment, many new AI-generated categories appear (e.g. "book", "books",
     "recipe", "travel") alongside the pre-seeded tree (e.g. "Media > Books", "Food > Savory").
     The original seeded categories appear to be pushed down or replaced.
@@ -144,7 +138,8 @@ markitdown --help
        items from rogue categories (e.g. "book" → "Media > Books")
   - **Note:** This will get worse as enrichment completes — all 764 notes will add their own
     AI-invented category paths. Best to fix the classifier pipeline before re-running enrichment.
-  - **Wait until enrichment finishes** to see the full picture, then fix + re-enrich.
+  - **Done:** Implemented fuzzy-mapping in `classifier.ts` and ran a DB cleanup script.
+
 
 ---
 
@@ -163,7 +158,7 @@ markitdown --help
 
 ## 🟢 Features / Improvements
 
-- [ ] **Table View — "View All" as a rich data table with filters**
+- [x] **Table View — "View All" as a rich data table with filters** ✅
 
   **Requirement:** Replace the card grid on "View All" with a dense, scannable table showing
   every item's key metadata in one place. Make review actions available inline.
@@ -180,164 +175,94 @@ markitdown --help
   - Status: All / Pending Review / Reviewed / Pending Enrichment
   - Search: full-text across title + summary
 
-  **Implementation notes:**
-  - Route: `/items/table` (new page) with URL params for shareable filter state
-    e.g. `/items/table?type=media&status=pending-review`
-  - Reuse existing `GET /api/items` — it already accepts type, category, tag, enriched,
-    pendingEnrichment, unreviewed. Add `q` (full-text) and `sortBy`/`sortDir` params.
-  - Add `PUT /api/items/review-all` for the bulk "Mark All as Reviewed" action (see bug above)
-  - Pagination: 50 rows per page, URL param `offset`
-  - Columns that are long (summary, content) should be truncated with tooltip on hover
-  - Export visible rows as CSV directly from this table
+  **Done:** Implemented `/items/table` with rich filtering, pagination, and bulk review action.
 
-  **Why it matters:** With 764 notes, the card grid is impossible to scan. A table lets the
-  user triage review status, spot bad AI classifications, and bulk-act in seconds.
 
 ---
 
-- [ ] **Media Intelligence — Movie & Book database auto-extracted from notes**
+- [x] **Media Intelligence — Movie & Book database auto-extracted from notes** ✅
+  - **Requirement:** Extract movies and books from notes. Split multi-entity notes.
+  - **Done:** Implemented multi-entity detection in classifier, note splitting in ingest, and `/media` view.
 
-  **Requirement A — Single note, multiple entities (note splitting):**
-  When a note lists multiple movies or books (e.g. "Watched: Inception, Interstellar, Dune"),
-  Ollama should detect this as a multi-entity note and split it into individual items — one
-  item per movie/book — each with its own structured metadata.
-
-  **Requirement B — Per-entity enrichment:**
-  Each extracted movie/book item should be enriched with:
-
-  *Movies:*
-  - Genre (Thriller / Drama / Comedy / Action / Horror / Sci-Fi)
-  - Director, year, cast (top 3)
-  - Rating (user's own: 1–5 stars, stored in structured)
-  - Watched status (watched / want-to-watch / watching)
-  - Streaming platform if mentioned
-
-  *Books:*
-  - Author, year published, genre
-  - Read status (read / reading / want-to-read)
-  - User's rating (1–5 stars)
-  - Notes/highlights from the note content
-
-  **Requirement C — Dedicated collection views:**
-  - `/media/movies` — table of all `type=media` items: poster placeholder, title, genre,
-    director, year, watched status, rating. Filterable by genre/status/rating.
-  - `/media/books` — table of all `type=book` items: title, author, genre, status, rating.
-  - Both views should support inline status/rating updates without opening the item page.
-
-  **Implementation approach:**
-
-  *Step 1 — Multi-entity detection at classify time:*
-  Add a `multiEntity` field to the classifier output. If Ollama detects a list of movies/books,
-  return `{ type: 'media', multiEntity: true, entities: [{title, year, ...}, ...] }`.
-  The ingest route checks `multiEntity` and creates N items instead of 1.
-
-  *Step 2 — Structured schema extensions:*
-  ```typescript
-  // Current MediaData
-  { genre, year, director, watched }
-
-  // Extended MediaData
-  { genre, year, director, cast: string[], watched: boolean,
-    watchStatus: 'watched' | 'want-to-watch' | 'watching',
-    userRating: 1 | 2 | 3 | 4 | 5 | null,
-    streamingPlatform?: string }
-
-  // Extended BookData
-  { author, genre, year, status: 'read' | 'reading' | 'want-to-read',
-    userRating: 1 | 2 | 3 | 4 | 5 | null,
-    highlights?: string[] }
-  ```
-
-  *Step 3 — Collection pages:*
-  New pages `/media/movies` and `/media/books` with table + filter + inline edit for
-  status and rating. These are the "living databases" the user wants.
-
-  *Note on external data enrichment:*
-  Ollama can infer genre/director from training data for well-known titles. For unknown
-  titles, consider optionally calling a free API:
-  - Movies: OMDB API (free tier: 1000 req/day) — `http://www.omdbapi.com/?t=Inception`
-  - Books: Open Library API (free, no key) — `https://openlibrary.org/search.json?title=Sapiens`
-  This would be an opt-in setting, not automatic.
+- [x] **Place Intelligence — Restaurant, Café & Location database auto-extracted from notes** ✅
+  - **Requirement:** Extract structured places from travel and food notes.
+  - **Done:** Added `place` type, structured `PlaceData`, and `/places` view with Maps integration.
 
 ---
 
-- [ ] **Place Intelligence — Restaurant, Café & Location database auto-extracted from notes**
-
-  **Requirement:** Notes about restaurants, cafés, hotels, attractions, and destinations are
-  very common in Google Keep ("Must try — Thai Garden, Bangkok", "Dog-friendly cafés near
-  Kanchanaburi", "Hotels near Khao Yai"). These should be extracted and stored as structured
-  place entities — not just plain notes — so they're easy to browse, filter, and act on.
-
-  **Structured schema — Place:**
-  ```typescript
-  interface PlaceData {
-    name: string                // "Thai Garden"
-    type: 'restaurant' | 'cafe' | 'hotel' | 'attraction' | 'destination' | 'other'
-    cuisine?: string            // "Thai", "Italian" — for restaurants/cafés
-    city?: string               // "Bangkok"
-    country?: string            // "Thailand"
-    address?: string            // if mentioned in note or source
-    visitStatus: 'visited' | 'want-to-visit' | 'want-to-revisit'
-    userRating?: 1 | 2 | 3 | 4 | 5   // user's own rating from note context
-    priceRange?: '$' | '$$' | '$$$'   // if mentioned
-    notes?: string              // what to order, tips, highlights from note
-    mapsUrl?: string            // Google Maps link if present in source
-    tags?: string[]             // e.g. ["dog-friendly", "rooftop", "date-night"]
-  }
-  ```
-
-  **Source enrichment — use every clue available:**
-  - **Original note content:** Ollama extracts name, cuisine, city, visit context ("visited",
-    "must try", "want to go back") and infers visitStatus + rating from sentiment.
-  - **Keep labels:** Labels like "Travel", "Bangkok", "Food" carried over as tags give
-    geographic context without needing AI.
-  - **sourceUrl (if present):** If the Keep note had a URL (Google Maps link, TripAdvisor,
-    Zomato, blog post), re-fetch the URL with Jina to extract richer details — address,
-    hours, cuisine, rating from the platform.
-  - **Google Maps URL pattern:** `maps.google.com/...` or `goo.gl/maps/...` links in note
-    content or sourceUrl can be detected and stored as `mapsUrl` for one-click navigation.
-
-  **Multi-entity detection (same as movies/books):**
-  A single Keep note often lists many places ("Dog-friendly spots near Bangkok:
-  Kanchanaburi, Khao Yai, Hua Hin"). Ollama should detect this as a multi-entity place
-  note and split into N separate place items.
-
-  **Collection view — `/places`:**
-  Table with columns: Name | Type | Cuisine | City/Country | Visit Status | Rating | Tags | Source
-  - Filter by: type (restaurant/café/hotel/attraction), city, country, visit status, rating
-  - Inline edit: visit status (toggle visited/want-to-visit) and rating (star click)
-  - "Open in Maps" button if `mapsUrl` is present
-  - Group by city or country for trip planning view
-
-  **Maps to canonical category tree:**
-  - Restaurant/Café → `Travel > Restaurants`
-  - Hotel → `Travel > Hotels`
-  - Attraction → `Travel > Attractions`
-  - Destination/City → `Travel > Destinations`
-
-  **Vision — what we are building toward:**
-  > A Keep note from years ago like *"Dog-friendly spots near Kanchanaburi — river rafting
-  > place, good food"* becomes a filterable entry in `/places` with visit status, your rating
-  > context, and a Maps button — your entire travel wishlist and history in one structured table.
-
-  This is the north star for the Places feature. Every restaurant, café, hotel, and attraction
-  ever mentioned across all Keep notes should surface here — enriched, organised, and actionable.
-  No more digging through old notes to remember "where was that place I wanted to visit?"
-
----
-
-- [ ] **ETA on AI Enrichment progress widget (Sidebar)**
+- [x] **ETA on AI Enrichment progress widget (Sidebar)** ✅
   - Track when enrichment started and how many notes were pending at that point
   - Every poll (5s), compute rate = notes_classified / elapsed_seconds
   - Display: "~12 min left" or "~3 notes/min" alongside the X/764 counter
-  - Implementation: `GET /api/items/enrichment` already returns `pending` + `total`;
-    store `{ startTime, startPending }` in component state on first non-zero result,
-    then derive `rate = (startPending - pending) / elapsed` and `eta = pending / rate`
-  - Edge cases: rate = 0 (just started, show "calculating..."), rate very slow (show hours)
-  - Already have the data — purely a frontend calculation, no server changes needed
+  - Done: Implemented real-time rate and ETA tracking in Sidebar.
 
-- [ ] Wire up model selector in Settings (llama3.2 vs gemma3:4b)
-- [ ] Pagination on Dashboard and category pages (currently limited to 12/50)
-- [ ] Bulk delete from PendingItems / EnrichedItems pages
-- [ ] Export enriched items as CSV in addition to JSON
-- [ ] PWA: test offline mode and share-target flow
+- [x] Wire up model selector in Settings (llama3.2 vs gemma3:4b) ✅
+  - Done: Added `settings` table and API, wired UI to toggle models and cloud vs local.
+
+- [x] Pagination on Dashboard and category pages (currently limited to 12/50) ✅
+  - Done: Added "Load More" to Dashboard and Prev/Next to Category pages.
+- [x] Bulk delete from PendingItems / EnrichedItems pages ✅
+  - Done: Added multi-select and bulk delete to both pages.
+
+- [x] Export enriched items as CSV in addition to JSON ✅
+  - Done: Added "Export CSV" buttons to Table View, Places, and Media pages.
+
+---
+
+## 🚀 Vision / Future Phases (from Gemini Vision)
+
+- [x] **Actionable Insights Dashboard (The "Wow" Moment)** ✅
+  - **Requirement:** Automatically scan user's library and surface 1-3 near-term actionable
+    insights on the Dashboard.
+  - **Done:** Created `insightService` backend pulling recent/random items, and updated 
+    Dashboard UI with an animated, staggered Insight card layout.
+
+- [x] **Celebratory Welcome Experience ("Hello World")** ✅
+  - **Requirement:** A personalized onboarding flow when a user first connects their data.
+  - **Personas:** Choose between "The Helpful Productivity Partner" (logistics focused) 
+    or "The Inspirational Creative Muse" (passion focused).
+  - **Flow:** Celebrate the data connection, show immediate value via a few high-level 
+    connections the AI made across different notes.
+  - **Done:** Created an interactive, animated 3-step onboarding flow in `/welcome`.
+
+- [x] **Advanced Local Structured Outputs (Reliability Upgrade)** ✅
+  - Done: Enabled native JSON Mode in `ollama.ts`, implemented "Enum Trick" for categories 
+    (providing strict leaf node list in prompt), and forced Temperature 0.0 for reliability.
+
+---
+
+## 🧠 "Knowledge OS" Architecture (Claude Recommendations)
+
+- [x] **First-Class Entity Graph & Resolution** ✅
+  - **Requirement:** Turn extracted strings (directors, authors, cities) into actual relational entities (`people`, `places` tables).
+  - **Why:** Enables queries like "every movie by this director" or "everything connected to Bangkok" across all note types.
+  - **Implementation:** Created `entities` and `item_entities` tables, added `extractAndLinkEntities` to the ingestion and update flows, and wrote an entity resolution background script.
+
+- [x] **Local RAG Q&A ("Ask Your Knowledge")** ✅
+  - **Requirement:** A chat interface that queries the local database.
+  - **Done:** Implemented `ragService` backend using hybrid search context and AI synthesis,
+    and created a dedicated `/ask` chat page with cited sources.
+
+
+- [x] **Resurfacing / Serendipity Layer** ✅
+  - **Requirement:** A dedicated section (or weekly digest) for rediscovery.
+  - **Done:** Added `/api/items/rediscover` backend logic and a "Rediscover" widget on the 
+    Dashboard showing "On this day" and forgotten items.
+
+- [x] **Confidence Scoring & Curation Queue** ✅
+  - **Requirement:** Capture a confidence signal from the AI during extraction.
+  - **Done:** Added `confidence` column to schema, updated AI prompts to return a 0-100 score, 
+    and added a color-coded "Score" column to the Table View for easy curation of low-confidence items.
+
+- [ ] **Data Provenance & Re-processing**
+  - **Requirement:** Keep the raw imported note immutable. Treat structured extractions as a derived, versioned layer.
+  - **Why:** Allows re-running the entire library through a newer, smarter model (e.g., Gemma 4) later without losing the original context or manual edits.
+
+- [ ] **Multi-modal Capture (Vision & Audio)**
+  - **Requirement:** Support image OCR (local vision model) and voice memos (local Whisper).
+
+---
+
+- [x] PWA: test offline mode and share-target flow ✅
+  - Done: Configured Workbox runtime caching (NetworkFirst) for API routes, registered SW,
+    and implemented share-target intent handling in the Dashboard IngestPanel.
