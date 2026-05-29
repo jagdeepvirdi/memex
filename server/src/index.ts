@@ -5,6 +5,7 @@ import jwt from 'jsonwebtoken'
 import express from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
+import { pool } from './db/client.js'
 import type { Request, Response, NextFunction } from 'express'
 
 // Load .env from project root regardless of CWD
@@ -47,25 +48,37 @@ app.use(express.json({ limit: '50mb' }))
 
 // ── Auth Middleware ──────────────────────────────────────────────────────────
 
-const authMiddleware = (req: Request, res: Response, next: NextFunction) => {
-  // Public paths
-  if (req.path.startsWith('/api/auth') || req.path.startsWith('/api/health') || req.path === '/api/ingest/markitdown/health') {
-    return next()
-  }
-  
-  const authHeader = req.headers.authorization
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Unauthorized' })
-  }
-  
-  const token = authHeader.split(' ')[1]
+const PUBLIC_PATHS = [
+  '/api/auth',
+  '/api/health',
+  '/api/ingest/markitdown/health',
+  '/api/ingest/vision/health',
+]
+
+const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+  if (PUBLIC_PATHS.some(p => req.path.startsWith(p))) return next()
+
+  const token = req.headers.authorization?.replace(/^Bearer\s+/, '')
+  if (!token) return res.status(401).json({ error: 'Unauthorized' })
+
+  // 1. Try JWT (standard session token)
   try {
-    const decoded = jwt.verify(token, JWT_SECRET)
-    req.user = decoded
-    next()
-  } catch (err) {
-    res.status(401).json({ error: 'Invalid token' })
-  }
+    req.user = jwt.verify(token, JWT_SECRET)
+    return next()
+  } catch {}
+
+  // 2. Try bookmarklet key (persistent, never expires)
+  try {
+    const { rows } = await pool.query(
+      "SELECT value FROM settings WHERE key = 'bookmarklet_key'",
+    )
+    if (rows.length > 0 && rows[0].value === JSON.stringify(token)) {
+      req.user = 'bookmarklet'
+      return next()
+    }
+  } catch {}
+
+  res.status(401).json({ error: 'Invalid token' })
 }
 
 app.use(authMiddleware)

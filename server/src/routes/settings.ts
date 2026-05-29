@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { randomBytes } from 'crypto';
 import { pool } from '../db/client.js';
 
 const router = Router();
@@ -40,6 +41,23 @@ router.put('/', async (req, res) => {
     res.status(500).json({ error: 'Failed to update settings' });
   } finally {
     client.release();
+  }
+});
+
+// POST /api/settings/bookmarklet-key — generate (or regenerate) a persistent API key
+router.post('/bookmarklet-key', async (_req, res) => {
+  const key = randomBytes(24).toString('hex')  // 48-char hex, never expires
+  try {
+    await pool.query(
+      `INSERT INTO settings (key, value, updated_at)
+       VALUES ('bookmarklet_key', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+      [JSON.stringify(key)]
+    );
+    res.json({ key });
+  } catch (error) {
+    console.error('Failed to generate bookmarklet key:', error);
+    res.status(500).json({ error: 'Failed to generate key' });
   }
 });
 

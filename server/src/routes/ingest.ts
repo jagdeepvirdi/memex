@@ -9,7 +9,7 @@ import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
 import { findSimilarItems } from '../services/duplicateService.js';
-import { embedQuery } from '../services/embedder.js';
+import { embedQuery, embedItem } from '../services/embedder.js';
 import { pool } from '../db/client.js';
 import { setItemCategories, setItemTags, createItem } from '../db/helpers.js';
 import { extractAndLinkEntities } from '../services/entityService.js';
@@ -324,6 +324,63 @@ router.post('/file', upload.single('file'), async (req, res) => {
       return res.status(503).json({ error: msg });
     }
     return res.status(500).json({ error: msg });
+  }
+});
+
+// ── POST /api/ingest/quicksave — one-shot: scrape + classify + save (bookmarklet) ──
+
+router.post('/quicksave', async (req, res) => {
+  const { url } = req.body;
+  if (!url || typeof url !== 'string') {
+    return res.status(400).json({ error: 'URL is required' });
+  }
+
+  try {
+    const scraped = await scrapeUrl(url);
+
+    const [preview, embedding] = await Promise.all([
+      summarizeAndClassify(scraped),
+      embedQuery(scraped.content.slice(0, 2000)),
+    ]);
+
+    const similarItems = await findSimilarItems(embedding);
+
+    const client = await pool.connect();
+    let savedItem;
+    try {
+      await client.query('BEGIN');
+      savedItem = await createItem(client, {
+        title: preview.title,
+        type: preview.type,
+        content: preview.content,
+        structured: preview.structured as Record<string, unknown>,
+        source: preview.source,
+        sourceUrl: preview.sourceUrl,
+        categories: preview.categories,
+        tags: preview.tags,
+        reviewed: false,
+      });
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+
+    // Async: embed in background
+    embedItem(savedItem.title, savedItem.content)
+      .then(v => pool.query('UPDATE items SET embedding=$1 WHERE id=$2', [JSON.stringify(v), savedItem.id]))
+      .catch(() => {});
+
+    res.json({
+      item: { id: savedItem.id, title: savedItem.title, type: savedItem.type },
+      similarItems,
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Failed to save';
+    console.error('Quicksave error:', error);
+    res.status(500).json({ error: msg });
   }
 });
 

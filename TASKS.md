@@ -315,12 +315,15 @@ markitdown --help
 
 ### High Value / Reasonable Effort
 
-- [ ] **Browser extension / bookmarklet — one-click "Save to Memex" from any page**
-  - The ingest API already exists; needs a small browser extension (or simple bookmarklet) that
-    sends the current tab's URL to `POST /api/ingest/url` and shows a confirmation popup
-  - This is what makes a PKM get used daily — friction-free capture
-  - Start with a bookmarklet (no browser store needed): a `javascript:` URL that POSTs to localhost
-  - Extension version: Chrome/Firefox WebExtension, manifest v3, single popup UI
+- [x] **Browser extension / bookmarklet — one-click "Save to Memex" from any page** ✅
+  - **Done:** Persistent bookmarklet key stored in `settings` table (48-char hex, never expires,
+    regeneratable). Auth middleware updated to accept bookmarklet key as a JWT alternative.
+  - `POST /api/settings/bookmarklet-key` — generates/regenerates the key.
+  - `POST /api/ingest/quicksave` — scrape + classify + save in one call, also runs duplicate
+    detection and returns `similarItems` in the response.
+  - Settings > Bookmarklet section: draggable "Save to Memex" link + copy button + regenerate.
+  - The bookmarklet shows a floating toast on any page: "✅ Saved: [title]" or error message.
+    Warns if a similar item already exists in Memex.
 
 - [x] **Duplicate / near-duplicate detection at ingest time** ✅
   - **Done:** `duplicateService.ts` — `findSimilarItems(embedding)` queries pgvector at 0.92
