@@ -18,6 +18,7 @@ import {
   MessageSquare,
   Wifi,
   WifiOff,
+  Newspaper,
   FolderSync,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -26,7 +27,7 @@ import { useAuthStore } from '../../store/authStore';
 import type { Category, Tag } from '../../../../shared/types';
 
 interface SidebarProps {
-  activeSection: 'dashboard' | 'categories' | 'vault' | 'tags' | 'settings' | 'trash' | 'table' | 'places' | 'media' | 'ask' | 'category-review';
+  activeSection: 'dashboard' | 'categories' | 'vault' | 'tags' | 'settings' | 'trash' | 'table' | 'places' | 'media' | 'ask' | 'category-review' | 'digest';
 }
 
 export default function Sidebar({ activeSection }: SidebarProps) {
@@ -145,11 +146,17 @@ export default function Sidebar({ activeSection }: SidebarProps) {
       
       {/* Main Nav */}
       <nav className="px-3 flex flex-col gap-1">
-        <NavItem 
-          icon={<Home size={18} />} 
-          label="Dashboard" 
-          active={activeSection === 'dashboard'} 
+        <NavItem
+          icon={<Home size={18} />}
+          label="Dashboard"
+          active={activeSection === 'dashboard'}
           onClick={() => navigate('/')}
+        />
+        <NavItem
+          icon={<Newspaper size={18} />}
+          label="Weekly Digest"
+          active={activeSection === 'digest'}
+          onClick={() => navigate('/digest')}
         />
         <NavItem 
           icon={<MessageSquare size={18} />} 

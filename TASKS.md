@@ -385,11 +385,18 @@ markitdown --help
 
 ### Medium Term
 
-- [ ] **Weekly digest — local summary of your knowledge activity**
+- [x] **Weekly digest — local summary of your knowledge activity** ✅
   - A new `/digest` page (or auto-shown on Mondays): what you saved this week, one "On this day"
     memory, one AI-generated connection between two unrelated notes you haven't seen together
   - Server: `GET /api/items/digest` — last 7 days + random older item + Ollama-generated connection
   - No email needed — just a dedicated page that Memex opens to on Monday morning
+  - **Done:** `digestService.ts` generates: this-week items (last 7 days), week-over-week count
+    comparison, "on this day" (same date a prior year), and an AI-generated cross-domain connection
+    between 2 random reviewed items (prefers different types for maximum insight). `GET /api/items/digest`.
+    `Digest.tsx` — newspaper-style layout: stat card with trend arrow, item grid, on-this-day
+    memory, connection card showing both items as clickable tiles + AI insight in a quote block.
+    "Regenerate" button refreshes the Ollama connection. Sidebar nav link added. `App.tsx`
+    auto-redirects to `/digest` on Mondays (once per day, tracked in localStorage).
 
 - [ ] **Sharing — opt-in public links for items or collections**
   - Add `public_token TEXT UNIQUE` column to items (migration 012)

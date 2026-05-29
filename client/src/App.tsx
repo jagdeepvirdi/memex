@@ -19,6 +19,7 @@ import SemanticGraph from './pages/SemanticGraph'
 import Welcome from './pages/Welcome'
 import AskMemex from './pages/AskMemex'
 import CategoryReview from './pages/CategoryReview'
+import Digest from './pages/Digest'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated)
@@ -67,10 +68,28 @@ function ReminderPoller() {
   return null
 }
 
+function MondayDigestRedirect() {
+  const isAuthenticated = useAuthStore(state => state.isAuthenticated)
+
+  useEffect(() => {
+    if (!isAuthenticated) return
+    const today = new Date()
+    if (today.getDay() !== 1) return  // not Monday
+    const key = `memex-digest-seen-${today.toISOString().split('T')[0]}`
+    if (localStorage.getItem(key)) return
+    localStorage.setItem(key, '1')
+    // Small delay so the app finishes mounting before redirecting
+    setTimeout(() => { window.location.href = '/digest' }, 500)
+  }, [isAuthenticated])
+
+  return null
+}
+
 export default function App() {
   return (
     <ErrorBoundary>
       <ReminderPoller />
+      <MondayDigestRedirect />
       <BrowserRouter>
         <div className="min-h-screen w-full bg-bg text-ink font-body">
           <Routes>
@@ -119,6 +138,9 @@ export default function App() {
             } />
             <Route path="/categories/review" element={
               <ProtectedRoute><CategoryReview /></ProtectedRoute>
+            } />
+            <Route path="/digest" element={
+              <ProtectedRoute><Digest /></ProtectedRoute>
             } />
             
             <Route path="*" element={<Navigate to="/" replace />} />

@@ -690,6 +690,20 @@ router.delete('/:id', async (req, res) => {
   }
 })
 
+// ── GET /api/items/digest — weekly digest ────────────────────────────────────
+
+import { generateDigest } from '../services/digestService.js'
+
+router.get('/digest', async (_req, res) => {
+  try {
+    const digest = await generateDigest()
+    res.json(digest)
+  } catch (err) {
+    console.error('GET /api/items/digest error:', err)
+    res.status(500).json({ error: 'Failed to generate digest' })
+  }
+})
+
 // ── POST /api/items/nl-filter — natural-language query → structured filter → items ──
 
 import { parseNLFilter } from '../services/nlFilterService.js'

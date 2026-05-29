@@ -228,6 +228,23 @@ export interface StatsResponse {
   recentActivity: number
 }
 
+// ── Weekly Digest ─────────────────────────────────────────────────────────────
+
+export interface DigestConnection {
+  item1: { id: string; title: string; type: string; summary: string }
+  item2: { id: string; title: string; type: string; summary: string }
+  insight: string
+}
+
+export interface DigestResponse {
+  period: string
+  recentItems: Item[]
+  weekCount: number
+  prevWeekCount: number
+  onThisDay: RediscoveryItem | null
+  connection: DigestConnection | null
+}
+
 // ── NL Filter ─────────────────────────────────────────────────────────────────
 
 export interface ParsedFilter {
