@@ -157,6 +157,10 @@ export async function fetchVisionHealth(): Promise<{ available: boolean; model: 
   return apiFetch<{ available: boolean; model: string | null }>('/ingest/vision/health')
 }
 
+export async function fetchWhisperHealth(): Promise<{ installed: boolean }> {
+  return apiFetch<{ installed: boolean }>('/ingest/whisper/health')
+}
+
 export async function fetchCategoryAnomalies(): Promise<CategoryAnomaly[]> {
   return apiFetch<CategoryAnomaly[]>('/categories/anomalies')
 }

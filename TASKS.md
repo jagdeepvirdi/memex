@@ -398,18 +398,29 @@ markitdown --help
     "Regenerate" button refreshes the Ollama connection. Sidebar nav link added. `App.tsx`
     auto-redirects to `/digest` on Mondays (once per day, tracked in localStorage).
 
-- [ ] **Sharing — opt-in public links for items or collections**
+- [x] **Sharing — opt-in public links for items or collections** ✅
   - Add `public_token TEXT UNIQUE` column to items (migration 012)
   - `POST /api/items/:id/share` — generates a random token, sets `public_token`
   - `GET /api/share/:token` — unauthenticated read-only endpoint returns the item
-  - Client: "Share" button on Item page copies the `http://localhost:3002/api/share/[token]` link
+  - Client: "Share" button on Item page copies the share link
   - Use case: "Here's my Bangkok restaurant list" shared with a friend
+  - **Done:** Migration 012 adds `public_token TEXT UNIQUE`. `POST /api/items/:id/share` mints a
+    40-char hex token; `DELETE` revokes it. Public `GET /api/share/:token` (in PUBLIC_PATHS, no auth)
+    returns the item only if non-deleted and non-encrypted. `PublicItem.tsx` at `/share/:token` is a
+    standalone read-only page (no sidebar/auth) with self-contained dark styling. Item page has a
+    "Public Share" section: create link → copyable URL + revoke. Hidden for encrypted items.
 
-- [ ] **Voice memo ingestion (Whisper)**
-  - Ollama ships `whisper:base` (145 MB) — transcribes audio to text locally
-  - New "Voice" tab in Quick Add: record in-browser (`MediaRecorder` API → WAV blob)
-    or upload an audio file (MP3/WAV/M4A)
-  - Server: `POST /api/ingest/voice` — sends audio to Ollama Whisper, gets transcript,
-    passes to `classify()`, returns preview
+- [x] **Voice memo ingestion (Whisper)** ✅
+  - New "Voice" tab in Quick Add: record in-browser (`MediaRecorder` API → WebM blob)
+    or upload an audio file (MP3/WAV/M4A/OGG/WebM/FLAC)
+  - Server: `POST /api/ingest/voice` — transcribes audio, passes to `classify()`, returns preview
   - Completes the multi-modal capture story alongside vision
-  - `GET /api/ingest/whisper/health` — checks if whisper model is pulled
+  - `GET /api/ingest/whisper/health` — checks if whisper CLI is installed
+  - **Done:** `whisperService.ts` mirrors the MarkItDown spawn-a-CLI pattern using `openai-whisper`
+    (`pip install openai-whisper`). NOTE: spec said "Ollama ships whisper" but Ollama has no audio
+    transcription endpoint — using Whisper CLI directly is the correct local-first approach.
+    `transcribeAudio()` writes a temp file, runs `whisper --model base --output_format txt --fp16 False`,
+    reads the .txt sidecar, cleans up. `POST /api/ingest/voice` runs transcribe → classify → embed →
+    dedupe in parallel, returns `{ preview, similarItems }`. `VoiceIngestPanel.tsx` — in-browser
+    recorder (MediaRecorder, live timer, playback) + audio file upload. Shows install instructions
+    if whisper missing. `WHISPER_MODEL` env var selects model size. Voice tab added to IngestPanel.

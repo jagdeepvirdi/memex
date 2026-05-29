@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink } from 'lucide-react';
+import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic } from 'lucide-react';
 import { toast } from 'sonner';
 import { ingestUrl, createItem } from '../../lib/api';
 import type { SimilarItem } from '../../lib/api';
 import ItemCard from '../cards/ItemCard';
 import KeepImportPanel from './KeepImportPanel';
 import FileIngestPanel from './FileIngestPanel';
+import VoiceIngestPanel from './VoiceIngestPanel';
 import Editor from '../Editor';
 import type { Item, ItemType, CreateItemRequest } from '../../../../shared/types';
 
@@ -17,7 +18,7 @@ interface IngestPanelProps {
 }
 
 export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialText }: IngestPanelProps) {
-  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual' | 'file'>(
+  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual' | 'file' | 'voice'>(
     initialUrl ? 'url' : initialText ? 'manual' : 'url'
   );
   const [url, setUrl] = useState(initialUrl || '');
@@ -166,6 +167,15 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           <Paperclip size={16} />
           File
         </button>
+        <button
+          onClick={() => setActiveTab('voice')}
+          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+            activeTab === 'voice' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
+          }`}
+        >
+          <Mic size={16} />
+          Voice
+        </button>
       </div>
 
       <div className="p-6">
@@ -236,6 +246,8 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           </>
         ) : activeTab === 'keep' ? (
           <KeepImportPanel />
+        ) : activeTab === 'voice' ? (
+          <VoiceIngestPanel onSuccess={onSuccess} />
         ) : (
           <FileIngestPanel onSuccess={onSuccess} />
         )}

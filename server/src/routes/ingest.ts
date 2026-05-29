@@ -8,6 +8,7 @@ import { parseKeepZip } from '../services/keepImporter.js';
 import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
+import { transcribeAudio, checkWhisperInstalled, isAudioMime } from '../services/whisperService.js';
 import { findSimilarItems } from '../services/duplicateService.js';
 import { embedQuery, embedItem } from '../services/embedder.js';
 import { pool } from '../db/client.js';
@@ -324,6 +325,61 @@ router.post('/file', upload.single('file'), async (req, res) => {
       return res.status(503).json({ error: msg });
     }
     return res.status(500).json({ error: msg });
+  }
+});
+
+// ── GET /api/ingest/whisper/health — is the whisper CLI installed? ────────────
+
+router.get('/whisper/health', async (_req, res) => {
+  const installed = await checkWhisperInstalled();
+  res.json({ installed });
+});
+
+// ── POST /api/ingest/voice — transcribe audio → classify → preview ────────────
+
+router.post('/voice', upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No audio uploaded' });
+
+  const { originalname, buffer, mimetype } = req.file;
+
+  if (!isAudioMime(mimetype) && !originalname.match(/\.(webm|ogg|wav|mp3|mp4|m4a|flac|aac)$/i)) {
+    return res.status(415).json({ error: `Unsupported audio type: ${mimetype}` });
+  }
+
+  try {
+    const transcript = await transcribeAudio(buffer, originalname || 'recording.webm');
+
+    if (!transcript.trim()) {
+      return res.status(422).json({ error: 'No speech could be transcribed from this audio.' });
+    }
+
+    const [classification, embedding] = await Promise.all([
+      classify(transcript),
+      embedQuery(transcript.slice(0, 2000)),
+    ]);
+
+    if (!classification.title || classification.title === 'Untitled') {
+      classification.title = transcript.split('\n')[0]?.slice(0, 80) || 'Voice Note';
+    }
+
+    const similarItems = await findSimilarItems(embedding);
+    return res.json({
+      preview: {
+        title: classification.title,
+        type: classification.type,
+        content: transcript,
+        structured: { ...classification.structured, summary: classification.summary },
+        categories: classification.categories,
+        tags: classification.tags,
+        source: 'manual',
+      },
+      similarItems,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Transcription failed';
+    console.error('Voice ingest error:', err);
+    const status = msg.includes('not found') ? 503 : 500;
+    return res.status(status).json({ error: msg, code: status === 503 ? 'NO_WHISPER' : undefined });
   }
 });
 
