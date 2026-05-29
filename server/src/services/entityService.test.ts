@@ -8,6 +8,15 @@ function mockClient() {
   return { query: vi.fn() } as any
 }
 
+// Collect the `role` (3rd param) from every 3-arg query call — i.e. the
+// item_entities link inserts. Lets us assert which roles were linked.
+function linkedRoles(client: any): unknown[] {
+  return (client.query.mock.calls as unknown[][])
+    .map((c) => c[1])
+    .filter((p): p is unknown[] => Array.isArray(p) && p.length === 3)
+    .map((p) => p[2])
+}
+
 beforeEach(() => vi.clearAllMocks())
 
 describe('getOrCreateEntity', () => {
@@ -78,11 +87,7 @@ describe('extractAndLinkEntities', () => {
     await extractAndLinkEntities(client, 'item1', 'media', {
       director: 'Nolan', cast: ['Bale', 'Caine'],
     })
-    // roles used should include director and cast
-    const roles = client.query.mock.calls
-      .map(c => c[1])
-      .filter((p): p is unknown[] => Array.isArray(p) && p.length === 3)
-      .map(p => p[2])
+    const roles = linkedRoles(client)
     expect(roles).toContain('director')
     expect(roles).toContain('cast')
   })
@@ -91,15 +96,14 @@ describe('extractAndLinkEntities', () => {
     const client = mockClient()
     client.query.mockResolvedValue({ rows: [{ id: 'e1' }] })
     await extractAndLinkEntities(client, 'item1', 'book', { author: 'Tolkien' })
-    const roles = client.query.mock.calls.map(c => c[1]).filter((p): p is unknown[] => Array.isArray(p) && p.length === 3).map(p => p[2])
-    expect(roles).toContain('author')
+    expect(linkedRoles(client)).toContain('author')
   })
 
   it('links place city and country', async () => {
     const client = mockClient()
     client.query.mockResolvedValue({ rows: [{ id: 'e1' }] })
     await extractAndLinkEntities(client, 'item1', 'place', { city: 'Bangkok', country: 'Thailand' })
-    const roles = client.query.mock.calls.map(c => c[1]).filter((p): p is unknown[] => Array.isArray(p) && p.length === 3).map(p => p[2])
+    const roles = linkedRoles(client)
     expect(roles).toContain('city')
     expect(roles).toContain('country')
   })

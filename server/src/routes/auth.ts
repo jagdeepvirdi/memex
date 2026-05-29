@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import rateLimit from 'express-rate-limit'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { pool } from '../db/client.js'
@@ -7,10 +8,20 @@ const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET
 if (!JWT_SECRET) throw new Error('JWT_SECRET environment variable must be set')
 
+// Throttle credential endpoints to slow brute-force attempts.
+// Limit per IP per window; configurable via env for testing.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: Number(process.env.AUTH_RATE_LIMIT_MAX ?? 10),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many attempts. Try again later.' },
+})
+
 /**
  * POST /api/auth/login
  */
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   const { email, password } = req.body
 
   if (!email || !password) {
@@ -40,7 +51,7 @@ router.post('/login', async (req, res) => {
  * POST /api/auth/setup
  * Only works if no users exist. Creates the first user.
  */
-router.post('/setup', async (req, res) => {
+router.post('/setup', authLimiter, async (req, res) => {
   const { email, password } = req.body
 
   if (!email || !password) {
