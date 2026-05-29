@@ -22,6 +22,7 @@ import type { Category } from '../../../shared/types'
 
 export default function SettingsPage() {
   const [exporting, setExporting] = useState(false)
+  const [exportingObsidian, setExportingObsidian] = useState(false)
   const [success, setSuccess] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [categories, setCategories] = useState<Category[]>([])
@@ -92,6 +93,33 @@ export default function SettingsPage() {
       console.error(err)
     } finally {
       setLoadingCats(false)
+    }
+  }
+
+  const handleExportObsidian = async () => {
+    setExportingObsidian(true)
+    setError(null)
+    try {
+      const token = JSON.parse(localStorage.getItem('memex-auth') || '{}')?.state?.token ?? ''
+      const res = await fetch('/api/items/export/obsidian', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error('Export failed')
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `memex-obsidian-${new Date().toISOString().split('T')[0]}.zip`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      setSuccess('Obsidian vault exported')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch {
+      setError('Obsidian export failed')
+    } finally {
+      setExportingObsidian(false)
     }
   }
 
@@ -333,13 +361,31 @@ export default function SettingsPage() {
                      <p className="text-sm text-ink font-medium">Export Workspace</p>
                      <p className="text-xs text-ink-muted mt-0.5">Download all your items and categories as JSON.</p>
                   </div>
-                  <button 
+                  <button
                     onClick={handleExport}
                     disabled={exporting}
                     className="flex items-center gap-2 text-xs bg-accent text-bg px-4 py-2 rounded-lg font-bold hover:bg-accent-dark transition-all"
                   >
                     {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                    Export Data
+                    Export JSON
+                  </button>
+               </div>
+
+               <div className="flex items-center justify-between">
+                  <div>
+                     <p className="text-sm text-ink font-medium">Export as Obsidian Vault</p>
+                     <p className="text-xs text-ink-muted mt-0.5">
+                       ZIP of Markdown files with YAML frontmatter — drop into any Obsidian vault.
+                       Encrypted vault items are excluded.
+                     </p>
+                  </div>
+                  <button
+                    onClick={handleExportObsidian}
+                    disabled={exportingObsidian}
+                    className="flex items-center gap-2 text-xs bg-purple-500/20 text-purple-300 border border-purple-500/30 px-4 py-2 rounded-lg font-bold hover:bg-purple-500/30 transition-all"
+                  >
+                    {exportingObsidian ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                    Export Obsidian
                   </button>
                </div>
 

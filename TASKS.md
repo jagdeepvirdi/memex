@@ -344,7 +344,7 @@ markitdown --help
     `GET /api/items` so Table View can consume it directly
   - Client: replace or augment the search box in TableView with a "Ask a filter" mode
 
-- [ ] **Export to Obsidian / Markdown vault**
+- [x] **Export to Obsidian / Markdown vault** ✅
   - Each item → `[title].md` with YAML frontmatter:
     ```yaml
     ---
@@ -360,6 +360,11 @@ markitdown --help
   - Structured data → additional YAML keys (ingredients, director, visitStatus, etc.)
   - Export: ZIP download via `GET /api/items/export/obsidian`
   - Client: "Export as Obsidian Vault" button in Settings
+  - **Done:** `GET /api/items/export/obsidian` builds a ZIP (adm-zip, no new deps) with one
+    `.md` per item. YAML frontmatter includes title, type, source, created, reviewed, confidence,
+    categories, tags, and all structured fields (excluding summary). Summary appears as a Markdown
+    blockquote, original content follows. Encrypted items are excluded. Duplicate titles get `(n)`
+    suffix. "Export Obsidian" button added to Settings > Data & Privacy.
 
 ### Medium Term
 

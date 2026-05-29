@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import pLimit from 'p-limit'
+import AdmZip from 'adm-zip'
 import { pool } from '../db/client.js'
 import {
   fetchItem,
@@ -678,6 +679,145 @@ router.delete('/:id', async (req, res) => {
   } catch (err) {
     console.error('DELETE /api/items/:id error:', err)
     res.status(500).json({ error: 'Failed to delete item' })
+  }
+})
+
+// ── GET /api/items/export/obsidian — ZIP of Markdown files with YAML frontmatter ──
+
+function sanitizeFilename(title: string): string {
+  return title
+    .replace(/[/\\:*?"<>|]/g, '-')   // replace filesystem-unsafe chars
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 100) || 'Untitled'
+}
+
+function toYamlValue(val: unknown, indent = ''): string {
+  if (val === null || val === undefined) return '~'
+  if (typeof val === 'boolean') return val ? 'true' : 'false'
+  if (typeof val === 'number') return String(val)
+  if (Array.isArray(val)) {
+    if (val.length === 0) return '[]'
+    return '\n' + val.map(v => `${indent}  - ${toYamlValue(v)}`).join('\n')
+  }
+  if (typeof val === 'object') {
+    const lines = Object.entries(val as Record<string, unknown>)
+      .filter(([, v]) => v !== null && v !== undefined)
+      .map(([k, v]) => `${indent}  ${k}: ${toYamlValue(v, indent + '  ')}`)
+    return lines.length ? '\n' + lines.join('\n') : '{}'
+  }
+  const str = String(val)
+  // Quote if contains colon+space, leading special chars, or newlines
+  if (/:\s|^[{[\-#*&!|>'"@`]|[\n\r]/.test(str)) {
+    return `"${str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')}"`
+  }
+  return str
+}
+
+function itemToMarkdown(item: Record<string, unknown>): string {
+  const structured = (item.structured as Record<string, unknown>) ?? {}
+  const categories = (item.categories as string[]) ?? []
+  const tags = (item.tags as string[]) ?? []
+
+  const frontmatter: Record<string, unknown> = {
+    title: item.title,
+    type: item.type,
+    source: item.source,
+    ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
+    created: item.createdAt,
+    reviewed: item.reviewed,
+    ...(item.confidence != null ? { confidence: item.confidence } : {}),
+    ...(categories.length ? { categories } : {}),
+    ...(tags.length ? { tags } : {}),
+    // Flatten structured fields (exclude 'summary' — it goes in the body)
+    ...Object.fromEntries(
+      Object.entries(structured)
+        .filter(([k]) => k !== 'summary')
+        .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    ),
+  }
+
+  const yamlLines = Object.entries(frontmatter)
+    .filter(([, v]) => v !== null && v !== undefined)
+    .map(([k, v]) => `${k}: ${toYamlValue(v)}`)
+    .join('\n')
+
+  const summary = structured.summary ? `> ${structured.summary}\n\n` : ''
+  const content = typeof item.content === 'string' ? item.content : ''
+
+  return `---\n${yamlLines}\n---\n\n${summary}${content}`
+}
+
+router.get('/export/obsidian', async (_req, res) => {
+  try {
+    const { rows } = await pool.query(`
+      SELECT
+        i.id, i.title, i.type, i.content, i.structured,
+        i.source, i.source_url, i.encrypted, i.reviewed,
+        i.created_at, i.updated_at, i.confidence,
+        COALESCE(
+          (SELECT array_agg(c.name ORDER BY ic2.depth)
+           FROM item_categories ic2
+           JOIN categories c ON c.id = ic2.category_id
+           WHERE ic2.item_id = i.id),
+          '{}'::text[]
+        ) AS categories,
+        COALESCE(
+          (SELECT array_agg(t.name ORDER BY t.name)
+           FROM item_tags it2
+           JOIN tags t ON t.id = it2.tag_id
+           WHERE it2.item_id = i.id),
+          '{}'::text[]
+        ) AS tags
+      FROM items i
+      WHERE i.deleted_at IS NULL
+        AND i.encrypted = FALSE
+      ORDER BY i.created_at DESC
+    `)
+
+    const zip = new AdmZip()
+    const usedFilenames = new Map<string, number>()
+
+    for (const row of rows) {
+      const item = {
+        id: row.id,
+        title: row.title,
+        type: row.type,
+        content: row.content,
+        structured: row.structured,
+        source: row.source,
+        sourceUrl: row.source_url,
+        reviewed: row.reviewed,
+        confidence: row.confidence,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        categories: row.categories ?? [],
+        tags: row.tags ?? [],
+      }
+
+      const baseName = sanitizeFilename(item.title)
+
+      // Deduplicate filenames by appending a counter
+      const count = usedFilenames.get(baseName) ?? 0
+      usedFilenames.set(baseName, count + 1)
+      const filename = count === 0 ? `${baseName}.md` : `${baseName} (${count}).md`
+
+      const markdown = itemToMarkdown(item)
+      zip.addFile(filename, Buffer.from(markdown, 'utf8'))
+    }
+
+    const zipBuffer = zip.toBuffer()
+    const date = new Date().toISOString().split('T')[0]
+
+    res.setHeader('Content-Type', 'application/zip')
+    res.setHeader('Content-Disposition', `attachment; filename="memex-obsidian-${date}.zip"`)
+    res.setHeader('Content-Length', zipBuffer.length)
+    res.send(zipBuffer)
+
+    console.log(`[Export] Obsidian vault: ${rows.length} items → ${zipBuffer.length} bytes`)
+  } catch (err) {
+    console.error('GET /api/items/export/obsidian error:', err)
+    res.status(500).json({ error: 'Export failed' })
   }
 })
 
