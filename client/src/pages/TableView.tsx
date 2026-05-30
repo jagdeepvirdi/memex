@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Loader2, Check, ExternalLink, Filter, Search, RotateCcw, Shield, Download, Bell, Sparkles, X, Send } from 'lucide-react'
+import { ArrowLeft, Loader2, Check, Filter, Search, RotateCcw, Shield, Download, Bell, Sparkles, X, Send, Trash2, Pencil } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
-import { fetchItems, updateItem, migrateToVault, nlFilter } from '../lib/api'
+import { fetchItems, updateItem, migrateToVault, nlFilter, deleteItem } from '../lib/api'
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
 import { itemsToCsv, downloadCsv } from '../lib/export'
@@ -37,6 +37,7 @@ export default function TableView() {
   const [loading, setLoading] = useState(true)
   const [bulkReviewing, setBulkReviewing] = useState(false)
   const [migratingId, setMigratingId] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const { vaultKey, isLocked } = useVaultStore()
 
   // NL filter mode
@@ -141,6 +142,21 @@ export default function TableView() {
       toast.error('Failed to move item to vault')
     } finally {
       setMigratingId(null)
+    }
+  }
+
+  const handleDelete = async (item: Item) => {
+    if (!confirm(`Delete "${item.title}"? This cannot be undone.`)) return
+    setDeletingId(item.id)
+    try {
+      await deleteItem(item.id)
+      setItems(prev => prev.filter(i => i.id !== item.id))
+      setTotal(prev => prev - 1)
+      toast.success('Item deleted')
+    } catch {
+      toast.error('Failed to delete item')
+    } finally {
+      setDeletingId(null)
     }
   }
 
@@ -364,7 +380,7 @@ export default function TableView() {
                     <th className="px-4 py-4 w-40">Tags</th>
                     <th className="px-4 py-4 w-24 text-center">Score</th>
                     <th className="px-4 py-4 min-w-[300px]">Summary</th>
-                    <th className="px-6 py-4 w-28 text-center">Actions</th>
+                    <th className="px-6 py-4 w-36 text-center">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/[0.03]">
@@ -432,30 +448,38 @@ export default function TableView() {
                         <td className="px-4 py-4 text-xs text-ink-muted line-clamp-1 h-12 flex items-center">
                           {(item.structured as any)?.summary || '—'}
                         </td>
-                        <td className="px-6 py-4 flex justify-center items-center gap-2">
-                          <button 
+                        <td className="px-6 py-4 flex justify-center items-center gap-1.5">
+                          <button
+                            onClick={() => navigate(`/item/${item.id}`)}
+                            className="p-1.5 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all"
+                            title="Edit"
+                          >
+                            <Pencil size={15} />
+                          </button>
+                          <button
                             onClick={() => handleMoveToVault(item)}
                             disabled={migratingId === item.id}
                             className="p-1.5 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all"
                             title="Move to Secure Vault"
                           >
-                            {migratingId === item.id ? <Loader2 size={16} className="animate-spin" /> : <Shield size={16} />}
+                            {migratingId === item.id ? <Loader2 size={15} className="animate-spin" /> : <Shield size={15} />}
                           </button>
                           {!item.reviewed && (
-                            <button 
+                            <button
                               onClick={() => handleReview(item.id)}
                               className="p-1.5 text-accent/60 hover:text-accent hover:bg-accent/10 rounded-lg transition-all"
                               title="Mark Reviewed"
                             >
-                              <Check size={16} />
+                              <Check size={15} />
                             </button>
                           )}
-                          <button 
-                            onClick={() => navigate(`/item/${item.id}`)}
-                            className="p-1.5 text-ink-muted hover:text-ink hover:bg-white/10 rounded-lg transition-all"
-                            title="View Details"
+                          <button
+                            onClick={() => handleDelete(item)}
+                            disabled={deletingId === item.id}
+                            className="p-1.5 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                            title="Delete"
                           >
-                            <ExternalLink size={16} />
+                            {deletingId === item.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                           </button>
                         </td>
                       </tr>

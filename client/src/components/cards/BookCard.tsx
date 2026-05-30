@@ -14,7 +14,7 @@ const STATUS_LABEL: Record<NonNullable<BookData['status']>, { label: string; col
 
 export default function BookCard({ item, onClick }: Props) {
   const s = item.structured as Partial<BookData>
-  const status = s.status ? STATUS_LABEL[s.status] : STATUS_LABEL['want-to-read']
+  const status = (s.status && STATUS_LABEL[s.status]) || STATUS_LABEL['want-to-read']
 
   return (
     <CardBase onClick={onClick}>
