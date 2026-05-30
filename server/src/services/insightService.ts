@@ -1,6 +1,7 @@
 import { pool } from '../db/client.js'
 import { aiChat } from './ai.js'
 import type { Insight } from '../../../shared/types.js'
+import logger from '../lib/logger.js'
 
 const INSIGHT_SYSTEM_PROMPT = `You are a personal knowledge assistant. Analyze the following notes and items from the user's library.
 Identify 1-3 highly relevant, near-term actionable insights, recurring patterns, or interesting connections.
@@ -36,8 +37,18 @@ export async function generateInsights(): Promise<Insight[]> {
     const content = items.map(i => `- [${i.type}] ${i.title}: ${i.summary || ''}`).join('\n')
     const prompt = `Analyze these items and surface 1-3 insights:\n\n${content}`
 
-    const raw = await aiChat(prompt, INSIGHT_SYSTEM_PROMPT, 'json', { temperature: 0.2 })
-    
+    let raw: string
+    try {
+      raw = await Promise.race([
+        aiChat(prompt, INSIGHT_SYSTEM_PROMPT, 'json', { temperature: 0.2 }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('AI timeout')), 15_000)
+        ),
+      ])
+    } catch {
+      return []
+    }
+
     try {
       const start = raw.indexOf('[')
       const end = raw.lastIndexOf(']')
@@ -45,7 +56,7 @@ export async function generateInsights(): Promise<Insight[]> {
       const parsed = JSON.parse(raw.slice(start, end + 1)) as Insight[]
       return parsed.slice(0, 3) // Max 3 insights
     } catch (err) {
-      console.error('Failed to parse insights JSON:', err)
+      logger.error(err, 'Failed to parse insights JSON')
       return []
     }
   } finally {

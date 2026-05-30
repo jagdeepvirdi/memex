@@ -7,6 +7,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 config({ path: resolve(__dirname, '../../../.env') })
 
 import pg from 'pg'
+import logger from '../lib/logger.js'
 
 const { Pool } = pg
 
@@ -22,5 +23,5 @@ export const pool = new Pool({
 })
 
 pool.on('error', (err) => {
-  console.error('Unexpected PostgreSQL pool error:', err)
+  logger.error(err, 'Unexpected PostgreSQL pool error')
 })

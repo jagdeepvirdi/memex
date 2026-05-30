@@ -67,8 +67,8 @@ export default function VaultItemForm({ item, onSuccess, onCancel }: Props) {
         <h2 className="font-display text-xl text-ink">
           {item ? 'Edit Secret' : 'Add New Secret'}
         </h2>
-        <button onClick={onCancel} className="text-ink-muted hover:text-ink">
-          <X size={20} />
+        <button onClick={onCancel} aria-label="Cancel" className="text-ink-muted hover:text-ink">
+          <X size={20} aria-hidden="true" />
         </button>
       </div>
 

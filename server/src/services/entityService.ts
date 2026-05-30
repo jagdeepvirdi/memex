@@ -1,6 +1,7 @@
 import { PoolClient } from 'pg'
 import { embedQuery } from './embedder.js'
 import type { Entity, EntityType, ItemType } from '../../../shared/types.js'
+import logger from '../lib/logger.js'
 
 /**
  * Finds an entity by exact name/type or creates it.
@@ -26,7 +27,7 @@ export async function getOrCreateEntity(
   try {
     embedding = await embedQuery(normalized);
   } catch (err) {
-    console.warn(`[Entity] Failed to embed "${normalized}":`, err);
+    logger.warn({ err }, `Entity embed failed for "${normalized}"`)
   }
 
   const { rows: newRows } = await client.query(
@@ -108,6 +109,6 @@ export async function extractAndLinkEntities(
        }
     }
   } catch (err) {
-    console.error(`[Entity] Extraction failed for item ${itemId}:`, err);
+    logger.error(err, `Entity extraction failed for item ${itemId}`)
   }
 }

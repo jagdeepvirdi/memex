@@ -15,23 +15,54 @@ import { pool } from '../db/client.js';
 import { setItemCategories, setItemTags, createItem } from '../db/helpers.js';
 import { extractAndLinkEntities } from '../services/entityService.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
+import logger from '../lib/logger.js'
 
 const router = Router();
-const upload = multer({ storage: multer.memoryStorage() });
 
-interface Job {
-  status: 'processing' | 'completed' | 'failed'
-  progress: number
-  total: number
-  completed: number
-  startedAt: number
-  completedAt?: number
-  results?: any[]
-  error?: string
+// 50 MB cap for documents and images; 100 MB for audio; 500 MB for Keep ZIPs.
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+})
+const audioUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+})
+const keepUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 500 * 1024 * 1024 },
+})
+
+// ── Job helpers — DB-backed so progress survives server restarts ──────────────
+
+async function createJob(id: string, total: number): Promise<void> {
+  await pool.query(
+    `INSERT INTO ingest_jobs (id, status, progress, total, completed)
+     VALUES ($1, 'processing', 0, $2, 0)`,
+    [id, total],
+  )
 }
 
-// In-memory job store
-const jobs: Record<string, Job> = {};
+async function updateJobProgress(id: string, completed: number, total: number): Promise<void> {
+  await pool.query(
+    'UPDATE ingest_jobs SET completed=$1, progress=$2 WHERE id=$3',
+    [completed, Math.round((completed / total) * 100), id],
+  )
+}
+
+async function completeJob(id: string): Promise<void> {
+  await pool.query(
+    "UPDATE ingest_jobs SET status='completed', completed_at=NOW() WHERE id=$1",
+    [id],
+  )
+}
+
+async function failJob(id: string, error: string): Promise<void> {
+  await pool.query(
+    "UPDATE ingest_jobs SET status='failed', error=$2, completed_at=NOW() WHERE id=$1",
+    [id, error],
+  )
+}
 
 // Background: classify saved items one by one and update DB records
 async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: string) {
@@ -45,8 +76,7 @@ async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: st
     // Skip genuinely empty notes
     if (!text.trim()) {
       completed++;
-      jobs[jobId].completed = completed;
-      jobs[jobId].progress = Math.round((completed / itemIds.length) * 100);
+      await updateJobProgress(jobId, completed, itemIds.length).catch(() => {});
       return;
     }
 
@@ -64,7 +94,7 @@ async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: st
         const isReviewed = itemMeta[0]?.reviewed ?? false;
 
         if (result.multiEntity && result.entities && result.entities.length > 0) {
-          console.log(`[Classify] Multi-entity detected for ${id}: ${result.entities.length} entities`);
+          logger.info(`[Classify] Multi-entity detected for ${id}: ${result.entities.length} entities`)
 
           for (const entity of result.entities) {
             const newItem = await createItem(client, {
@@ -116,29 +146,25 @@ async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: st
             if (result.categories.length > 0) await setItemCategories(client, id, result.categories);
             await extractAndLinkEntities(client, id, result.type, structuredWithSummary);
           } else {
-            console.log(`[Classify] Skipped applying to reviewed item ${id} — extraction saved for review`);
+            logger.info(`[Classify] Skipped applying to reviewed item ${id} — extraction saved for review`)
           }
         }
         await client.query('COMMIT');
-        console.log(`[Classify] OK: ${result.title} → ${result.type}${isReviewed ? ' (extraction only — item reviewed)' : ''}`);
+        logger.info(`[Classify] OK: ${result.title} → ${result.type}${isReviewed ? ' (extraction only — item reviewed)' : ''}`)
       } catch (err) {
         await client.query('ROLLBACK');
-        console.error(`[Classify] DB update failed for ${id}:`, err);
+        logger.error(err, `[Classify] DB update failed for ${id}`)
       } finally {
         client.release();
       }
     } catch (err) {
-      console.error(`[Classify] Failed for ${id}, leaving as pending`);
+      logger.error(`[Classify] Failed for ${id}, leaving as pending`)
     }
 
     completed++;
-    jobs[jobId].completed = completed;
-    jobs[jobId].progress = Math.round((completed / itemIds.length) * 100);
+    await updateJobProgress(jobId, completed, itemIds.length).catch(() => {});
     if (completed >= itemIds.length) {
-      jobs[jobId].status = 'completed';
-      jobs[jobId].completedAt = Date.now();
-      const elapsed = ((jobs[jobId].completedAt! - jobs[jobId].startedAt) / 1000).toFixed(1);
-      console.log(`[Keep import] Classified ${itemIds.length} items in ${elapsed}s`);
+      await completeJob(jobId).catch(() => {});
     }
   }));
 
@@ -159,18 +185,18 @@ router.post('/url', async (req, res) => {
     const similarItems = await findSimilarItems(embedding);
     res.json({ preview, similarItems });
   } catch (error) {
-    console.error('Ingest URL error:', error);
+    logger.error(error, 'Ingest URL error')
     res.status(500).json({ error: 'Failed to ingest URL' });
   }
 });
 
-router.post('/keep', upload.single('file'), async (req, res) => {
+router.post('/keep', keepUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const notes = parseKeepZip(req.file.buffer);
     res.json({ notes });
   } catch (error) {
-    console.error('Keep ingest error:', error);
+    logger.error(error, 'Keep ingest error')
     res.status(500).json({ error: 'Failed to parse Keep ZIP' });
   }
 });
@@ -202,28 +228,48 @@ router.post('/keep/bulk', async (req, res) => {
   } catch (err) {
     await client.query('ROLLBACK');
     client.release();
-    console.error('Bulk Keep insert error:', err);
+    logger.error(err, 'Bulk Keep insert error')
     return res.status(500).json({ error: 'Failed to save notes to database' });
   }
   client.release();
 
   const jobId = uuidv4();
-  jobs[jobId] = { status: 'processing', progress: 0, total: notes.length, completed: 0, startedAt: Date.now() };
+  await createJob(jobId, notes.length);
 
   // Fire and forget — runs in background
-  classifyAndUpdateBatch(savedIds, notes, jobId);
+  classifyAndUpdateBatch(savedIds, notes, jobId)
+    .catch(err => failJob(jobId, String(err)).catch(() => {}));
 
-  console.log(`[Keep import] Saved ${savedIds.length} notes, background classification started (job ${jobId})`);
+  logger.info(`[Keep import] Saved ${savedIds.length} notes, background classification started (job ${jobId})`)
   res.json({ saved: savedIds.length, jobId });
 });
 
-router.get('/jobs/:id', (req, res) => {
-  const job = jobs[req.params.id];
-  if (!job) return res.status(404).json({ error: 'Job not found' });
-  const elapsed = job.completedAt
-    ? ((job.completedAt - job.startedAt) / 1000).toFixed(1)
-    : ((Date.now() - job.startedAt) / 1000).toFixed(1);
-  res.json({ ...job, elapsed });
+router.get('/jobs/:id', async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM ingest_jobs WHERE id = $1',
+      [req.params.id],
+    )
+    if (rows.length === 0) return res.status(404).json({ error: 'Job not found' })
+    const row = rows[0]
+    const startedMs = new Date(row.started_at).getTime()
+    const completedMs = row.completed_at ? new Date(row.completed_at).getTime() : null
+    const elapsed = completedMs
+      ? ((completedMs - startedMs) / 1000).toFixed(1)
+      : ((Date.now() - startedMs) / 1000).toFixed(1)
+    res.json({
+      status: row.status,
+      progress: row.progress,
+      total: row.total,
+      completed: row.completed,
+      startedAt: startedMs,
+      completedAt: completedMs ?? undefined,
+      elapsed,
+    })
+  } catch (err) {
+    logger.error(err, 'GET /api/ingest/jobs/:id error')
+    res.status(500).json({ error: 'Failed to fetch job' })
+  }
 });
 
 // ── GET /api/ingest/markitdown/health ─────────────────────────────────────────
@@ -278,7 +324,7 @@ router.post('/file', upload.single('file'), async (req, res) => {
       });
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Vision analysis failed';
-      console.error('Vision ingest error:', err);
+      logger.error(err, 'Vision ingest error')
       const status = msg.includes('No vision model') ? 503 : 500;
       return res.status(status).json({ error: msg, code: status === 503 ? 'NO_VISION_MODEL' : undefined });
     }
@@ -320,7 +366,7 @@ router.post('/file', upload.single('file'), async (req, res) => {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'File conversion failed';
-    console.error('File ingest error:', err);
+    logger.error(err, 'File ingest error')
     if (msg.includes('not found')) {
       return res.status(503).json({ error: msg });
     }
@@ -337,7 +383,7 @@ router.get('/whisper/health', async (_req, res) => {
 
 // ── POST /api/ingest/voice — transcribe audio → classify → preview ────────────
 
-router.post('/voice', upload.single('file'), async (req, res) => {
+router.post('/voice', audioUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No audio uploaded' });
 
   const { originalname, buffer, mimetype } = req.file;
@@ -377,7 +423,7 @@ router.post('/voice', upload.single('file'), async (req, res) => {
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Transcription failed';
-    console.error('Voice ingest error:', err);
+    logger.error(err, 'Voice ingest error')
     const status = msg.includes('not found') ? 503 : 500;
     return res.status(status).json({ error: msg, code: status === 503 ? 'NO_WHISPER' : undefined });
   }
@@ -435,7 +481,7 @@ router.post('/quicksave', async (req, res) => {
     });
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to save';
-    console.error('Quicksave error:', error);
+    logger.error(error, 'Quicksave error')
     res.status(500).json({ error: msg });
   }
 });
@@ -465,7 +511,7 @@ router.post('/text', async (req, res) => {
       similarItems,
     });
   } catch (error) {
-    console.error('Text classification error:', error);
+    logger.error(error, 'Text classification error')
     res.status(500).json({ error: 'Failed to classify text' });
   }
 });

@@ -27,35 +27,35 @@
     `period` shape), and `/reminders/due` + `/export/obsidian` return 200 through the real router —
     catching the `/:id` shadowing bug class that `tsc` and handler-level unit tests miss.
 
-- [ ] **Auth rate-limiting**
+- [x] **Auth rate-limiting** ✅
   - `POST /api/auth/login` has no throttle — brute-forceable. Add `express-rate-limit`
     (e.g. 10 attempts / 15 min / IP) on the auth router.
 
 ### 🟡 Action Items — Medium Priority
 
-- [ ] **Share tokens never expire**
+- [x] **Share tokens never expire** ✅
   - `public_token` is permanent until manually revoked. Add optional `share_expires_at` and
     filter it out in `GET /api/share/:token`. Consider a "share expires in 7 days" default.
 
-- [ ] **Replace in-memory ingest job store with something restart-safe**
+- [x] **Replace in-memory ingest job store with something restart-safe** ✅
   - `jobs` object in `ingest.ts` is lost on server restart — a Keep import in progress becomes
     unobservable. Either persist job state in a table or document the limitation in the UI.
 
-- [ ] **Structured logger instead of 99 raw `console.*` calls**
+- [x] **Structured logger instead of 99 raw `console.*` calls** ✅
   - Adopt `pino` (or similar) with levels. Keeps prod logs parseable and lets tests silence output.
 
-- [ ] **Client test coverage**
+- [x] **Client test coverage** ✅
   - Only `ItemCard` and `crypto` are tested. Add tests for `lib/api.ts` (request shaping),
     `lib/export.ts` (CSV/escaping), `store/vaultStore` (auto-lock timing), and the
     `ReminderPoller` / `MondayDigestRedirect` logic in `App.tsx`.
 
 ### 🟢 Action Items — Low Priority / Polish
 
-- [ ] **CI pipeline** — GitHub Action running `npm test` + `tsc --noEmit` on push (nothing exists today).
-- [ ] **Coverage reporting** — `vitest --coverage` with a threshold gate once coverage improves.
-- [ ] **`schema.sql` drift guard** — a test that diffs `schema.sql` against applied migrations.
-- [ ] **Accessibility pass** — keyboard nav, focus traps in modals, aria labels on icon-only buttons.
-- [ ] **Rate-limit / size-cap file & voice uploads** — `multer` currently has no fileSize limit.
+- [x] **CI pipeline** ✅ — GitHub Action running `npm test` + `tsc --noEmit` on push (`.github/workflows/ci.yml`).
+- [x] **Coverage reporting** ✅ — `vitest --coverage` via `npm run coverage`; thresholds configured in vitest.config.ts / vite.config.ts; coverage step in CI.
+- [x] **`schema.sql` drift guard** ✅ — `schema.test.ts` checks sequential numbering, all migration tables present in schema.sql, and migration count comment accurate.
+- [x] **Accessibility pass** ✅ — `SearchModal`: role="dialog", aria-modal, focus trap, Escape-to-close, aria-label on close button, role="listbox/option" on results. Icon-only buttons in VaultItemForm, Dashboard, Login, Settings all have aria-label.
+- [x] **Rate-limit / size-cap file & voice uploads** ✅ — `multer` limits: documents/images 50 MB, audio 100 MB, Keep ZIP 500 MB.
 
 ---
 
@@ -326,7 +326,7 @@ markitdown --help
 
 - [x] **Fix ~20 unused import warnings in client** ✅ (done in commit 2c43f25)
 
-- [ ] **Add timeout to insightService / digestService Ollama calls**
+- [x] **Add timeout to insightService / digestService Ollama calls** ✅
   - `insightService.ts` and `digestService.ts` have no timeout on `aiChat()` — a slow/hung
     Ollama blocks the Dashboard and Digest on first load.
   - Fix: wrap in `Promise.race` with a ~15s timeout; return `[]` / null on timeout.

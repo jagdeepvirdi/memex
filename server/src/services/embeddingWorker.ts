@@ -1,5 +1,6 @@
 import { pool } from '../db/client.js';
 import { embedItem } from './embedder.js';
+import logger from '../lib/logger.js'
 
 let isRunning = false;
 
@@ -7,7 +8,7 @@ let isRunning = false;
  * Background worker that finds items with missing embeddings and attempts to generate them.
  */
 export async function startEmbeddingWorker() {
-  console.log('  -> [Worker] Starting Embedding Retry Worker');
+  logger.info('Starting Embedding Retry Worker')
   
   // Run every 60 seconds
   setInterval(async () => {
@@ -21,7 +22,7 @@ export async function startEmbeddingWorker() {
       );
 
       if (rows.length > 0) {
-        console.log(`  -> [Worker] Generating missing embeddings for ${rows.length} items...`);
+        logger.info(`Generating missing embeddings for ${rows.length} items`)
         
         for (const row of rows) {
           try {
@@ -30,14 +31,14 @@ export async function startEmbeddingWorker() {
               JSON.stringify(vector),
               row.id
             ]);
-            console.log(`     OK: ${row.id}`);
+            logger.info({ id: row.id }, 'Embedding generated')
           } catch (err) {
-            console.error(`     ERR: Failed to embed ${row.id}`, err);
+            logger.error(err, `Failed to embed ${row.id}`)
           }
         }
       }
     } catch (err) {
-      console.error('  -> [Worker] Database query failed', err);
+      logger.error(err, 'Embedding worker DB query failed')
     } finally {
       isRunning = false;
     }

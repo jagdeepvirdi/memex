@@ -3,6 +3,7 @@ import rateLimit from 'express-rate-limit'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { pool } from '../db/client.js'
+import logger from '../lib/logger.js'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET
@@ -42,7 +43,7 @@ router.post('/login', authLimiter, async (req, res) => {
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' })
     res.json({ token, user: { id: user.id, email: user.email } })
   } catch (err) {
-    console.error('Login error:', err)
+    logger.error(err, 'Login error')
     res.status(500).json({ error: 'Login failed' })
   }
 })
@@ -74,7 +75,7 @@ router.post('/setup', authLimiter, async (req, res) => {
     const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' })
     res.status(201).json({ token, user })
   } catch (err) {
-    console.error('Setup error:', err)
+    logger.error(err, 'Setup error')
     res.status(500).json({ error: 'Setup failed' })
   }
 })

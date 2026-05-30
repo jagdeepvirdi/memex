@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { pool } from '../db/client.js'
 import { rowToItem } from '../db/helpers.js'
+import logger from '../lib/logger.js'
 
 const router = Router()
 
@@ -18,7 +19,7 @@ router.get('/:token', async (req, res) => {
          i.id, i.title, i.type, i.content, i.structured,
          i.source, i.source_url, i.encrypted, i.reviewed,
          i.created_at, i.updated_at, i.confidence, i.remind_at,
-         i.public_token,
+         i.public_token, i.share_expires_at,
          COALESCE(
            (SELECT array_agg(c.name ORDER BY ic2.depth)
             FROM item_categories ic2
@@ -36,7 +37,8 @@ router.get('/:token', async (req, res) => {
        FROM items i
        WHERE i.public_token = $1
          AND i.deleted_at IS NULL
-         AND i.encrypted = FALSE`,
+         AND i.encrypted = FALSE
+         AND (i.share_expires_at IS NULL OR i.share_expires_at > NOW())`,
       [token],
     )
 
@@ -46,7 +48,7 @@ router.get('/:token', async (req, res) => {
 
     res.json(rowToItem(rows[0]))
   } catch (err) {
-    console.error('GET /api/share/:token error:', err)
+    logger.error(err, 'GET /api/share/:token error')
     res.status(500).json({ error: 'Failed to fetch shared item' })
   }
 })

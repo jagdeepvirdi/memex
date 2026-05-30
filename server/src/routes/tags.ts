@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 import { pool } from '../db/client.js'
 import type { Tag } from '../../../shared/types.js'
+import logger from '../lib/logger.js'
 
 const router = Router()
 
@@ -25,7 +26,7 @@ router.get('/', async (_req, res) => {
 
     res.json(tags)
   } catch (err) {
-    console.error('GET /api/tags error:', err)
+    logger.error(err, 'GET /api/tags error')
     res.status(500).json({ error: 'Failed to fetch tags' })
   }
 })
@@ -80,7 +81,7 @@ export function itemTagsHandler(router: Router): void {
 
       res.json(tagRows.map((r) => r.name))
     } catch (err) {
-      console.error('POST /api/items/:id/tags error:', err)
+      logger.error(err, 'POST /api/items/:id/tags error')
       res.status(500).json({ error: 'Failed to add tags' })
     } finally {
       client.release()
@@ -114,7 +115,7 @@ export function itemTagsHandler(router: Router): void {
 
       res.status(204).send()
     } catch (err) {
-      console.error('DELETE /api/items/:id/tags/:tag error:', err)
+      logger.error(err, 'DELETE /api/items/:id/tags/:tag error')
       res.status(500).json({ error: 'Failed to remove tag' })
     }
   })

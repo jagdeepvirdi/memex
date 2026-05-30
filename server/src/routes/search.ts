@@ -4,6 +4,7 @@ import { rowToItem } from '../db/helpers.js';
 import { embedQuery } from '../services/embedder.js';
 import { askKnowledge } from '../services/ragService.js';
 import type { ItemType } from '../../../shared/types.js';
+import logger from '../lib/logger.js'
 
 const router = Router();
 
@@ -19,7 +20,7 @@ router.post('/ask', async (req, res) => {
     const response = await askKnowledge(question);
     res.json(response);
   } catch (error) {
-    console.error('Ask knowledge error:', error);
+    logger.error(error, 'Ask knowledge error')
     res.status(500).json({ error: 'Failed to answer question' });
   }
 });
@@ -107,7 +108,7 @@ router.post('/', async (req, res) => {
 
     res.json({ items, total: items.length });
   } catch (error) {
-    console.error('Search error:', error);
+    logger.error(error, 'Search error')
     res.status(500).json({ error: 'Failed to perform search' });
   }
 });
@@ -146,7 +147,7 @@ router.get('/graph', async (_req, res) => {
 
     res.json({ nodes, links })
   } catch (error) {
-    console.error('Graph error:', error)
+    logger.error(error, 'Graph error')
     res.status(500).json({ error: 'Failed to build graph' })
   }
 })

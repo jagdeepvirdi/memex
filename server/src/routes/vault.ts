@@ -2,6 +2,7 @@ import { Router } from 'express';
 import crypto from 'crypto';
 import { pool } from '../db/client.js';
 import type { VaultItem, VaultMeta } from '../../../shared/types.js';
+import logger from '../lib/logger.js'
 
 const router = Router();
 
@@ -25,7 +26,7 @@ router.get('/salt', async (_req, res) => {
     const finalResult = await pool.query<{ salt: string }>('SELECT salt FROM vault_config WHERE id = 1');
     res.json({ salt: finalResult.rows[0].salt } as VaultMeta);
   } catch (error) {
-    console.error('Vault salt error:', error);
+    logger.error(error, 'Vault salt error')
     res.status(500).json({ error: 'Failed to fetch vault salt' });
   }
 });
@@ -41,7 +42,7 @@ router.get('/', async (_req, res) => {
     );
     res.json(rows);
   } catch (error) {
-    console.error('Vault list error:', error);
+    logger.error(error, 'Vault list error')
     res.status(500).json({ error: 'Failed to fetch vault items' });
   }
 });
@@ -67,7 +68,7 @@ router.post('/', async (req, res) => {
 
     res.status(201).json(rows[0]);
   } catch (error) {
-    console.error('Vault create error:', error);
+    logger.error(error, 'Vault create error')
     res.status(500).json({ error: 'Failed to create vault item' });
   }
 });
@@ -111,7 +112,7 @@ router.post('/migrate/:itemId', async (req, res) => {
     res.status(201).json(vaultRows[0]);
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Vault migration error:', error);
+    logger.error(error, 'Vault migration error')
     res.status(500).json({ error: 'Failed to migrate item to vault' });
   } finally {
     client.release();
@@ -145,7 +146,7 @@ router.put('/:id', async (req, res) => {
 
     res.json(rows[0]);
   } catch (error) {
-    console.error('Vault update error:', error);
+    logger.error(error, 'Vault update error')
     res.status(500).json({ error: 'Failed to update vault item' });
   }
 });
@@ -165,7 +166,7 @@ router.delete('/:id', async (req, res) => {
 
     res.status(204).end();
   } catch (error) {
-    console.error('Vault delete error:', error);
+    logger.error(error, 'Vault delete error')
     res.status(500).json({ error: 'Failed to delete vault item' });
   }
 });

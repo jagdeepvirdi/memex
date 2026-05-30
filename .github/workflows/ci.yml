@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  server:
+    name: Server — typecheck + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test
+        env:
+          JWT_SECRET: ci-test-secret-do-not-use-in-prod
+          DATABASE_URL: postgresql://memex:memex@localhost:5432/memex
+          NODE_ENV: test
+
+      - name: Coverage (with threshold gate)
+        run: npm run coverage
+        env:
+          JWT_SECRET: ci-test-secret-do-not-use-in-prod
+          DATABASE_URL: postgresql://memex:memex@localhost:5432/memex
+          NODE_ENV: test
+
+  client:
+    name: Client — typecheck + tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test

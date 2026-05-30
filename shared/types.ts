@@ -31,6 +31,7 @@ export interface Item {
   confidence?: number
   remindAt?: Date | null
   publicToken?: string | null
+  shareExpiresAt?: Date | null
 }
 
 // ── Structured data per type ──────────────────────────────────────────────────

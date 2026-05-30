@@ -47,7 +47,12 @@ async function generateConnection(candidates: Item[]): Promise<DigestConnection 
     `What is the unexpected connection?`
 
   try {
-    const insight = await aiChat(prompt, CONNECTION_PROMPT, undefined, { temperature: 0.4 })
+    const insight = await Promise.race([
+      aiChat(prompt, CONNECTION_PROMPT, undefined, { temperature: 0.4 }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('AI timeout')), 15_000)
+      ),
+    ])
     return {
       item1: { id: item1.id, title: item1.title, type: item1.type, summary: s1 },
       item2: { id: item2.id, title: item2.title, type: item2.type, summary: s2 },

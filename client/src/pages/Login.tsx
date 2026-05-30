@@ -111,7 +111,7 @@ export default function LoginPage() {
                    </p>
                 </div>
                 {aiStatus === 'offline' && (
-                  <button onClick={checkAI} className="p-1.5 hover:bg-white/5 rounded text-ink-muted"><Sparkles size={14}/></button>
+                  <button onClick={checkAI} aria-label="Retry AI connection" className="p-1.5 hover:bg-white/5 rounded text-ink-muted"><Sparkles size={14} aria-hidden="true" /></button>
                 )}
              </div>
           )}

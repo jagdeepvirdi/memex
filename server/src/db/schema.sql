@@ -1,4 +1,4 @@
--- Memex — canonical schema reference (reflects all 9 migrations)
+-- Memex — canonical schema reference (reflects all 14 migrations)
 -- This file is documentation only. The live DB is built by running migrations in order:
 --   npm run migrate
 -- Do not run this file directly against the DB.
@@ -40,6 +40,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS categories_child_uniq
 --   005: reviewed
 --   008: confidence
 --   009: raw_content, extraction_model
+--   011: remind_at
+--   012: public_token
+--   013: share_expires_at
 CREATE TABLE IF NOT EXISTS items (
   id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   title            TEXT        NOT NULL,
@@ -55,6 +58,9 @@ CREATE TABLE IF NOT EXISTS items (
   reviewed         BOOLEAN     NOT NULL DEFAULT FALSE,  -- 005: user confirmed AI classification
   confidence       FLOAT,                      -- 008: AI self-assessed extraction quality 0-100
   extraction_model TEXT,                       -- 009: which model produced current structured data
+  remind_at        TIMESTAMPTZ,                -- 011: optional reminder timestamp
+  public_token     TEXT UNIQUE,               -- 012: random hex token for public sharing
+  share_expires_at TIMESTAMPTZ,               -- 013: optional expiry for public share
   deleted_at       TIMESTAMPTZ,                -- 003: soft-delete
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -168,6 +174,20 @@ CREATE TABLE IF NOT EXISTS vault_config (
   id    INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
   salt  TEXT NOT NULL  -- PBKDF2 salt, base64, not secret
 );
+
+-- ── Ingest job tracking (migration 014) ──────────────────────────────────────
+-- DB-backed job store so Keep import progress survives server restarts.
+CREATE TABLE IF NOT EXISTS ingest_jobs (
+  id           UUID        PRIMARY KEY,
+  status       TEXT        NOT NULL DEFAULT 'processing',
+  progress     INTEGER     NOT NULL DEFAULT 0,
+  total        INTEGER     NOT NULL DEFAULT 0,
+  completed    INTEGER     NOT NULL DEFAULT 0,
+  started_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  error        TEXT
+);
+CREATE INDEX IF NOT EXISTS ingest_jobs_status_idx ON ingest_jobs (status);
 
 -- ── Auth (single-user) ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS users (

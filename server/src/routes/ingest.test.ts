@@ -143,34 +143,35 @@ describe('POST /api/ingest/keep/bulk', () => {
 
 describe('GET /api/ingest/jobs/:id', () => {
   it('returns 404 for unknown job id', async () => {
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any)
     const res = await request(app)
       .get('/api/ingest/jobs/nonexistent')
       .set('Authorization', AUTH)
     expect(res.status).toBe(404)
   })
 
-  it('returns job progress after bulk import starts a job', async () => {
-    // Start a job first
-    const client = mockClient([
-      null,
-      { rows: [{ id: 'item-1' }] },
-      null,
-    ])
-
-    const bulkRes = await request(app)
-      .post('/api/ingest/keep/bulk')
-      .set('Authorization', AUTH)
-      .send({ notes: [{ title: 'T', content: 'C', labels: [] }] })
-
-    const { jobId } = bulkRes.body
+  it('returns job progress for a known job id', async () => {
+    const fakeJobId = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
+    vi.mocked(pool.query).mockResolvedValue({
+      rows: [{
+        id: fakeJobId,
+        status: 'processing',
+        progress: 50,
+        total: 10,
+        completed: 5,
+        started_at: new Date('2025-01-01T00:00:00Z'),
+        completed_at: null,
+        error: null,
+      }],
+    } as any)
 
     const res = await request(app)
-      .get(`/api/ingest/jobs/${jobId}`)
+      .get(`/api/ingest/jobs/${fakeJobId}`)
       .set('Authorization', AUTH)
 
     expect(res.status).toBe(200)
-    expect(res.body).toHaveProperty('progress')
-    expect(res.body).toHaveProperty('status')
+    expect(res.body).toHaveProperty('progress', 50)
+    expect(res.body).toHaveProperty('status', 'processing')
     expect(res.body).toHaveProperty('elapsed')
   })
 })

@@ -432,7 +432,7 @@ function ShortcutsModal({ onClose }: { onClose: () => void }) {
       <div className="w-full max-w-sm bg-surface border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300" onClick={e => e.stopPropagation()}>
         <div className="p-6 border-b border-white/5 flex justify-between items-center">
           <h3 className="font-display text-xl text-ink">Shortcuts</h3>
-          <button onClick={onClose} className="text-ink-muted hover:text-ink"><X size={20}/></button>
+          <button onClick={onClose} aria-label="Close shortcuts" className="text-ink-muted hover:text-ink"><X size={20} aria-hidden="true" /></button>
         </div>
         <div className="p-6 space-y-4">
           {shortcuts.map(s => (

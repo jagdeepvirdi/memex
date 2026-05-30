@@ -331,8 +331,8 @@ export default function SettingsPage() {
                               onChange={(e) => setEditingCat({...editingCat, name: e.target.value})}
                               autoFocus
                             />
-                            <button onClick={handleRenameCategory} className="text-green-500 hover:text-green-400"><Save size={14}/></button>
-                            <button onClick={() => setEditingCat(null)} className="text-ink-muted hover:text-ink"><X size={14}/></button>
+                            <button onClick={handleRenameCategory} aria-label="Save category name" className="text-green-500 hover:text-green-400"><Save size={14} aria-hidden="true" /></button>
+                            <button onClick={() => setEditingCat(null)} aria-label="Cancel rename" className="text-ink-muted hover:text-ink"><X size={14} aria-hidden="true" /></button>
                          </div>
                        ) : (
                          <>

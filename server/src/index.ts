@@ -26,6 +26,7 @@ import { itemCategoriesHandler } from './routes/categories.js'
 import { itemTagsHandler } from './routes/tags.js'
 import { checkOllamaHealth } from './services/ollama.js'
 import { startEmbeddingWorker } from './services/embeddingWorker.js'
+import logger from './lib/logger.js'
 
 // Extend Express Request type
 declare global {
@@ -120,7 +121,7 @@ app.use('/api/share', shareRouter)
 
 if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
-    console.log(`Memex server listening on http://localhost:${PORT}`)
+    logger.info(`Memex server listening on http://localhost:${PORT}`)
     
     // Start background workers
     startEmbeddingWorker()

@@ -1,5 +1,6 @@
 import { YoutubeTranscript } from 'youtube-transcript';
 import { getSetting } from './settings.js';
+import logger from '../lib/logger.js'
 
 export interface ScrapedContent {
   title: string;
@@ -55,7 +56,7 @@ async function scrapeYoutube(url: string, videoId: string): Promise<ScrapedConte
       sourceUrl: url
     };
   } catch (error) {
-    console.error('YouTube scrape error:', error);
+    logger.error(error, 'YouTube scrape error')
     return {
       title: `YouTube Video (${videoId})`,
       content: 'Transcript unavailable.',
@@ -85,7 +86,7 @@ async function scrapeInstagram(url: string, shortcode: string): Promise<ScrapedC
       sourceUrl: url
     };
   } catch (error) {
-    console.error('Instagram scrape error:', error);
+    logger.error(error, 'Instagram scrape error')
     return {
       title: `Instagram Post (${shortcode})`,
       content: 'Instagram content unavailable.',
@@ -117,7 +118,7 @@ async function scrapeGeneric(url: string): Promise<ScrapedContent> {
       sourceUrl: url
     };
   } catch (error) {
-    console.error('Generic scrape error:', error);
+    logger.error(error, 'Generic scrape error')
     return {
       title: url,
       content: 'Failed to extract content from this URL.',

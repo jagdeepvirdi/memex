@@ -1,4 +1,5 @@
 import { pool } from '../db/client.js';
+import logger from '../lib/logger.js'
 
 export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
   try {
@@ -6,7 +7,7 @@ export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
     if (rows.length === 0) return defaultValue;
     return rows[0].value as T;
   } catch (error) {
-    console.error(`Failed to fetch setting ${key}:`, error);
+    logger.error(error, `Failed to fetch setting ${key}`)
     return defaultValue;
   }
 }

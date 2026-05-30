@@ -16,6 +16,7 @@ import { embedItem } from '../services/embedder.js'
 import { extractAndLinkEntities } from '../services/entityService.js'
 import { generateDigest } from '../services/digestService.js'
 import type { ItemType, ItemSource } from '../../../shared/types.js'
+import logger from '../lib/logger.js'
 
 const router = Router()
 
@@ -82,6 +83,7 @@ interface ItemRow {
   confidence: number | null
   remind_at: Date | null
   public_token: string | null
+  share_expires_at: Date | null
 }
 
 // ── GET /api/items ────────────────────────────────────────────────────────────
@@ -158,7 +160,7 @@ router.get('/', async (req, res) => {
       const listSql = `
         SELECT
           i.id, i.title, i.type, i.content, i.structured,
-          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at, i.confidence, i.remind_at, i.public_token,
+          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at, i.confidence, i.remind_at, i.public_token, i.share_expires_at,
           COALESCE(
             (SELECT array_agg(c.name ORDER BY ic2.depth)
              FROM item_categories ic2
@@ -188,7 +190,7 @@ router.get('/', async (req, res) => {
       client.release()
     }
   } catch (err) {
-    console.error('GET /api/items error:', err)
+    logger.error(err, 'GET /api/items error')
     res.status(500).json({ error: 'Failed to fetch items' })
   }
 })
@@ -269,13 +271,13 @@ router.post('/', async (req, res) => {
             itemId,
           ]),
         )
-        .catch((err) => console.error('Embedding failed for', itemId, err))
+        .catch((err) => logger.error(err, `Embedding failed for ${itemId}`))
     }
 
     res.status(201).json(item)
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('POST /api/items error:', err)
+    logger.error(err, 'POST /api/items error')
     res.status(500).json({ error: 'Failed to create item' })
   } finally {
     client.release()
@@ -298,7 +300,7 @@ router.put('/review-all', async (req, res) => {
     )
     res.json({ count: rowCount })
   } catch (err) {
-    console.error('PUT /api/items/review-all error:', err)
+    logger.error(err, 'PUT /api/items/review-all error')
     res.status(500).json({ error: 'Failed to review items' })
   }
 })
@@ -313,7 +315,7 @@ router.get('/insights', async (_req, res) => {
     const insights = await generateInsights()
     res.json(insights)
   } catch (err) {
-    console.error('GET /api/items/insights error:', err)
+    logger.error(err, 'GET /api/items/insights error')
     res.status(500).json({ error: 'Failed to generate insights' })
   }
 })
@@ -325,7 +327,7 @@ router.get('/rediscover', async (_req, res) => {
     const items = await getRediscoveryItems()
     res.json(items)
   } catch (err) {
-    console.error('GET /api/items/rediscover error:', err)
+    logger.error(err, 'GET /api/items/rediscover error')
     res.status(500).json({ error: 'Failed to fetch rediscovery items' })
   }
 })
@@ -389,23 +391,23 @@ router.post('/enrich', async (_req, res) => {
           }
 
           await client.query('COMMIT')
-          console.log(`[Re-enrich] OK: ${result.title} → ${result.type}${isReviewed ? ' (extraction only)' : ''}`)
+          logger.info(`[Re-enrich] OK: ${result.title} → ${result.type}${isReviewed ? ' (extraction only)' : ''}`)
         } catch (err) {
           await client.query('ROLLBACK')
-          console.error(`[Re-enrich] DB update failed for ${row.id}:`, err)
+          logger.error(err, `[Re-enrich] DB update failed for ${row.id}`)
         } finally {
           client.release()
         }
       } catch {
-        console.error(`[Re-enrich] Classify failed for ${row.id}, leaving as pending`)
+        logger.error(`[Re-enrich] Classify failed for ${row.id}, leaving as pending`)
       }
 
       done++
-      if (done % 10 === 0) console.log(`[Re-enrich] ${done}/${rows.length}`)
+      if (done % 10 === 0) logger.info(`[Re-enrich] ${done}/${rows.length}`)
     })))
-    console.log(`[Re-enrich] Complete: ${rows.length} items processed`)
+    logger.info(`[Re-enrich] Complete: ${rows.length} items processed`)
   } catch (err) {
-    console.error('POST /api/items/enrich error:', err)
+    logger.error(err, 'POST /api/items/enrich error')
   }
 })
 
@@ -424,7 +426,7 @@ router.get('/enrichment', async (_req, res) => {
       total:   parseInt(rows[0].total,   10),
     })
   } catch (err) {
-    console.error('GET /api/items/enrichment error:', err)
+    logger.error(err, 'GET /api/items/enrichment error')
     res.status(500).json({ error: 'Failed to fetch enrichment status' })
   }
 })
@@ -454,7 +456,7 @@ router.get('/stats', async (_req, res) => {
       recentActivity:  parseInt(rows[0].recent,      10),
     })
   } catch (err) {
-    console.error('GET /api/items/stats error:', err)
+    logger.error(err, 'GET /api/items/stats error')
     res.status(500).json({ error: 'Failed to fetch stats' })
   }
 })
@@ -468,7 +470,7 @@ router.get('/digest', async (_req, res) => {
     const digest = await generateDigest()
     res.json(digest)
   } catch (err) {
-    console.error('GET /api/items/digest error:', err)
+    logger.error(err, 'GET /api/items/digest error')
     res.status(500).json({ error: 'Failed to generate digest' })
   }
 })
@@ -509,7 +511,7 @@ router.get('/:id/extractions', async (req, res) => {
     )
     res.json(rows)
   } catch (err) {
-    console.error('GET /api/items/:id/extractions error:', err)
+    logger.error(err, 'GET /api/items/:id/extractions error')
     res.status(500).json({ error: 'Failed to fetch extraction history' })
   }
 })
@@ -553,7 +555,7 @@ router.post('/:id/apply-extraction/:extractionId', async (req, res) => {
     res.json(updated)
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('POST /api/items/:id/apply-extraction error:', err)
+    logger.error(err, 'POST /api/items/:id/apply-extraction error')
     res.status(500).json({ error: 'Failed to apply extraction' })
   } finally {
     client.release()
@@ -655,13 +657,13 @@ router.put('/:id', async (req, res) => {
             req.params.id,
           ]),
         )
-        .catch((err) => console.error('Re-embed failed for', req.params.id, err))
+        .catch((err) => logger.error(err, `Re-embed failed for ${req.params.id}`))
     }
 
     res.json(item)
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('PUT /api/items/:id error:', err)
+    logger.error(err, 'PUT /api/items/:id error')
     res.status(500).json({ error: 'Failed to update item' })
   } finally {
     client.release()
@@ -683,7 +685,7 @@ router.delete('/bulk', async (req, res) => {
     )
     res.json({ count: rowCount })
   } catch (err) {
-    console.error('DELETE /api/items/bulk error:', err)
+    logger.error(err, 'DELETE /api/items/bulk error')
     res.status(500).json({ error: 'Failed to delete items' })
   }
 })
@@ -702,7 +704,7 @@ router.delete('/:id', async (req, res) => {
     }
     res.status(204).send()
   } catch (err) {
-    console.error('DELETE /api/items/:id error:', err)
+    logger.error(err, 'DELETE /api/items/:id error')
     res.status(500).json({ error: 'Failed to delete item' })
   }
 })
@@ -777,7 +779,7 @@ router.post('/nl-filter', async (req, res) => {
 
     res.json({ items: rows.map(rowToItem), total, parsedFilter })
   } catch (err) {
-    console.error('POST /api/items/nl-filter error:', err)
+    logger.error(err, 'POST /api/items/nl-filter error')
     res.status(500).json({ error: 'NL filter failed' })
   }
 })
@@ -813,7 +815,7 @@ router.get('/reminders/due', async (_req, res) => {
     `)
     res.json(rows.map(rowToItem))
   } catch (err) {
-    console.error('GET /api/items/reminders/due error:', err)
+    logger.error(err, 'GET /api/items/reminders/due error')
     res.status(500).json({ error: 'Failed to fetch due reminders' })
   }
 })
@@ -823,14 +825,17 @@ router.get('/reminders/due', async (_req, res) => {
 router.post('/:id/share', async (req, res) => {
   try {
     const token = randomBytes(20).toString('hex')
-    const { rowCount } = await pool.query(
-      'UPDATE items SET public_token = $1 WHERE id = $2 AND deleted_at IS NULL',
+    const { rowCount, rows } = await pool.query<{ share_expires_at: Date }>(
+      `UPDATE items
+          SET public_token = $1, share_expires_at = NOW() + INTERVAL '7 days'
+        WHERE id = $2 AND deleted_at IS NULL
+        RETURNING share_expires_at`,
       [token, req.params.id],
     )
     if (rowCount === 0) return res.status(404).json({ error: 'Item not found' })
-    res.json({ token })
+    res.json({ token, expiresAt: rows[0].share_expires_at })
   } catch (err) {
-    console.error('POST /api/items/:id/share error:', err)
+    logger.error(err, 'POST /api/items/:id/share error')
     res.status(500).json({ error: 'Failed to generate share token' })
   }
 })
@@ -840,13 +845,13 @@ router.post('/:id/share', async (req, res) => {
 router.delete('/:id/share', async (req, res) => {
   try {
     const { rowCount } = await pool.query(
-      'UPDATE items SET public_token = NULL WHERE id = $1 AND deleted_at IS NULL',
+      'UPDATE items SET public_token = NULL, share_expires_at = NULL WHERE id = $1 AND deleted_at IS NULL',
       [req.params.id],
     )
     if (rowCount === 0) return res.status(404).json({ error: 'Item not found' })
     res.status(204).send()
   } catch (err) {
-    console.error('DELETE /api/items/:id/share error:', err)
+    logger.error(err, 'DELETE /api/items/:id/share error')
     res.status(500).json({ error: 'Failed to revoke sharing' })
   }
 })
@@ -983,9 +988,9 @@ router.get('/export/obsidian', async (_req, res) => {
     res.setHeader('Content-Length', zipBuffer.length)
     res.send(zipBuffer)
 
-    console.log(`[Export] Obsidian vault: ${rows.length} items → ${zipBuffer.length} bytes`)
+    logger.info(`[Export] Obsidian vault: ${rows.length} items → ${zipBuffer.length} bytes`)
   } catch (err) {
-    console.error('GET /api/items/export/obsidian error:', err)
+    logger.error(err, 'GET /api/items/export/obsidian error')
     res.status(500).json({ error: 'Export failed' })
   }
 })

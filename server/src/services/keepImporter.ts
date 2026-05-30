@@ -1,6 +1,7 @@
 import AdmZip from 'adm-zip';
 import crypto from 'crypto';
 import type { ItemSource } from '../../../shared/types.js';
+import logger from '../lib/logger.js'
 
 export interface KeepNote {
   title: string;
@@ -53,7 +54,7 @@ export function parseKeepZip(buffer: Buffer): KeepNote[] {
           source: 'keep'
         });
       } catch (error) {
-        console.error(`Failed to parse Keep note ${entry.entryName}:`, error);
+        logger.error(error, `Failed to parse Keep note ${entry.entryName}`)
       }
     }
   }

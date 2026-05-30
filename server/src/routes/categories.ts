@@ -4,6 +4,7 @@ import { pool } from '../db/client.js'
 import { setItemCategories } from '../db/helpers.js'
 import { normalizeCategories } from '../services/classifier.js'
 import type { Category, CategoryAnomaly } from '../../../shared/types.js'
+import logger from '../lib/logger.js'
 
 const CANONICAL_ROOTS = new Set(['Food', 'Media', 'Tech', 'Finance', 'Personal', 'Links', 'Travel'])
 
@@ -80,7 +81,7 @@ router.get('/', async (_req, res) => {
 
     res.json(buildTree(rows))
   } catch (err) {
-    console.error('GET /api/categories error:', err)
+    logger.error(err, 'GET /api/categories error')
     res.status(500).json({ error: 'Failed to fetch categories' })
   }
 })
@@ -124,7 +125,7 @@ router.post('/', async (req, res) => {
       children: [],
     } as Category)
   } catch (err) {
-    console.error('POST /api/categories error:', err)
+    logger.error(err, 'POST /api/categories error')
     res.status(500).json({ error: 'Failed to create category' })
   }
 })
@@ -190,7 +191,7 @@ router.put('/:id', async (req, res) => {
       itemCount: parseInt(rows[0].item_count, 10),
     } as Category)
   } catch (err) {
-    console.error('PUT /api/categories/:id error:', err)
+    logger.error(err, 'PUT /api/categories/:id error')
     res.status(500).json({ error: 'Failed to update category' })
   }
 })
@@ -233,7 +234,7 @@ router.delete('/:id', async (req, res) => {
 
     res.status(204).send()
   } catch (err) {
-    console.error('DELETE /api/categories/:id error:', err)
+    logger.error(err, 'DELETE /api/categories/:id error')
     res.status(500).json({ error: 'Failed to delete category' })
   }
 })
@@ -289,7 +290,7 @@ router.get('/anomalies', async (_req, res) => {
 
     res.json(anomalies)
   } catch (err) {
-    console.error('GET /api/categories/anomalies error:', err)
+    logger.error(err, 'GET /api/categories/anomalies error')
     res.status(500).json({ error: 'Failed to fetch category anomalies' })
   }
 })
@@ -367,7 +368,7 @@ router.post('/remap', async (req, res) => {
     res.json({ remapped: itemRows.length })
   } catch (err) {
     await client.query('ROLLBACK')
-    console.error('POST /api/categories/remap error:', err)
+    logger.error(err, 'POST /api/categories/remap error')
     res.status(500).json({ error: 'Failed to remap category' })
   } finally {
     client.release()
@@ -405,7 +406,7 @@ export function itemCategoriesHandler(router: Router): void {
       res.status(204).send()
     } catch (err) {
       await client.query('ROLLBACK')
-      console.error('POST /api/items/:id/categories error:', err)
+      logger.error(err, 'POST /api/items/:id/categories error')
       res.status(500).json({ error: 'Failed to update item categories' })
     } finally {
       client.release()

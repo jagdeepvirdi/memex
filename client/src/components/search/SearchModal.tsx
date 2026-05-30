@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Search, 
   Command, 
@@ -29,6 +29,24 @@ export default function SearchModal({ onClose }: SearchModalProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  // Focus trap — keep Tab/Shift+Tab inside the dialog
+  const handleDialogKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Escape') { onClose(); return; }
+    if (e.key !== 'Tab') return;
+    const focusable = dialogRef.current?.querySelectorAll<HTMLElement>(
+      'button, input, [href], [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable || focusable.length === 0) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (e.shiftKey) {
+      if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+    } else {
+      if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+  }, [onClose]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -75,16 +93,26 @@ export default function SearchModal({ onClose }: SearchModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] px-4 bg-bg/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="w-full max-w-2xl bg-surface border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-300">
-        
+    <div
+      className="fixed inset-0 z-[60] flex items-start justify-center pt-[15vh] px-4 bg-bg/80 backdrop-blur-sm animate-in fade-in duration-200"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search"
+        onKeyDown={handleDialogKeyDown}
+        className="w-full max-w-2xl bg-surface border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 slide-in-from-top-4 duration-300"
+      >
         {/* Input Area */}
         <div className="flex items-center gap-4 px-6 py-4 border-b border-white/5">
-          <Search size={22} className={loading ? 'text-accent animate-pulse' : 'text-ink-muted'} />
+          <Search size={22} className={loading ? 'text-accent animate-pulse' : 'text-ink-muted'} aria-hidden="true" />
           <input
             ref={inputRef}
             autoFocus
             type="text"
+            aria-label="Search your knowledge base"
             placeholder="Search items, notes, recipes..."
             className="flex-1 bg-transparent border-none outline-none text-ink text-lg placeholder:text-ink-muted/30"
             value={query}
@@ -92,20 +120,24 @@ export default function SearchModal({ onClose }: SearchModalProps) {
           />
           <div className="flex items-center gap-2">
             {loading ? (
-              <Loader2 size={18} className="animate-spin text-ink-muted" />
+              <Loader2 size={18} className="animate-spin text-ink-muted" aria-hidden="true" />
             ) : (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded border border-white/5 text-[10px] text-ink-muted font-mono uppercase">
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded border border-white/5 text-[10px] text-ink-muted font-mono uppercase" aria-hidden="true">
                 <Command size={10} /> K
               </div>
             )}
-            <button onClick={onClose} className="p-1 hover:bg-white/5 rounded-md text-ink-muted transition-colors">
-              <X size={18} />
+            <button onClick={onClose} aria-label="Close search" className="p-1 hover:bg-white/5 rounded-md text-ink-muted transition-colors">
+              <X size={18} aria-hidden="true" />
             </button>
           </div>
         </div>
 
         {/* Results Area */}
-        <div className="flex-1 overflow-y-auto max-h-[60vh]">
+        <div
+          role="listbox"
+          aria-label="Search results"
+          className="flex-1 overflow-y-auto max-h-[60vh]"
+        >
           {!query.trim() ? (
             <div className="p-12 text-center space-y-2">
               <p className="text-ink font-display text-lg">Start typing to search...</p>
@@ -116,7 +148,11 @@ export default function SearchModal({ onClose }: SearchModalProps) {
               {results.map((item, i) => (
                 <div
                   key={item.id}
+                  role="option"
+                  aria-selected={selectedIndex === i}
+                  tabIndex={0}
                   onClick={() => handleSelect(item.id)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSelect(item.id)}
                   onMouseEnter={() => setSelectedIndex(i)}
                   className={`flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all ${
                     selectedIndex === i ? 'bg-accent/10 border-accent/20' : 'hover:bg-white/5 border-transparent'

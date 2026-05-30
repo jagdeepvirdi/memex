@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { randomBytes } from 'crypto';
 import { pool } from '../db/client.js';
+import logger from '../lib/logger.js'
 
 const router = Router();
 
@@ -14,7 +15,7 @@ router.get('/', async (req, res) => {
     }, {} as Record<string, any>);
     res.json(settings);
   } catch (error) {
-    console.error('Failed to fetch settings:', error);
+    logger.error(error, 'Failed to fetch settings')
     res.status(500).json({ error: 'Failed to fetch settings' });
   }
 });
@@ -37,7 +38,7 @@ router.put('/', async (req, res) => {
     res.json({ status: 'ok' });
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Failed to update settings:', error);
+    logger.error(error, 'Failed to update settings')
     res.status(500).json({ error: 'Failed to update settings' });
   } finally {
     client.release();
@@ -56,7 +57,7 @@ router.post('/bookmarklet-key', async (_req, res) => {
     );
     res.json({ key });
   } catch (error) {
-    console.error('Failed to generate bookmarklet key:', error);
+    logger.error(error, 'Failed to generate bookmarklet key')
     res.status(500).json({ error: 'Failed to generate key' });
   }
 });
