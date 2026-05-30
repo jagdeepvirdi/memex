@@ -60,7 +60,9 @@ jobs:
           cache-dependency-path: client/package-lock.json
 
       - name: Install dependencies
-        run: npm ci
+        # npm install instead of npm ci: the lockfile is Windows-generated and
+        # omits Linux-specific optional deps (esbuild platform binaries).
+        run: npm install
 
       - name: Type-check
         run: npx tsc --noEmit

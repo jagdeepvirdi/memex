@@ -27,6 +27,15 @@ vi.mock('../services/summarizer', () => ({
   }),
 }))
 
+vi.mock('../services/embedder', () => ({
+  embedQuery: vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+  embedItem:  vi.fn().mockResolvedValue([0.1, 0.2, 0.3]),
+}))
+
+vi.mock('../services/duplicateService', () => ({
+  findSimilarItems: vi.fn().mockResolvedValue([]),
+}))
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 let AUTH = ''
