@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react'
-import { ArrowLeft, Loader2, Zap, Trash2, Square, CheckSquare, LayoutGrid, List, Pencil } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowLeft, Loader2, Zap, Trash2, Square, CheckSquare, LayoutGrid, List, Pencil, FolderPen, X, Check } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
 import ItemCard from '../components/cards/ItemCard'
 import { CardSkeleton } from '../components/Skeleton'
-import { fetchItems, deleteItemsBulk, deleteItem } from '../lib/api'
+import { fetchItems, deleteItemsBulk, deleteItem, updateItem } from '../lib/api'
 import type { Item, ItemType } from '../../../shared/types'
 
 const TYPE_FILTERS: { label: string; value: ItemType | 'all' }[] = [
@@ -33,6 +33,10 @@ export default function EnrichedItemsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [recatItem, setRecatItem] = useState<Item | null>(null)
+  const [recatValue, setRecatValue] = useState('')
+  const [recatSaving, setRecatSaving] = useState(false)
+  const recatInputRef = useRef<HTMLInputElement>(null)
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
     (localStorage.getItem('enriched-view-mode') as ViewMode | null) ?? 'card'
   )
@@ -129,6 +133,29 @@ export default function EnrichedItemsPage() {
     }
   }
 
+  const openRecat = (item: Item) => {
+    setRecatItem(item)
+    setRecatValue(item.categories.join(' > '))
+    setTimeout(() => recatInputRef.current?.focus(), 50)
+  }
+
+  const handleRecat = async () => {
+    if (!recatItem) return
+    const categories = recatValue.split(/[>\/,]/).map(s => s.trim()).filter(Boolean)
+    if (categories.length === 0) return
+    setRecatSaving(true)
+    try {
+      const updated = await updateItem(recatItem.id, { categories })
+      setItems(prev => prev.map(i => i.id === updated.id ? updated : i))
+      toast.success('Category updated')
+      setRecatItem(null)
+    } catch {
+      toast.error('Failed to update category')
+    } finally {
+      setRecatSaving(false)
+    }
+  }
+
   const pageLimit = viewMode === 'table' ? 50 : 48
 
   return (
@@ -218,6 +245,13 @@ export default function EnrichedItemsPage() {
                         title="Edit"
                       >
                         <Pencil size={13} />
+                      </button>
+                      <button
+                        onClick={e => { e.stopPropagation(); openRecat(item) }}
+                        className="p-1.5 bg-surface/90 border border-white/10 text-ink-muted hover:text-yellow-400 hover:border-yellow-400/40 rounded-lg transition-all backdrop-blur-sm"
+                        title="Change category"
+                      >
+                        <FolderPen size={13} />
                       </button>
                       <button
                         onClick={e => { e.stopPropagation(); handleDeleteItem(item) }}
@@ -341,6 +375,13 @@ export default function EnrichedItemsPage() {
                                 <Pencil size={15} />
                               </button>
                               <button
+                                onClick={() => openRecat(item)}
+                                className="p-1.5 text-ink-muted hover:text-yellow-400 hover:bg-yellow-400/10 rounded-lg transition-all"
+                                title="Change category"
+                              >
+                                <FolderPen size={15} />
+                              </button>
+                              <button
                                 onClick={() => handleDeleteItem(item)}
                                 disabled={deletingId === item.id}
                                 className="p-1.5 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all disabled:opacity-50"
@@ -408,6 +449,59 @@ export default function EnrichedItemsPage() {
           )}
         </div>
       </main>
+
+      {/* Quick recategorize modal */}
+      {recatItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-surface border border-white/10 rounded-2xl shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
+              <div className="flex items-center gap-2">
+                <FolderPen size={16} className="text-accent" />
+                <h2 className="font-display text-base text-ink">Change Category</h2>
+              </div>
+              <button onClick={() => setRecatItem(null)} className="p-1.5 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              <p className="text-xs text-ink-muted truncate">
+                <span className="text-ink font-medium">{recatItem.title}</span>
+              </p>
+              <div>
+                <label className="text-[10px] text-ink-muted uppercase tracking-widest font-bold block mb-2">
+                  Category path
+                </label>
+                <input
+                  ref={recatInputRef}
+                  value={recatValue}
+                  onChange={e => setRecatValue(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') handleRecat(); if (e.key === 'Escape') setRecatItem(null) }}
+                  placeholder="Personal > Notes  (separate with  >  or  ,)"
+                  className="w-full bg-bg border border-white/10 rounded-lg py-2.5 px-3 text-sm text-ink focus:border-accent outline-none transition-all placeholder:text-ink-muted/40"
+                />
+                <p className="text-[10px] text-ink-muted/50 mt-1.5">
+                  Current: <span className="text-ink-muted">{recatItem.categories.join(' › ') || '—'}</span>
+                </p>
+              </div>
+              <div className="flex gap-3 pt-1">
+                <button
+                  onClick={() => setRecatItem(null)}
+                  className="flex-1 py-2 rounded-lg border border-white/10 text-sm text-ink-muted hover:text-ink hover:bg-white/5 transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleRecat}
+                  disabled={recatSaving || !recatValue.trim()}
+                  className="flex-1 py-2 rounded-lg bg-accent text-bg font-bold text-sm hover:bg-accent/90 disabled:opacity-50 flex items-center justify-center gap-2 transition-all"
+                >
+                  {recatSaving ? <Loader2 size={14} className="animate-spin" /> : <><Check size={14} /> Save</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
