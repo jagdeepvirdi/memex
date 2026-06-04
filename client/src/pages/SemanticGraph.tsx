@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Sidebar from '../components/sidebar/Sidebar';
+import { AppHeader } from '../components/AppHeader';
 import { apiFetch } from '../lib/api';
 
 export default function SemanticGraphPage() {
@@ -47,36 +48,11 @@ export default function SemanticGraphPage() {
       {!fullscreen && <Sidebar activeSection="dashboard" />}
 
       <main className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]">
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10 shrink-0">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => navigate(-1)}
-              className="text-ink-muted hover:text-ink transition-colors"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div className="flex items-center gap-2">
-               <Sparkles className="text-accent" size={18} />
-               <h1 className="font-display text-lg text-ink">Semantic Intelligence Map</h1>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-             <button 
-               onClick={() => setFullscreen(!fullscreen)}
-               className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all"
-               title={fullscreen ? "Exit Fullscreen" : "Fullscreen"}
-             >
-               {fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
-             </button>
-             <button 
-               onClick={loadGraph}
-               className="text-xs bg-white/5 hover:bg-white/10 text-ink px-4 py-2 rounded-lg transition-all font-medium"
-             >
-               Refresh Map
-             </button>
-          </div>
-        </header>
+        <AppHeader
+          left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-2"><Sparkles className="text-accent" size={18} /><h1 className="font-display text-lg text-ink">Semantic Intelligence Map</h1></div></div>}
+          actions={<div className="flex items-center gap-3"><button onClick={() => setFullscreen(!fullscreen)} className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all" title={fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>{fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button><button onClick={loadGraph} className="text-xs bg-white/5 hover:bg-white/10 text-ink px-4 py-2 rounded-lg transition-all font-medium">Refresh Map</button></div>}
+        />
+        <AppHeader.Spacer />
 
         <div className="flex-1 relative">
            {loading ? (

@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
   Newspaper,
-  ArrowLeft,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -13,6 +12,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import ItemCard from '../components/cards/ItemCard'
 import { fetchDigest } from '../lib/api'
 import type { DigestResponse } from '../../../shared/types'
@@ -65,35 +65,17 @@ export default function DigestPage() {
       <Sidebar activeSection="digest" />
 
       <main className="flex-1 overflow-y-auto">
+        <AppHeader
+          left={<div className="flex items-center gap-3"><Newspaper size={18} className="text-ink-muted" /><h1 className="font-display text-lg text-ink">Weekly Digest</h1></div>}
+          actions={!loading ? <button onClick={load} className="flex items-center gap-2 text-xs text-ink-muted hover:text-ink bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg transition-all"><RefreshCw size={13} /> Regenerate</button> : undefined}
+        />
+        <AppHeader.Spacer />
         <div className="max-w-4xl mx-auto px-8 py-10">
 
-          {/* Header */}
-          <div className="mb-10">
-            <div className="flex items-center gap-2 text-ink-muted text-sm mb-4">
-              <button onClick={() => navigate('/')} className="hover:text-ink transition-colors flex items-center gap-1">
-                <ArrowLeft size={14} /> Dashboard
-              </button>
-            </div>
-            <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <Newspaper size={28} className="text-accent" />
-                  <h1 className="font-display text-4xl text-ink">Weekly Digest</h1>
-                </div>
-                {digest && (
-                  <p className="text-ink-muted text-sm">{digest.period}</p>
-                )}
-              </div>
-              {!loading && (
-                <button
-                  onClick={load}
-                  className="flex items-center gap-2 text-xs text-ink-muted hover:text-ink bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg transition-all"
-                >
-                  <RefreshCw size={13} /> Regenerate
-                </button>
-              )}
-            </div>
-          </div>
+          {/* Period subtitle */}
+          {digest && (
+            <p className="text-ink-muted text-sm mb-10">{digest.period}</p>
+          )}
 
           {loading && (
             <div className="flex flex-col items-center gap-4 py-24 text-ink-muted">

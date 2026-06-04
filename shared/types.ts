@@ -152,6 +152,13 @@ export interface VaultMeta {
   salt: string  // PBKDF2 salt (base64), stored server-side, not secret
 }
 
+export interface VaultStatus {
+  hasSetup: boolean
+  salt?: string
+  verifier?: string | null
+  verifierIv?: string | null
+}
+
 // ── API request/response shapes ───────────────────────────────────────────────
 
 export interface CreateItemRequest {

@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
-import { ArrowLeft, Loader2, Send, Brain, Bot, User, Sparkles, ExternalLink, Bookmark } from 'lucide-react'
+import { ArrowLeft, Loader2, Send, Brain, Bot, User, ExternalLink, Bookmark } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import { askKnowledge } from '../lib/api'
 import type { Item } from '../../../shared/types'
 
@@ -66,21 +67,10 @@ export default function AskMemexPage() {
       <Sidebar activeSection="dashboard" />
       
       <main className="flex-1 flex flex-col relative max-w-4xl mx-auto w-full border-x border-white/5">
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10 shrink-0">
-          <div className="flex items-center gap-6">
-            <button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors">
-              <ArrowLeft size={20} />
-            </button>
-            <h1 className="font-display text-lg flex items-center gap-2">
-              <Brain size={20} className="text-accent" />
-              Ask My Knowledge
-            </h1>
-          </div>
-          <div className="flex items-center gap-2 text-[10px] uppercase tracking-widest font-bold text-ink-muted bg-white/5 px-2 py-1 rounded">
-             <Sparkles size={10} className="text-accent" />
-             Local RAG Mode
-          </div>
-        </header>
+        <AppHeader
+          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg flex items-center gap-2"><Brain size={20} className="text-accent" />Ask My Knowledge</h1></div>}
+        />
+        <AppHeader.Spacer />
 
         {/* Chat Area */}
         <div ref={scrollRef} className="flex-1 overflow-y-auto p-8 flex flex-col gap-8 custom-scrollbar">

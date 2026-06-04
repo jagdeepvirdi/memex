@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import { apiFetch, fetchCategories } from '../lib/api'
 import type { Category } from '../../../shared/types'
 
@@ -40,6 +41,9 @@ export default function SettingsPage() {
     use_claude: false,
     auto_lock_timeout: '15'
   })
+  const [showVaultReset, setShowVaultReset] = useState(false)
+  const [vaultResetConfirm, setVaultResetConfirm] = useState('')
+  const [vaultResetting, setVaultResetting] = useState(false)
 
   useEffect(() => {
     loadCategories()
@@ -176,6 +180,23 @@ export default function SettingsPage() {
     setTimeout(() => setOllamaStatus('idle'), 4000)
   }
 
+  const handleVaultReset = async () => {
+    if (vaultResetConfirm !== 'RESET') return
+    setVaultResetting(true)
+    try {
+      await apiFetch('/vault/reset', { method: 'POST' })
+      setShowVaultReset(false)
+      setVaultResetConfirm('')
+      setSuccess('Vault reset — all secrets deleted and password cleared.')
+      setTimeout(() => setSuccess(null), 4000)
+    } catch {
+      setError('Failed to reset vault')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setVaultResetting(false)
+    }
+  }
+
   const handleDeleteCategory = async (id: string) => {
     if (!confirm('Delete this category? (Only works if empty and no subcategories)')) return
     try {
@@ -194,15 +215,10 @@ export default function SettingsPage() {
       <Sidebar activeSection="settings" />
 
       <main className="flex-1 flex flex-col relative overflow-y-auto">
-        <header className="h-16 border-b border-white/5 flex items-center gap-6 px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10 shrink-0">
-          <Link to="/" className="text-ink-muted hover:text-ink transition-colors">
-            <ArrowLeft size={20} />
-          </Link>
-          <div className="flex items-center gap-3">
-             <SettingsIcon size={20} className="text-accent" />
-             <h1 className="font-display text-lg text-ink">System Settings</h1>
-          </div>
-        </header>
+        <AppHeader
+          left={<div className="flex items-center gap-6"><Link to="/" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></Link><div className="flex items-center gap-3"><SettingsIcon size={20} className="text-accent" /><h1 className="font-display text-lg text-ink">System Settings</h1></div></div>}
+        />
+        <AppHeader.Spacer />
 
         <div className="p-12 max-w-3xl mx-auto w-full flex flex-col gap-12">
           {/* AI Config */}
@@ -412,20 +428,29 @@ export default function SettingsPage() {
                <h2 className="font-display text-xl text-ink">Vault Security</h2>
             </div>
             <div className="bg-surface/50 border border-white/5 rounded-2xl p-6 space-y-6">
+               {/* Change password — only possible while vault is unlocked */}
                <div className="flex items-center justify-between">
                   <div>
-                     <p className="text-sm text-ink font-medium">Rotate Master Password</p>
-                     <p className="text-xs text-ink-muted mt-0.5">Re-encrypts all vault items with a new key.</p>
+                     <p className="text-sm text-ink font-medium">Change Vault Password</p>
+                     <p className="text-xs text-ink-muted mt-0.5">Re-encrypts all secrets with a new password. Open the Vault to use this.</p>
                   </div>
-                  <button className="text-xs text-red-400 hover:underline font-medium">Reset Password</button>
+                  <Link
+                    to="/vault"
+                    className="text-xs text-accent hover:underline font-medium"
+                  >
+                    Go to Vault →
+                  </Link>
                </div>
-               
+
+               <div className="h-px bg-white/5" />
+
+               {/* Auto-lock */}
                <div className="flex items-center justify-between">
                   <div>
                      <p className="text-sm text-ink font-medium">Auto-lock Timeout</p>
                      <p className="text-xs text-ink-muted mt-0.5">Duration of inactivity before vault locks.</p>
                   </div>
-                  <select 
+                  <select
                     className="bg-bg border border-white/10 rounded-lg px-3 py-1.5 text-xs text-ink outline-none cursor-pointer focus:border-accent/50 transition-colors"
                     value={settings.auto_lock_timeout}
                     onChange={(e) => handleUpdateSettings({ auto_lock_timeout: e.target.value })}
@@ -436,24 +461,94 @@ export default function SettingsPage() {
                      <option value="60">1 Hour</option>
                   </select>
                </div>
-               
+
+               <div className="h-px bg-white/5" />
+
+               {/* Strict local mode */}
                <div className="flex items-center justify-between">
                   <div>
                      <p className="text-sm text-ink font-medium">Strict Local Mode</p>
                      <p className="text-xs text-ink-muted mt-0.5">Disable URL scraping and force local-only execution.</p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      className="sr-only peer" 
+                    <input
+                      type="checkbox"
+                      className="sr-only peer"
                       checked={settings.strict_local_mode === 'true' || settings.strict_local_mode === true}
                       onChange={(e) => handleUpdateSettings({ strict_local_mode: e.target.checked.toString() })}
                     />
                     <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent"></div>
                   </label>
                </div>
+
+               <div className="h-px bg-white/5" />
+
+               {/* Reset vault — nuclear option */}
+               <div className="flex items-center justify-between">
+                  <div>
+                     <p className="text-sm text-ink font-medium text-red-400">Reset Vault</p>
+                     <p className="text-xs text-ink-muted mt-0.5">Permanently deletes all secrets and clears the vault password. Cannot be undone.</p>
+                  </div>
+                  <button
+                    onClick={() => setShowVaultReset(true)}
+                    className="text-xs text-red-400 border border-red-400/30 hover:bg-red-400/10 px-3 py-1.5 rounded-lg font-medium transition-all"
+                  >
+                    Reset Vault
+                  </button>
+               </div>
             </div>
           </section>
+
+          {/* Vault Reset Confirmation Modal */}
+          {showVaultReset && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm">
+              <div className="w-full max-w-md bg-surface border border-white/10 rounded-2xl shadow-2xl p-6 space-y-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-500/10 rounded-full flex items-center justify-center shrink-0">
+                    <ShieldAlert size={20} className="text-red-400" />
+                  </div>
+                  <div>
+                    <h3 className="font-display text-lg text-ink">Reset Vault?</h3>
+                    <p className="text-xs text-ink-muted">This cannot be undone</p>
+                  </div>
+                </div>
+                <p className="text-sm text-ink-muted leading-relaxed">
+                  All encrypted secrets will be permanently deleted and the vault password will be cleared.
+                  You will need to set a new vault password next time you open the vault.
+                </p>
+                <div>
+                  <label className="text-xs text-ink-muted mb-1.5 block">
+                    Type <span className="font-mono text-red-400 font-bold">RESET</span> to confirm
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="RESET"
+                    className="w-full bg-bg border border-white/10 focus:border-red-400/50 rounded-lg py-2.5 px-4 text-ink outline-none transition-all font-mono"
+                    value={vaultResetConfirm}
+                    onChange={e => setVaultResetConfirm(e.target.value.toUpperCase())}
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => { setShowVaultReset(false); setVaultResetConfirm('') }}
+                    disabled={vaultResetting}
+                    className="flex-1 py-2.5 rounded-lg border border-white/10 text-sm text-ink-muted hover:text-ink hover:bg-white/5 transition-all disabled:opacity-40"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleVaultReset}
+                    disabled={vaultResetting || vaultResetConfirm !== 'RESET'}
+                    className="flex-1 py-2.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-sm hover:bg-red-500/30 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
+                  >
+                    {vaultResetting ? <Loader2 size={15} className="animate-spin" /> : null}
+                    Delete Everything
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Status Indicators */}
           {(success || error) && (

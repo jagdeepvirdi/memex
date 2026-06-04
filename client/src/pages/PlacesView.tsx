@@ -3,6 +3,7 @@ import { ArrowLeft, Star, MapPin, ExternalLink, Search, RotateCcw, Download } fr
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import { fetchItems, updateItem } from '../lib/api'
 import { itemsToCsv, downloadCsv } from '../lib/export'
 import type { Item, PlaceData } from '../../../shared/types'
@@ -79,29 +80,11 @@ export default function PlacesView() {
     <div className="min-h-screen bg-bg flex text-ink">
       <Sidebar activeSection="places" />
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10">
-          <div className="flex items-center gap-6">
-            <button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors">
-              <ArrowLeft size={20} />
-            </button>
-            <h1 className="font-display text-lg flex items-center gap-2">
-              <MapPin size={20} className="text-accent" />
-              Places & Travel
-            </h1>
-            {!loading && (
-              <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">
-                {total} entries
-              </span>
-            )}
-          </div>
-          <button 
-            onClick={handleExportCsv}
-            className="text-xs flex items-center gap-2 bg-white/5 text-ink-muted hover:text-ink border border-white/10 px-3 py-1.5 rounded-lg transition-all"
-          >
-            <Download size={14} />
-            Export CSV
-          </button>
-        </header>
+        <AppHeader
+          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg flex items-center gap-2"><MapPin size={20} className="text-accent" />Places & Travel</h1>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} entries</span>}</div>}
+          actions={<button onClick={handleExportCsv} className="text-xs flex items-center gap-2 bg-white/5 text-ink-muted hover:text-ink border border-white/10 px-3 py-1.5 rounded-lg transition-all"><Download size={14} />Export CSV</button>}
+        />
+        <AppHeader.Spacer />
 
         <div className="p-8 flex-1 flex flex-col gap-6 overflow-hidden">
           {/* Filters Bar */}

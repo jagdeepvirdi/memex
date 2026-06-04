@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, Settings, Loader2, Zap, Database, Key, Clock, HelpCircle, X, Sparkles, Calendar, TrendingUp, Lightbulb, Link2, Compass } from 'lucide-react'
+import { Plus, Search, HelpCircle, X, Zap, Database, Key, Clock, Sparkles, Calendar, TrendingUp, Lightbulb, Link2, Compass, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { AppHeader } from '../components/AppHeader'
 import IngestPanel from '../components/ingest/IngestPanel'
 import SearchModal from '../components/search/SearchModal'
 import Sidebar from '../components/sidebar/Sidebar'
@@ -26,7 +27,6 @@ function formatReminder(date: Date): string {
 export default function Dashboard() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  
   const share = searchParams.get('share') === 'true'
   const sharedTitle = searchParams.get('title') || ''
   const sharedText = searchParams.get('text') || ''
@@ -129,33 +129,30 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col relative">
-        {/* Header */}
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10">
-          <div 
-            onClick={() => setShowSearch(true)}
-            className="flex items-center gap-4 bg-surface/80 px-4 py-2 rounded-full border border-white/5 w-96 max-w-full cursor-pointer hover:border-accent/30 transition-all group"
-          >
-            <Search size={18} className="text-ink-muted group-hover:text-accent transition-colors" />
-            <span className="text-ink-muted/50 text-sm flex-1">Search everything...</span>
-            <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/5 rounded border border-white/5 text-[10px] text-ink-muted font-mono">
-               <span className="text-[8px]">⌘</span>K
+        <AppHeader
+          left={
+            <div
+              onClick={() => setShowSearch(true)}
+              className="flex items-center gap-4 bg-surface/80 px-4 py-2 rounded-full border border-white/5 w-96 max-w-full cursor-pointer hover:border-accent/30 transition-all group"
+            >
+              <Search size={18} className="text-ink-muted group-hover:text-accent transition-colors" />
+              <span className="text-ink-muted/50 text-sm flex-1">Search everything...</span>
+              <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/5 rounded border border-white/5 text-[10px] text-ink-muted font-mono">
+                <span className="text-[8px]">⌘</span>K
+              </div>
             </div>
-          </div>
-
-          <div className="flex items-center gap-4 text-ink-muted">
-            <button 
+          }
+          actions={
+            <button
               onClick={() => setShowShortcuts(true)}
-              className="p-2 hover:bg-white/5 rounded-lg transition-colors"
+              className="p-2 hover:bg-white/5 rounded-lg transition-colors text-ink-muted"
               title="Keyboard Shortcuts"
             >
               <HelpCircle size={20} />
             </button>
-            <Settings size={20} className="hover:text-ink cursor-pointer transition-colors" />
-            <div className="w-8 h-8 rounded-full bg-accent/20 border border-accent/30 flex items-center justify-center text-accent font-bold text-xs">
-              M
-            </div>
-          </div>
-        </header>
+          }
+        />
+        <AppHeader.Spacer />
 
         {/* Hero Section */}
         <div className="p-12 max-w-7xl mx-auto w-full flex flex-col gap-12">

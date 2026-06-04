@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeft, Filter, SortAsc } from 'lucide-react'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import ItemCard from '../components/cards/ItemCard'
 import { CardSkeleton } from '../components/Skeleton'
 import { fetchItems, apiFetch } from '../lib/api'
@@ -72,53 +73,11 @@ export default function CategoryPage() {
       <Sidebar activeSection="categories" />
 
       <main className="flex-1 flex flex-col relative">
-        <header className="h-16 border-b border-white/5 flex items-center gap-6 px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10">
-          <Link to="/" className="text-ink-muted hover:text-ink transition-colors">
-            <ArrowLeft size={20} />
-          </Link>
-          <div className="flex flex-col">
-            <h1 className="font-display text-lg text-ink">
-              {category ? category.name : 'Loading...'}
-            </h1>
-            <p className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">
-              {category?.itemCount || 0} items in this category
-            </p>
-          </div>
-          
-          <div className="ml-auto flex items-center gap-6">
-            <div className="flex items-center gap-2">
-              <SortAsc size={14} className="text-ink-muted" />
-              <select 
-                className="bg-surface border border-white/10 rounded-lg px-3 py-1 text-xs text-ink outline-none focus:border-accent/50 cursor-pointer"
-                value={sortBy}
-                onChange={(e) => handleUpdateSort(e.target.value as SortOption)}
-              >
-                <option value="newest">Newest</option>
-                <option value="oldest">Oldest</option>
-                <option value="alpha">Alphabetical</option>
-                <option value="type">By Type</option>
-              </select>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Filter size={14} className="text-ink-muted" />
-              <select 
-                className="bg-surface border border-white/10 rounded-lg px-3 py-1 text-xs text-ink outline-none focus:border-accent/50 cursor-pointer"
-                value={typeFilter || ''}
-                onChange={(e) => handleUpdateFilter(e.target.value || null)}
-              >
-                <option value="">All Types</option>
-                <option value="note">Notes</option>
-                <option value="recipe">Recipes</option>
-                <option value="media">Media</option>
-                <option value="link">Links</option>
-                <option value="book">Books</option>
-                <option value="stock">Stocks</option>
-                <option value="spec">Specs</option>
-              </select>
-            </div>
-          </div>
-        </header>
+        <AppHeader
+          left={<div className="flex items-center gap-6"><Link to="/" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></Link><div className="flex flex-col"><h1 className="font-display text-lg text-ink">{category ? category.name : 'Loading...'}</h1><p className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">{category?.itemCount || 0} items in this category</p></div></div>}
+          actions={<div className="flex items-center gap-6"><div className="flex items-center gap-2"><SortAsc size={14} className="text-ink-muted" /><select className="bg-surface border border-white/10 rounded-lg px-3 py-1 text-xs text-ink outline-none focus:border-accent/50 cursor-pointer" value={sortBy} onChange={(e) => handleUpdateSort(e.target.value as SortOption)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="alpha">Alphabetical</option><option value="type">By Type</option></select></div><div className="flex items-center gap-2"><Filter size={14} className="text-ink-muted" /><select className="bg-surface border border-white/10 rounded-lg px-3 py-1 text-xs text-ink outline-none focus:border-accent/50 cursor-pointer" value={typeFilter || ''} onChange={(e) => handleUpdateFilter(e.target.value || null)}><option value="">All Types</option><option value="note">Notes</option><option value="recipe">Recipes</option><option value="media">Media</option><option value="link">Links</option><option value="book">Books</option><option value="stock">Stocks</option><option value="spec">Specs</option></select></div></div>}
+        />
+        <AppHeader.Spacer />
 
         <div className="p-12 max-w-7xl mx-auto w-full flex-1 flex flex-col">
           {loading ? (

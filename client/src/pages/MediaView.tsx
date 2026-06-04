@@ -3,6 +3,7 @@ import { ArrowLeft, Star, Book, ExternalLink, Search, RotateCcw, Clapperboard, D
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import { fetchItems, updateItem } from '../lib/api'
 import { itemsToCsv, downloadCsv } from '../lib/export'
 import type { Item } from '../../../shared/types'
@@ -78,43 +79,11 @@ export default function MediaView() {
     <div className="min-h-screen bg-bg flex text-ink">
       <Sidebar activeSection="media" />
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10">
-          <div className="flex items-center gap-6">
-            <button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors">
-              <ArrowLeft size={20} />
-            </button>
-            <h1 className="font-display text-lg flex items-center gap-2">
-              {mode === 'book' ? <Book size={20} className="text-accent" /> : <Clapperboard size={20} className="text-accent" />}
-              {mode === 'book' ? 'Library (Books)' : 'Media & Movies'}
-            </h1>
-            <div className="flex bg-white/5 p-1 rounded-lg">
-               <button 
-                 onClick={() => { const p = new URLSearchParams(searchParams); p.set('mode', 'media'); setSearchParams(p) }}
-                 className={`px-3 py-1 text-[10px] rounded-md transition-all ${mode === 'media' ? 'bg-accent text-bg font-bold' : 'text-ink-muted hover:text-ink'}`}
-               >
-                 Movies
-               </button>
-               <button 
-                 onClick={() => { const p = new URLSearchParams(searchParams); p.set('mode', 'book'); setSearchParams(p) }}
-                 className={`px-3 py-1 text-[10px] rounded-md transition-all ${mode === 'book' ? 'bg-accent text-bg font-bold' : 'text-ink-muted hover:text-ink'}`}
-               >
-                 Books
-               </button>
-            </div>
-            {!loading && (
-              <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">
-                {total} items
-              </span>
-            )}
-          </div>
-          <button 
-            onClick={handleExportCsv}
-            className="text-xs flex items-center gap-2 bg-white/5 text-ink-muted hover:text-ink border border-white/10 px-3 py-1.5 rounded-lg transition-all"
-          >
-            <Download size={14} />
-            Export CSV
-          </button>
-        </header>
+        <AppHeader
+          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg flex items-center gap-2">{mode === 'book' ? <Book size={20} className="text-accent" /> : <Clapperboard size={20} className="text-accent" />}{mode === 'book' ? 'Library (Books)' : 'Media & Movies'}</h1><div className="flex bg-white/5 p-1 rounded-lg"><button onClick={() => { const p = new URLSearchParams(searchParams); p.set('mode', 'media'); setSearchParams(p) }} className={`px-3 py-1 text-[10px] rounded-md transition-all ${mode === 'media' ? 'bg-accent text-bg font-bold' : 'text-ink-muted hover:text-ink'}`}>Movies</button><button onClick={() => { const p = new URLSearchParams(searchParams); p.set('mode', 'book'); setSearchParams(p) }} className={`px-3 py-1 text-[10px] rounded-md transition-all ${mode === 'book' ? 'bg-accent text-bg font-bold' : 'text-ink-muted hover:text-ink'}`}>Books</button></div>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} items</span>}</div>}
+          actions={<button onClick={handleExportCsv} className="text-xs flex items-center gap-2 bg-white/5 text-ink-muted hover:text-ink border border-white/10 px-3 py-1.5 rounded-lg transition-all"><Download size={14} />Export CSV</button>}
+        />
+        <AppHeader.Spacer />
 
         <div className="p-8 flex-1 flex flex-col gap-6 overflow-hidden">
           {/* Filters Bar */}

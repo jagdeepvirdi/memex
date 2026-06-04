@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ArrowLeft, Loader2, Trash2, RotateCcw, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import ItemCard from '../components/cards/ItemCard'
 import { fetchItems, apiFetch } from '../lib/api'
 import type { Item } from '../../../shared/types'
@@ -46,15 +47,10 @@ export default function TrashPage() {
       <Sidebar activeSection="trash" />
 
       <main className="flex-1 flex flex-col relative overflow-y-auto">
-        <header className="h-16 border-b border-white/5 flex items-center gap-6 px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10 shrink-0">
-          <Link to="/" className="text-ink-muted hover:text-ink transition-colors">
-            <ArrowLeft size={20} />
-          </Link>
-          <div className="flex flex-col">
-            <h1 className="font-display text-lg text-ink">Trash Bin</h1>
-            <p className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">Deleted items can be restored here</p>
-          </div>
-        </header>
+        <AppHeader
+          left={<div className="flex items-center gap-6"><Link to="/" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></Link><div className="flex flex-col"><h1 className="font-display text-lg text-ink">Trash Bin</h1><p className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">Deleted items can be restored here</p></div></div>}
+        />
+        <AppHeader.Spacer />
 
         <div className="p-12 max-w-7xl mx-auto w-full flex-1">
           {loading ? (

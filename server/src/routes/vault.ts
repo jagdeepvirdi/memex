@@ -7,6 +7,56 @@ import logger from '../lib/logger.js'
 const router = Router();
 
 /**
+ * GET /api/vault/status
+ * Returns whether the vault has been set up, plus salt and verifier for unlock.
+ */
+router.get('/status', async (_req, res) => {
+  try {
+    const { rows } = await pool.query<{
+      salt: string; verifier: string | null; verifier_iv: string | null
+    }>('SELECT salt, verifier, verifier_iv FROM vault_config WHERE id = 1');
+
+    if (rows.length === 0) {
+      return res.json({ hasSetup: false });
+    }
+    res.json({
+      hasSetup: true,
+      salt: rows[0].salt,
+      verifier: rows[0].verifier ?? null,
+      verifierIv: rows[0].verifier_iv ?? null,
+    });
+  } catch (error) {
+    logger.error(error, 'Vault status error');
+    res.status(500).json({ error: 'Failed to fetch vault status' });
+  }
+});
+
+/**
+ * POST /api/vault/setup
+ * Stores the encrypted verifier after the user sets their vault password for the first time.
+ * The salt must already exist (created by GET /vault/salt).
+ */
+router.post('/setup', async (req, res) => {
+  try {
+    const { verifier, verifierIv } = req.body;
+    if (!verifier || !verifierIv) {
+      return res.status(400).json({ error: 'verifier and verifierIv are required' });
+    }
+    const result = await pool.query(
+      'UPDATE vault_config SET verifier = $1, verifier_iv = $2 WHERE id = 1',
+      [verifier, verifierIv],
+    );
+    if (result.rowCount === 0) {
+      return res.status(400).json({ error: 'Vault not initialised — call GET /vault/salt first' });
+    }
+    res.json({ success: true });
+  } catch (error) {
+    logger.error(error, 'Vault setup error');
+    res.status(500).json({ error: 'Failed to set up vault' });
+  }
+});
+
+/**
  * GET /api/vault/salt
  * Returns the salt for key derivation. Generates one if it doesn't exist.
  */
@@ -114,6 +164,69 @@ router.post('/migrate/:itemId', async (req, res) => {
     await client.query('ROLLBACK');
     logger.error(error, 'Vault migration error')
     res.status(500).json({ error: 'Failed to migrate item to vault' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * PUT /api/vault/rekey
+ * Re-encrypts all vault items with a new key (password change).
+ * The client decrypts every item locally, re-encrypts with the new key,
+ * then submits the new salt + verifier + all re-encrypted items in one transaction.
+ */
+router.put('/rekey', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { salt, verifier, verifierIv, items } = req.body as {
+      salt: string;
+      verifier: string;
+      verifierIv: string;
+      items: Array<{ id: string; ciphertext: string; iv: string }>;
+    };
+    if (!salt || !verifier || !verifierIv || !Array.isArray(items)) {
+      return res.status(400).json({ error: 'salt, verifier, verifierIv and items[] are required' });
+    }
+
+    await client.query('BEGIN');
+    await client.query(
+      'UPDATE vault_config SET salt = $1, verifier = $2, verifier_iv = $3 WHERE id = 1',
+      [salt, verifier, verifierIv],
+    );
+    for (const item of items) {
+      await client.query(
+        'UPDATE vault_items SET ciphertext = $1, iv = $2 WHERE id = $3',
+        [item.ciphertext, item.iv, item.id],
+      );
+    }
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error(error, 'Vault rekey error');
+    res.status(500).json({ error: 'Failed to change vault password' });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * POST /api/vault/reset
+ * Deletes all vault items and clears the vault config (salt + verifier).
+ * This is a destructive, unrecoverable operation — used from Settings.
+ */
+router.post('/reset', async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query('DELETE FROM vault_items');
+    await client.query('DELETE FROM vault_config WHERE id = 1');
+    await client.query('COMMIT');
+    res.json({ success: true });
+  } catch (error) {
+    await client.query('ROLLBACK');
+    logger.error(error, 'Vault reset error');
+    res.status(500).json({ error: 'Failed to reset vault' });
   } finally {
     client.release();
   }

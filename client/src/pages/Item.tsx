@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield, Plus, History, ChevronDown, ChevronUp, Check, Bot, Bell, BellOff, Share2, Copy, Link as LinkIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import ItemCard from '../components/cards/ItemCard'
 import Editor from '../components/Editor'
 import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, setReminder, shareItem, unshareItem } from '../lib/api'
@@ -270,67 +271,11 @@ export default function ItemPage() {
       <Sidebar activeSection="dashboard" />
 
       <main className="flex-1 flex flex-col relative overflow-y-auto">
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10 shrink-0">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => navigate(-1)}
-              className="text-ink-muted hover:text-ink transition-colors"
-            >
-              <ArrowLeft size={20} />
-            </button>
-            <div className="w-1 h-1 bg-white/20 rounded-full" />
-            <span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">
-              {item.type}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {!isEditing ? (
-              <>
-                <button
-                  onClick={handleMoveToVault}
-                  disabled={migrating}
-                  className="p-2 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all"
-                  title="Move to Secure Vault"
-                >
-                  {migrating ? <Loader2 size={18} className="animate-spin" /> : <Shield size={18} />}
-                </button>
-                <button
-                  onClick={startEditing}
-                  className="p-2 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all"
-                  title="Edit Item"
-                >
-                  <Edit2 size={18} />
-                </button>
-                <button 
-                  onClick={handleDelete}
-                  className="p-2 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
-                  title="Delete Item"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={() => { setIsEditing(false); setEditedTitle(item.title); setEditedContent(item.content); setEditedCategories(item.categories.join(' > ')); setEditedTags(item.tags); }}
-                  className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all"
-                  title="Cancel"
-                >
-                  <X size={18} />
-                </button>
-                <button 
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="bg-accent text-bg px-4 py-1.5 rounded-lg font-bold flex items-center gap-2 text-sm shadow-lg shadow-accent/20"
-                >
-                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                  Save
-                </button>
-              </>
-            )}
-          </div>
-        </header>
+        <AppHeader
+          left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="w-1 h-1 bg-white/20 rounded-full" /><span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">{item.type}</span></div>}
+          actions={<div className="flex items-center gap-3">{!isEditing ? (<><button onClick={handleMoveToVault} disabled={migrating} className="p-2 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all" title="Move to Secure Vault">{migrating ? <Loader2 size={18} className="animate-spin" /> : <Shield size={18} />}</button><button onClick={startEditing} className="p-2 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all" title="Edit Item"><Edit2 size={18} /></button><button onClick={handleDelete} className="p-2 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all" title="Delete Item"><Trash2 size={18} /></button></>) : (<><button onClick={() => { setIsEditing(false); setEditedTitle(item.title); setEditedContent(item.content); setEditedCategories(item.categories.join(' > ')); setEditedTags(item.tags); }} className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all" title="Cancel"><X size={18} /></button><button onClick={handleSave} disabled={saving} className="bg-accent text-bg px-4 py-1.5 rounded-lg font-bold flex items-center gap-2 text-sm shadow-lg shadow-accent/20">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Save</button></>)}</div>}
+        />
+        <AppHeader.Spacer />
 
         <div className="p-12 max-w-4xl mx-auto w-full flex flex-col gap-12">
           {/* Title Area */}

@@ -9,28 +9,31 @@ interface Props {
 export default function StockCard({ item, onClick }: Props) {
   const s = item.structured as Partial<StockData>
 
-  const notes = item.content.trim().replace(/\s+/g, ' ').slice(0, 100)
+  // Ollama may occasionally return ticker as a number — normalise to string
+  const ticker = s.ticker != null ? String(s.ticker).toUpperCase() : null
+  const exchange = s.exchange != null ? String(s.exchange) : null
+  const notes = (item.content ?? '').trim().replace(/\s+/g, ' ').slice(0, 100)
 
   return (
     <CardBase onClick={onClick}>
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
         <TypeBadge type="stock" />
-        {s.exchange && <Muted>{s.exchange}</Muted>}
+        {exchange && <Muted>{exchange}</Muted>}
       </div>
 
       {/* Ticker — large mono */}
-      {s.ticker && (
+      {ticker && (
         <span
           className="font-mono font-semibold tracking-wide"
           style={{ fontSize: '22px', color: '#F59E0B', letterSpacing: '0.04em' }}
         >
-          {s.ticker.toUpperCase()}
+          {ticker}
         </span>
       )}
 
       {/* Title (company name if different from ticker) */}
-      {item.title !== s.ticker && (
+      {item.title !== ticker && (
         <CardTitle>{item.title}</CardTitle>
       )}
 
@@ -38,7 +41,7 @@ export default function StockCard({ item, onClick }: Props) {
       {notes && (
         <Muted>
           {notes}
-          {item.content.trim().length > 100 ? '…' : ''}
+          {(item.content ?? '').trim().length > 100 ? '…' : ''}
         </Muted>
       )}
 

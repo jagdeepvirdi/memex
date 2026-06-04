@@ -3,6 +3,7 @@ import { ArrowLeft, Loader2, Zap, Trash2, Square, CheckSquare, LayoutGrid, List,
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import ItemCard from '../components/cards/ItemCard'
 import { CardSkeleton } from '../components/Skeleton'
 import { fetchItems, deleteItemsBulk, deleteItem } from '../lib/api'
@@ -28,6 +29,7 @@ export default function EnrichedItemsPage() {
   const [items, setItems] = useState<Item[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [fetchError, setFetchError] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -41,6 +43,7 @@ export default function EnrichedItemsPage() {
 
   useEffect(() => {
     setLoading(true)
+    setFetchError(null)
     fetchItems({
       enriched: true,
       type: typeFilter === 'all' ? undefined : typeFilter,
@@ -48,7 +51,12 @@ export default function EnrichedItemsPage() {
       offset
     })
       .then(res => { setItems(res.items); setTotal(res.total) })
-      .catch(console.error)
+      .catch(err => {
+        console.error(err)
+        setFetchError('Failed to load items. Please try again.')
+        setItems([])
+        setTotal(0)
+      })
       .finally(() => setLoading(false))
   }, [typeFilter, offset, viewMode])
 
@@ -127,55 +135,26 @@ export default function EnrichedItemsPage() {
     <div className="min-h-screen bg-bg flex">
       <Sidebar activeSection="dashboard" />
       <main className="flex-1 flex flex-col min-w-0">
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10">
-          <div className="flex items-center gap-6">
-            <button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors">
-              <ArrowLeft size={20} />
-            </button>
-            <div className="flex items-center gap-3">
-              <Zap size={20} className="text-yellow-400" />
-              <h1 className="font-display text-lg text-ink">AI Enriched Notes</h1>
-            </div>
-            {!loading && (
-              <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">
-                {total} enriched
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {selectedIds.size > 0 && (
-              <button
-                onClick={handleBulkDelete}
-                disabled={deleting}
-                className="flex items-center gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-all text-xs font-bold disabled:opacity-50"
-              >
-                {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                Delete Selected ({selectedIds.size})
-              </button>
-            )}
-
-            {/* View mode toggle */}
-            <div className="flex bg-white/5 border border-white/10 p-0.5 rounded-lg">
-              <button
-                onClick={() => switchView('card')}
-                className={`p-1.5 rounded-md transition-all ${viewMode === 'card' ? 'bg-accent text-bg' : 'text-ink-muted hover:text-ink'}`}
-                title="Card view"
-              >
-                <LayoutGrid size={15} />
-              </button>
-              <button
-                onClick={() => switchView('table')}
-                className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-accent text-bg' : 'text-ink-muted hover:text-ink'}`}
-                title="Table view"
-              >
-                <List size={15} />
-              </button>
-            </div>
-          </div>
-        </header>
+        <AppHeader
+          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-3"><Zap size={20} className="text-yellow-400" /><h1 className="font-display text-lg text-ink">AI Enriched Notes</h1></div>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} enriched</span>}</div>}
+          actions={<div className="flex items-center gap-3">{selectedIds.size > 0 && <button onClick={handleBulkDelete} disabled={deleting} className="flex items-center gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-all text-xs font-bold disabled:opacity-50">{deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}Delete Selected ({selectedIds.size})</button>}<div className="flex bg-white/5 border border-white/10 p-0.5 rounded-lg"><button onClick={() => switchView('card')} className={`p-1.5 rounded-md transition-all ${viewMode === 'card' ? 'bg-accent text-bg' : 'text-ink-muted hover:text-ink'}`} title="Card view"><LayoutGrid size={15} /></button><button onClick={() => switchView('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-accent text-bg' : 'text-ink-muted hover:text-ink'}`} title="Table view"><List size={15} /></button></div></div>}
+        />
+        <AppHeader.Spacer />
 
         <div className={`p-8 w-full flex flex-col gap-6 ${viewMode === 'card' ? 'max-w-7xl mx-auto' : ''}`}>
+          {/* Error banner */}
+          {fetchError && (
+            <div className="flex items-center gap-3 bg-red-500/10 border border-red-500/20 text-red-400 text-sm px-4 py-3 rounded-xl">
+              <span>{fetchError}</span>
+              <button
+                onClick={() => window.location.reload()}
+                className="ml-auto text-xs underline hover:no-underline"
+              >
+                Reload
+              </button>
+            </div>
+          )}
+
           {/* Type filter pills */}
           <div className="flex flex-wrap gap-2">
             {TYPE_FILTERS.map(f => (

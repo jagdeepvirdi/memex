@@ -5,12 +5,13 @@ import {
   FolderSync,
   CheckCircle2,
   AlertTriangle,
-  ChevronRight,
   Loader2,
   ArrowRight,
   Sparkles,
+  ArrowLeft,
 } from 'lucide-react'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import { fetchCategoryAnomalies, remapCategory } from '../lib/api'
 import type { CategoryAnomaly } from '../../../shared/types'
 
@@ -253,38 +254,16 @@ export default function CategoryReviewPage() {
       <Sidebar activeSection="category-review" />
 
       <main className="flex-1 overflow-y-auto p-8">
+        <AppHeader
+          left={<div className="flex items-center gap-3"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><FolderSync size={18} className="text-ink-muted" /><h1 className="font-display text-lg text-ink">Category Review</h1></div>}
+          actions={!loading && pendingCount > 1 && !allDone ? <button onClick={handleRemapAll} disabled={remapAllBusy} className="shrink-0 flex items-center gap-2 text-sm bg-accent text-bg px-4 py-2 rounded-lg font-semibold hover:bg-accent/80 disabled:opacity-40 transition-all">{remapAllBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}Remap All ({pendingCount})</button> : undefined}
+        />
+        <AppHeader.Spacer />
         <div className="max-w-2xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <div className="flex items-center gap-2 text-ink-muted text-sm mb-3">
-              <button onClick={() => navigate('/settings')} className="hover:text-ink transition-colors">
-                Settings
-              </button>
-              <ChevronRight size={14} />
-              <span className="text-ink">Category Review</span>
-            </div>
-            <div className="flex items-start justify-between">
-              <div>
-                <h1 className="font-display text-3xl text-ink mb-2 flex items-center gap-3">
-                  <FolderSync size={28} className="text-accent" />
-                  Category Review
-                </h1>
-                <p className="text-ink-muted text-sm">
-                  Root categories not in the canonical tree. Remap their items so they appear in the correct views.
-                </p>
-              </div>
-              {!loading && pendingCount > 1 && !allDone && (
-                <button
-                  onClick={handleRemapAll}
-                  disabled={remapAllBusy}
-                  className="shrink-0 flex items-center gap-2 text-sm bg-accent text-bg px-4 py-2 rounded-lg font-semibold hover:bg-accent/80 disabled:opacity-40 transition-all"
-                >
-                  {remapAllBusy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
-                  Remap All ({pendingCount})
-                </button>
-              )}
-            </div>
-          </div>
+          {/* Subtitle */}
+          <p className="text-ink-muted text-sm mb-8">
+            Root categories not in the canonical tree. Remap their items so they appear in the correct views.
+          </p>
 
           {/* Loading */}
           {loading && (

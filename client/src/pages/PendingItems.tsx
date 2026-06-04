@@ -3,6 +3,7 @@ import { ArrowLeft, Loader2, Zap, Trash2, Square, CheckSquare } from 'lucide-rea
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
+import { AppHeader } from '../components/AppHeader'
 import ItemCard from '../components/cards/ItemCard'
 import { CardSkeleton } from '../components/Skeleton'
 import { fetchItems, deleteItemsBulk } from '../lib/api'
@@ -73,35 +74,11 @@ export default function PendingItemsPage() {
     <div className="min-h-screen bg-bg flex">
       <Sidebar activeSection="dashboard" />
       <main className="flex-1 flex flex-col">
-        <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-bg/80 backdrop-blur-md sticky top-0 z-10">
-          <div className="flex items-center gap-6">
-            <button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors">
-              <ArrowLeft size={20} />
-            </button>
-            <div className="flex items-center gap-3">
-              <Zap size={20} className="text-yellow-400" />
-              <h1 className="font-display text-lg text-ink">Pending AI Enrichment</h1>
-            </div>
-            {!loading && (
-              <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">
-                {total} notes waiting
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3">
-            {selectedIds.size > 0 && (
-              <button
-                onClick={handleBulkDelete}
-                disabled={deleting}
-                className="flex items-center gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-all text-xs font-bold disabled:opacity-50"
-              >
-                {deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                Delete Selected ({selectedIds.size})
-              </button>
-            )}
-          </div>
-        </header>
+        <AppHeader
+          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-3"><Zap size={20} className="text-yellow-400" /><h1 className="font-display text-lg text-ink">Pending AI Enrichment</h1></div>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} notes waiting</span>}</div>}
+          actions={selectedIds.size > 0 ? <button onClick={handleBulkDelete} disabled={deleting} className="flex items-center gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-all text-xs font-bold disabled:opacity-50">{deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}Delete Selected ({selectedIds.size})</button> : undefined}
+        />
+        <AppHeader.Spacer />
 
         <div className="p-8 max-w-7xl mx-auto w-full flex flex-col gap-6">
           {items.length > 0 && (

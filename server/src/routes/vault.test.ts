@@ -27,7 +27,14 @@ const VAULT_ITEM = {
   updatedAt: new Date().toISOString(),
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  // Default client for paths that call pool.connect() before early-return validation
+  vi.mocked(pool.connect).mockResolvedValue({
+    query: vi.fn().mockResolvedValue({}),
+    release: vi.fn(),
+  } as any)
+})
 
 // ── Auth guard ────────────────────────────────────────────────────────────────
 
@@ -169,5 +176,220 @@ describe('DELETE /api/vault/:id', () => {
       .set('Authorization', AUTH)
 
     expect(res.status).toBe(404)
+  })
+})
+
+// ── GET /api/vault/status ─────────────────────────────────────────────────────
+
+describe('GET /api/vault/status', () => {
+  it('returns hasSetup:false when no vault_config row exists', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)
+
+    const res = await request(app).get('/api/vault/status').set('Authorization', AUTH)
+    expect(res.status).toBe(200)
+    expect(res.body.hasSetup).toBe(false)
+  })
+
+  it('returns salt + verifier when vault is fully set up', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [{ salt: 'abc==', verifier: 'enc123', verifier_iv: 'iv456' }],
+    } as any)
+
+    const res = await request(app).get('/api/vault/status').set('Authorization', AUTH)
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ hasSetup: true, salt: 'abc==', verifier: 'enc123', verifierIv: 'iv456' })
+  })
+
+  it('returns null verifier when salt exists but verifier not yet set', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [{ salt: 'abc==', verifier: null, verifier_iv: null }],
+    } as any)
+
+    const res = await request(app).get('/api/vault/status').set('Authorization', AUTH)
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ hasSetup: true, verifier: null, verifierIv: null })
+  })
+})
+
+// ── POST /api/vault/setup ─────────────────────────────────────────────────────
+
+describe('POST /api/vault/setup', () => {
+  it('returns 400 when verifier fields are missing', async () => {
+    const res = await request(app)
+      .post('/api/vault/setup')
+      .set('Authorization', AUTH)
+      .send({ verifier: 'enc123' }) // missing verifierIv
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/verifierIv/i)
+  })
+
+  it('returns 400 when no vault_config row exists to update', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rowCount: 0 } as any)
+
+    const res = await request(app)
+      .post('/api/vault/setup')
+      .set('Authorization', AUTH)
+      .send({ verifier: 'enc123', verifierIv: 'iv456' })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('stores verifier and returns success', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rowCount: 1 } as any)
+
+    const res = await request(app)
+      .post('/api/vault/setup')
+      .set('Authorization', AUTH)
+      .send({ verifier: 'enc123', verifierIv: 'iv456' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+  })
+})
+
+// ── PUT /api/vault/rekey ──────────────────────────────────────────────────────
+
+function mockClient(overrides: Record<string, any> = {}) {
+  const client = {
+    query: vi.fn().mockResolvedValue({ rows: [], rowCount: 1 }),
+    release: vi.fn(),
+    ...overrides,
+  }
+  vi.mocked(pool.connect).mockResolvedValueOnce(client as any)
+  return client
+}
+
+describe('PUT /api/vault/rekey', () => {
+  it('returns 400 when required fields are missing', async () => {
+    const res = await request(app)
+      .put('/api/vault/rekey')
+      .set('Authorization', AUTH)
+      .send({ salt: 'newsalt==' }) // missing verifier, verifierIv, items
+
+    expect(res.status).toBe(400)
+  })
+
+  it('commits transaction and returns success', async () => {
+    const client = mockClient()
+
+    const res = await request(app)
+      .put('/api/vault/rekey')
+      .set('Authorization', AUTH)
+      .send({
+        salt: 'newsalt==',
+        verifier: 'newenc',
+        verifierIv: 'newiv',
+        items: [{ id: 'v-1', ciphertext: 'newcipher', iv: 'newiv2' }],
+      })
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    // BEGIN + UPDATE vault_config + UPDATE vault_items (×1) + COMMIT
+    expect(client.query).toHaveBeenCalledWith('BEGIN')
+    expect(client.query).toHaveBeenCalledWith('COMMIT')
+    expect(client.release).toHaveBeenCalled()
+  })
+
+  it('rolls back and returns 500 on DB error', async () => {
+    const client = mockClient({
+      query: vi.fn()
+        .mockResolvedValueOnce({})  // BEGIN
+        .mockRejectedValueOnce(new Error('db error')),
+    })
+
+    const res = await request(app)
+      .put('/api/vault/rekey')
+      .set('Authorization', AUTH)
+      .send({ salt: 's', verifier: 'v', verifierIv: 'iv', items: [] })
+
+    expect(res.status).toBe(500)
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK')
+    expect(client.release).toHaveBeenCalled()
+  })
+})
+
+// ── POST /api/vault/reset ─────────────────────────────────────────────────────
+
+describe('POST /api/vault/reset', () => {
+  it('commits transaction and returns success', async () => {
+    const client = mockClient()
+
+    const res = await request(app)
+      .post('/api/vault/reset')
+      .set('Authorization', AUTH)
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(client.query).toHaveBeenCalledWith('BEGIN')
+    expect(client.query).toHaveBeenCalledWith('COMMIT')
+    expect(client.release).toHaveBeenCalled()
+  })
+
+  it('rolls back and returns 500 on DB error', async () => {
+    const client = mockClient({
+      query: vi.fn()
+        .mockResolvedValueOnce({})  // BEGIN
+        .mockRejectedValueOnce(new Error('db error')),
+    })
+
+    const res = await request(app)
+      .post('/api/vault/reset')
+      .set('Authorization', AUTH)
+
+    expect(res.status).toBe(500)
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK')
+    expect(client.release).toHaveBeenCalled()
+  })
+})
+
+// ── POST /api/vault/migrate/:itemId ──────────────────────────────────────────
+
+describe('POST /api/vault/migrate/:itemId', () => {
+  it('returns 400 when required fields are missing', async () => {
+    const res = await request(app)
+      .post('/api/vault/migrate/item-1')
+      .set('Authorization', AUTH)
+      .send({ service: 'GitHub' }) // missing ciphertext and iv
+
+    expect(res.status).toBe(400)
+  })
+
+  it('returns 404 when the source item does not exist', async () => {
+    const client = mockClient({
+      query: vi.fn()
+        .mockResolvedValueOnce({})                    // BEGIN
+        .mockResolvedValueOnce({ rows: [] } as any),  // SELECT item — not found
+    })
+
+    const res = await request(app)
+      .post('/api/vault/migrate/ghost')
+      .set('Authorization', AUTH)
+      .send({ service: 'GitHub', ciphertext: 'enc', iv: 'iv' })
+
+    expect(res.status).toBe(404)
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK')
+    expect(client.release).toHaveBeenCalled()
+  })
+
+  it('inserts vault item and hard-deletes source item on success', async () => {
+    const client = mockClient({
+      query: vi.fn()
+        .mockResolvedValueOnce({})                                        // BEGIN
+        .mockResolvedValueOnce({ rows: [{ id: 'item-1' }] } as any)      // SELECT item
+        .mockResolvedValueOnce({ rows: [{ id: 'v-new' }] } as any)       // INSERT vault_items
+        .mockResolvedValueOnce({})                                        // DELETE items
+        .mockResolvedValueOnce({}),                                       // COMMIT
+    })
+
+    const res = await request(app)
+      .post('/api/vault/migrate/item-1')
+      .set('Authorization', AUTH)
+      .send({ service: 'GitHub', url: 'https://github.com', username: 'u', ciphertext: 'enc', iv: 'iv' })
+
+    expect(res.status).toBe(201)
+    expect(res.body.id).toBe('v-new')
+    expect(client.query).toHaveBeenCalledWith('COMMIT')
+    expect(client.release).toHaveBeenCalled()
   })
 })

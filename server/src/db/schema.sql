@@ -1,4 +1,4 @@
--- Memex — canonical schema reference (reflects all 14 migrations)
+-- Memex — canonical schema reference (reflects all 15 migrations)
 -- This file is documentation only. The live DB is built by running migrations in order:
 --   npm run migrate
 -- Do not run this file directly against the DB.
@@ -171,8 +171,10 @@ CREATE TABLE IF NOT EXISTS vault_items (
 );
 
 CREATE TABLE IF NOT EXISTS vault_config (
-  id    INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
-  salt  TEXT NOT NULL  -- PBKDF2 salt, base64, not secret
+  id           INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+  salt         TEXT NOT NULL,  -- PBKDF2 salt, base64, not secret
+  verifier     TEXT,           -- AES-256-GCM encrypted sentinel (migration 015)
+  verifier_iv  TEXT            -- IV for the verifier ciphertext
 );
 
 -- ── Ingest job tracking (migration 014) ──────────────────────────────────────

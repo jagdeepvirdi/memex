@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Home,
   Folder,
@@ -7,23 +7,16 @@ import {
   ChevronRight,
   ChevronDown,
   Settings as SettingsIcon,
-  LogOut,
-  Brain,
   Trash2,
-  Sparkles,
-  Check,
   Table,
   MapPin,
   Clapperboard,
   MessageSquare,
-  Wifi,
-  WifiOff,
   Newspaper,
   FolderSync,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchCategories, fetchTags, apiFetch } from '../../lib/api';
-import { useAuthStore } from '../../store/authStore';
+import { fetchCategories, fetchTags } from '../../lib/api';
 import type { Category, Tag } from '../../../../shared/types';
 
 interface SidebarProps {
@@ -34,106 +27,27 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
-  const [aiStatus, setAiStatus] = useState<'ok' | 'error' | 'loading'>('loading');
-  const [enrichment, setEnrichment] = useState<{ pending: number; total: number } | null>(null);
-  const [eta, setEta] = useState<string | null>(null);
-  const [rate, setRate] = useState<string | null>(null);
-  const [isOnline, setIsOnline] = useState(typeof navigator !== 'undefined' ? navigator.onLine : true);
-
-  const startTimeRef = useRef<number | null>(null);
-  const startPendingRef = useRef<number | null>(null);
 
   const navigate = useNavigate();
-  const { logout, user } = useAuthStore();
+
+  const refreshCategoriesAndTags = () => {
+    fetchCategories().then(setCategories).catch(console.error);
+    fetchTags().then(setTags).catch(console.error);
+  };
 
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+    refreshCategoriesAndTags();
 
-    Promise.all([fetchCategories(), fetchTags()])
-      .then(([cats, tgs]) => {
-        setCategories(cats);
-        setTags(tgs);
-      })
-      .catch(console.error);
-
-    const checkStatus = () => {
-      apiFetch<{ status: string }>('/health/ollama')
-        .then(res => setAiStatus(res.status as 'ok' | 'error'))
-        .catch(() => setAiStatus('error'));
-    };
-
-    checkStatus();
-    const interval = setInterval(checkStatus, 30000);
-
-    // Poll DB-backed enrichment count every 5s; refresh categories when items get classified
-    let prevPending = -1;
-    const checkEnrichment = async () => {
-      try {
-        const data = await apiFetch<{ pending: number; total: number }>('/items/enrichment');
-        if (data.total > 0) {
-          setEnrichment(data);
-
-          // Track progress for ETA
-          if (data.pending > 0) {
-            if (startTimeRef.current === null) {
-              startTimeRef.current = Date.now();
-              startPendingRef.current = data.pending;
-            } else {
-              const elapsedSec = (Date.now() - startTimeRef.current) / 1000;
-              const completedSinceStart = startPendingRef.current! - data.pending;
-              
-              if (completedSinceStart > 0 && elapsedSec > 0) {
-                const itemsPerSec = completedSinceStart / elapsedSec;
-                const itemsPerMin = itemsPerSec * 60;
-                const remainingSec = data.pending / itemsPerSec;
-
-                setRate(`${itemsPerMin.toFixed(1)} notes/min`);
-                setEta(formatDuration(remainingSec));
-              }
-            }
-          } else {
-            // Completed
-            startTimeRef.current = null;
-            startPendingRef.current = null;
-            setEta(null);
-            setRate(null);
-          }
-
-          // Refresh categories whenever the pending count drops (new items got classified)
-          if (prevPending > 0 && data.pending < prevPending) {
-            fetchCategories().then(setCategories).catch(console.error);
-            fetchTags().then(setTags).catch(console.error);
-          }
-          prevPending = data.pending;
-        } else {
-          setEnrichment(null);
-        }
-      } catch {
-        // ignore — non-critical
-      }
-    };
-    checkEnrichment();
-    const enrichInterval = setInterval(checkEnrichment, 5000);
-
+    // Re-fetch when the AI enrichment hook signals new items were classified
+    window.addEventListener('memex:categories-changed', refreshCategoriesAndTags);
     return () => {
-      clearInterval(interval);
-      clearInterval(enrichInterval);
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('memex:categories-changed', refreshCategoriesAndTags);
     };
   }, []);
 
   const toggleCat = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     setExpandedCats(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
   };
 
   return (
@@ -254,89 +168,6 @@ export default function Sidebar({ activeSection }: SidebarProps) {
         </div>
       </div>
 
-      {/* User & AI Status Footer */}
-      <div className="p-4 mt-auto border-t border-white/5 bg-surface/80 flex flex-col gap-4">
-         {/* User Info */}
-         <div className="flex items-center justify-between px-2">
-            <div className="flex flex-col min-w-0">
-               <span className="text-[10px] text-ink font-medium truncate">{user?.email}</span>
-               <button onClick={handleLogout} className="text-[9px] text-ink-muted hover:text-red-400 flex items-center gap-1 mt-0.5 transition-colors uppercase tracking-tighter">
-                  <LogOut size={10} /> Logout
-               </button>
-            </div>
-         </div>
-
-         {enrichment && enrichment.total > 0 && (
-           <div className={`p-3 rounded-xl border transition-all ${
-             enrichment.pending === 0 ? 'bg-green-500/10 border-green-500/20' : 'bg-accent/5 border-accent/20'
-           }`}>
-             <div className="flex items-center justify-between mb-2">
-               <p className="text-[9px] text-ink-muted uppercase tracking-widest font-bold">AI Enrichment</p>
-               {enrichment.pending === 0
-                 ? <Check size={10} className="text-green-400" />
-                 : <Sparkles size={10} className="text-accent animate-pulse" />}
-             </div>
-             <div className="flex items-center justify-between mb-1.5">
-               <span className="text-[10px] text-ink font-mono">
-                 {enrichment.pending === 0
-                   ? `${enrichment.total} classified`
-                   : `${enrichment.total - enrichment.pending} / ${enrichment.total}`}
-               </span>
-               {enrichment.pending > 0 && (
-                 <span className="text-[10px] text-ink-muted">{enrichment.pending} left</span>
-               )}
-             </div>
-             <div className="h-1 bg-white/10 rounded-full overflow-hidden mb-2">
-               <div
-                 className={`h-full rounded-full transition-all duration-500 ${enrichment.pending === 0 ? 'bg-green-400' : 'bg-accent'}`}
-                 style={{ width: `${Math.round(((enrichment.total - enrichment.pending) / enrichment.total) * 100)}%` }}
-               />
-             </div>
-             {enrichment.pending > 0 && (eta || rate) && (
-               <div className="flex items-center justify-between mt-1">
-                 <span className="text-[8px] text-ink-muted uppercase font-bold tracking-tighter">
-                   {rate && `~${rate}`}
-                 </span>
-                 <span className="text-[8px] text-accent font-bold uppercase tracking-tighter">
-                   {eta && `ETA: ${eta}`}
-                 </span>
-               </div>
-             )}
-           </div>
-         )}
-
-         <div className="p-3 bg-white/5 rounded-xl border border-white/5 group hover:border-white/10 transition-all">
-            <div className="flex items-center justify-between mb-2">
-               <p className="text-[9px] text-ink-muted uppercase tracking-widest font-bold">Local Intelligence</p>
-               <Brain size={10} className={aiStatus === 'ok' ? 'text-accent' : 'text-ink-muted'} />
-            </div>
-            <div className="flex items-center justify-between mb-1.5">
-               <div className="flex items-center gap-2">
-                  <div className={`w-1.5 h-1.5 rounded-full ${
-                    aiStatus === 'ok' ? 'bg-green-500 animate-pulse' :
-                    aiStatus === 'error' ? 'bg-red-500' : 'bg-yellow-500'
-                  }`} />
-                  <span className="text-[10px] text-ink font-mono">Ollama</span>
-               </div>
-               <span className={`text-[10px] font-bold ${
-                 aiStatus === 'ok' ? 'text-accent' : 'text-ink-muted'
-               }`}>
-                 {aiStatus === 'ok' ? 'READY' : aiStatus === 'error' ? 'OFFLINE' : 'WAIT'}
-               </span>
-            </div>
-            <div className="flex items-center justify-between">
-               <div className="flex items-center gap-2">
-                  {isOnline
-                    ? <Wifi size={10} className="text-green-400" />
-                    : <WifiOff size={10} className="text-orange-400" />}
-                  <span className="text-[10px] text-ink font-mono">Network</span>
-               </div>
-               <span className={`text-[10px] font-bold ${isOnline ? 'text-green-400' : 'text-orange-400'}`}>
-                 {isOnline ? 'ONLINE' : 'OFFLINE'}
-               </span>
-            </div>
-         </div>
-      </div>
     </aside>
   );
 }
@@ -415,11 +246,3 @@ function CategoryItem({ cat, level, expanded, onToggle, onSelect }: {
   );
 }
 
-function formatDuration(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)}s`;
-  const mins = Math.floor(seconds / 60);
-  if (mins < 60) return `${mins}m`;
-  const hours = Math.floor(mins / 60);
-  const remainingMins = mins % 60;
-  return `${hours}h ${remainingMins}m`;
-}
