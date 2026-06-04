@@ -285,6 +285,8 @@ Directors, authors, cast members, cities, and stock exchanges are automatically 
 - AES-256-GCM encryption, key derived client-side via PBKDF2 (100k iterations, SHA-256)
 - Master password never sent to the server — key exists only in memory
 - Key cleared on lock or after 15-minute inactivity
+- **Verifier-based unlock** — an encrypted sentinel is stored on first setup; wrong password is rejected immediately instead of silently loading garbage
+- **Change vault password** — re-encrypts every secret client-side with a new key + salt in one atomic operation; vault stays unlocked afterwards
 - **Move to Vault**: encrypt any plain-text note directly from the Item page or Table View
 
 ---
@@ -304,7 +306,7 @@ Bulk Keep imports: notes save instantly; background queue classifies at 3 concur
 ## Running Tests
 
 ```bash
-# Server (207 tests)
+# Server (221 tests)
 cd server && npm test
 
 # Client (57 tests)

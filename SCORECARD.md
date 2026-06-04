@@ -50,6 +50,22 @@ Acted on the High-priority items the same day:
 Still open: client test coverage, share-token expiry, structured logger, Ollama timeouts,
 CI pipeline. See **TASKS.md** for the live, prioritized list.
 
+### Update — 2026-05-31 (all review action items resolved)
+
+All high/medium/low action items from the 2026-05-30 review are now complete:
+
+- **Test Coverage: ~7.0 → ~8.0.** Client tests added (api.ts, export.ts, vaultStore, ReminderPoller). Server total: 221. Client total: 57. **278 total.**
+- **Security: ~8.0 → 8.5.** Share tokens now have optional expiry (`share_expires_at`). Vault verifier (migration 015) added — wrong vault password rejected client-side immediately via AES-256-GCM sentinel check; no more silent wrong-key decryption.
+- **Code Quality:** Structured pino logger fully adopted; in-memory ingest job store replaced with DB-backed `ingest_jobs` table; all 99 `console.*` calls removed.
+- **CI:** GitHub Actions pipeline (`ci.yml`) — tsc + test + coverage on every push/PR. Coverage thresholds enforced.
+- **Schema drift guard:** `schema.test.ts` catches migration count drift and missing tables automatically.
+
+### Update — 2026-06-04 (vault hardening + shared AppHeader)
+
+- **Vault password change:** `VaultChangePassword` modal re-encrypts all secrets client-side with a new key + fresh salt and submits via `PUT /api/vault/rekey` in a single DB transaction.
+- **AppHeader component:** Single shared fixed top bar (`AppHeader.tsx`) adopted by all 14 authenticated pages. Shows live Ollama status, network indicator, enrichment progress + ETA, settings shortcut, and profile dropdown. Enrichment polling extracted into `useAiStatus` hook.
+- **Test count: 278** (221 server + 57 client). All passing.
+
 ### Action items
 
 The prioritized, checkable action items from this review live in **TASKS.md** under

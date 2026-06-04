@@ -101,7 +101,7 @@ memex/
 │   ├── routes/
 │   │   ├── ingest.ts          # URL + text + file ingestion; /keep bulk import
 │   │   ├── items.ts           # CRUD, /review-all, /rediscover, /enrichment stats
-│   │   ├── vault.ts           # Encrypted password CRUD + /migrate/:id endpoint
+│   │   ├── vault.ts           # Encrypted password CRUD + /migrate/:id + /status + /setup + /rekey + /reset
 │   │   ├── search.ts          # Semantic search + /ask RAG endpoint
 │   │   └── settings.ts        # GET/PUT /api/settings (key-value store)
 │   ├── services/
@@ -302,6 +302,9 @@ Key-value table with JSONB values. Default rows:
 - Salt stored in DB (not secret), ciphertext + IV stored in DB
 - Key exists only in memory, cleared on lock / 15-min inactivity
 - No AI involved in vault — pure crypto
+- **Verifier**: AES-256-GCM encrypted sentinel (`memex-vault-v1`) stored in `vault_config` (migration 015); decrypted on unlock to verify password — wrong password rejected immediately instead of silently loading garbage
+- **Password change**: `VaultChangePassword` modal re-derives key from new password + fresh random salt, decrypts every item with old key, re-encrypts with new key, submits atomically via `PUT /api/vault/rekey`
+- New endpoints: `GET /vault/status`, `POST /vault/setup`, `PUT /vault/rekey`, `POST /vault/reset`
 - `POST /api/vault/migrate/:id` — encrypts an existing plain-text item and hard-deletes the original (Move to Vault flow)
 
 ## Google Keep Import

@@ -56,7 +56,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 - Multi-entity detection: if `multiEntity=true`, ingest route splits into N separate items
 - Fuzzy category mapping: AI output is normalised to the canonical tree before DB write
 
-## Database Migrations (14 total)
+## Database Migrations (15 total)
 
 | # | File | Summary |
 |---|---|---|
@@ -74,6 +74,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 | 012 | `012_sharing.sql` | `public_token TEXT UNIQUE` on items |
 | 013 | `013_share_expiry.sql` | `share_expires_at TIMESTAMPTZ` on items |
 | 014 | `014_ingest_jobs.sql` | `ingest_jobs` table (DB-backed job store) |
+| 015 | `015_vault_verifier.sql` | `verifier`, `verifier_iv` columns on `vault_config` |
 
 ## Server Routes
 
@@ -129,7 +130,11 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 | POST | `/api/vault` | Create vault item |
 | PUT | `/api/vault/:id` | Update vault item |
 | DELETE | `/api/vault/:id` | Delete vault item |
+| GET | `/api/vault/status` | Vault setup status + salt + verifier |
 | GET | `/api/vault/salt` | PBKDF2 salt for key derivation |
+| POST | `/api/vault/setup` | Store verifier after first-time password setup |
+| PUT | `/api/vault/rekey` | Atomic password change — new salt + verifier + re-encrypted items |
+| POST | `/api/vault/reset` | Destructive wipe of all vault data |
 | POST | `/api/vault/migrate/:itemId` | Encrypt plain-text item → vault (hard-deletes original) |
 | GET | `/api/tags` | All tags with item counts |
 | GET | `/api/health` | Server health |
@@ -149,7 +154,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 | `/categories/review` | `CategoryReview.tsx` | Rogue category remapping UI |
 | `/category/:id` | `Category.tsx` | Paginated item grid |
 | `/item/:id` | `Item.tsx` | Edit, delete, move to vault, extraction history |
-| `/vault` | `Vault.tsx` | AES-256 encrypted password vault |
+| `/vault` | `Vault.tsx` | AES-256 encrypted vault; change-password modal |
 | `/settings` | `Settings.tsx` | Model, Claude toggle, bookmarklet, Obsidian export |
 | `/share/:token` | `PublicItem.tsx` | Public read-only page (no auth) |
 | `/welcome` | `Welcome.tsx` | Onboarding persona flow |
@@ -180,9 +185,18 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 | `server/src/services/recipeParser.ts` | Structured recipe extraction |
 | `server/src/lib/logger.ts` | pino logger — silent in test, pretty in dev, JSON in prod |
 
+## Key Client Components
+
+| File | Purpose |
+|---|---|
+| `client/src/components/AppHeader.tsx` | Shared fixed top bar — AI status, enrichment progress, settings, profile dropdown |
+| `client/src/hooks/useAiStatus.ts` | Polls Ollama health (30s) + enrichment progress (5s); dispatches `memex:categories-changed` |
+| `client/src/components/vault/VaultChangePassword.tsx` | Re-encryption modal — decrypts all items, re-encrypts with new key, calls `/vault/rekey` |
+| `client/src/components/vault/VaultLocked.tsx` | Setup + unlock screen; verifies password against stored sentinel before unlocking |
+
 ## Testing
 
-- **264 tests** — 207 server + 57 client, all passing.
+- **278 tests** — 221 server + 57 client, all passing.
 - Server: `cd server && npm test`
 - Client: `cd client && npm test`
 - Coverage: `npm run coverage` in either package (threshold gates enforced).

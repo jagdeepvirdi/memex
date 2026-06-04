@@ -143,6 +143,36 @@ markitdown --help
 
 ---
 
+## ✅ Vault Hardening & Shared AppHeader — 2026-06-04 (DONE)
+
+- [x] **Shared `AppHeader` component** ✅
+  - Fixed top bar with Ollama AI status pill, network indicator, enrichment progress + ETA,
+    Settings link, and profile dropdown with logout.
+  - Adopted across all 14 authenticated pages — replaces per-page inline headers.
+  - `AppHeader.Spacer` sub-component prevents content sliding under the fixed bar.
+
+- [x] **`useAiStatus` hook** ✅
+  - Extracted Ollama health polling (30s) and enrichment progress polling (5s) from Sidebar
+    into a reusable hook. Returns `{ aiStatus, enrichment, eta, rate, isOnline }`.
+  - Dispatches `memex:categories-changed` event when enrichment advances so Sidebar
+    category counts refresh automatically.
+
+- [x] **Vault verifier (migration 015)** ✅
+  - `verifier` + `verifier_iv` columns added to `vault_config`.
+  - First-time setup encrypts sentinel `memex-vault-v1` via `POST /api/vault/setup`.
+  - Unlock decrypts sentinel client-side to verify password; wrong password rejected
+    immediately — eliminates silent wrong-key decryption.
+
+- [x] **Vault password change** ✅
+  - `VaultChangePassword` modal re-encrypts every vault item with a new key + fresh salt,
+    submits to `PUT /api/vault/rekey` in a single DB transaction with progress bar.
+  - New endpoints: `GET /vault/status`, `POST /vault/setup`, `PUT /vault/rekey`, `POST /vault/reset`.
+
+- [x] **Vault test coverage** ✅
+  - 15 new tests covering all new endpoints. **Total: 278 tests (221 server + 57 client).**
+
+---
+
 ## 🐛 Known Bugs / Planned Improvements
 
 - [x] **Category staging area — review AI-suggested categories before DB commit** ✅
