@@ -6,7 +6,7 @@ import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
 import ItemCard from '../components/cards/ItemCard'
 import Editor from '../components/Editor'
-import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, setReminder, shareItem, unshareItem } from '../lib/api'
+import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, setReminder, shareItem, unshareItem, updateItem } from '../lib/api'
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
 import type { Item, ItemExtraction } from '../../../shared/types'
@@ -33,6 +33,10 @@ export default function ItemPage() {
   const [settingReminder, setSettingReminder] = useState(false)
   const [sharing, setSharing] = useState(false)
   const [copiedShare, setCopiedShare] = useState(false)
+  const [editingCategory, setEditingCategory] = useState(false)
+  const [categoryValue, setCategoryValue] = useState('')
+  const [savingCategory, setSavingCategory] = useState(false)
+  const categoryInputRef = useRef<HTMLInputElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
   const { vaultKey, isLocked } = useVaultStore()
 
@@ -215,6 +219,30 @@ export default function ItemPage() {
     }
   }
 
+  const openCategoryEdit = () => {
+    if (!item) return
+    setCategoryValue(item.categories.join(' > '))
+    setEditingCategory(true)
+    setTimeout(() => categoryInputRef.current?.focus(), 50)
+  }
+
+  const handleSaveCategory = async () => {
+    if (!item) return
+    const categories = categoryValue.split(/[>\/,]/).map(s => s.trim()).filter(Boolean)
+    if (categories.length === 0) { setEditingCategory(false); return }
+    setSavingCategory(true)
+    try {
+      const updated = await updateItem(item.id, { categories })
+      setItem(updated)
+      setEditingCategory(false)
+      toast.success('Category updated')
+    } catch {
+      toast.error('Failed to update category')
+    } finally {
+      setSavingCategory(false)
+    }
+  }
+
   const handleCopyShare = () => {
     if (!item?.publicToken) return
     navigator.clipboard.writeText(shareUrl(item.publicToken))
@@ -308,12 +336,36 @@ export default function ItemPage() {
                     placeholder="Food > Savory > Indian  (or type a new path)"
                   />
                 </div>
-              ) : item.categories.length > 0 ? (
-                <div className="flex items-center gap-2 text-ink-muted bg-white/5 px-3 py-1.5 rounded-lg border border-white/5">
-                  <Folder size={14} className="text-accent" />
-                  {item.categories.join(' › ')}
+              ) : editingCategory ? (
+                <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-lg border border-accent/30 flex-1 min-w-[260px]">
+                  <Folder size={14} className="text-accent shrink-0" />
+                  <input
+                    ref={categoryInputRef}
+                    value={categoryValue}
+                    onChange={e => setCategoryValue(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleSaveCategory(); if (e.key === 'Escape') setEditingCategory(false) }}
+                    className="bg-transparent outline-none text-ink text-xs w-full"
+                    placeholder="Personal > Notes"
+                  />
+                  {savingCategory
+                    ? <Loader2 size={13} className="animate-spin text-accent shrink-0" />
+                    : <>
+                        <button onClick={handleSaveCategory} className="text-green-400 hover:text-green-300 transition-colors shrink-0"><Check size={13} /></button>
+                        <button onClick={() => setEditingCategory(false)} className="text-ink-muted hover:text-ink transition-colors shrink-0"><X size={13} /></button>
+                      </>
+                  }
                 </div>
-              ) : null}
+              ) : (
+                <button
+                  onClick={openCategoryEdit}
+                  className="flex items-center gap-2 text-ink-muted bg-white/5 px-3 py-1.5 rounded-lg border border-white/5 hover:border-accent/30 hover:text-ink transition-all group"
+                  title="Click to change category"
+                >
+                  <Folder size={14} className="text-accent" />
+                  {item.categories.length > 0 ? item.categories.join(' › ') : <span className="italic opacity-50">No category</span>}
+                  <Edit2 size={11} className="opacity-0 group-hover:opacity-50 transition-opacity ml-0.5" />
+                </button>
+              )}
 
               {item.sourceUrl && (
                 <a
