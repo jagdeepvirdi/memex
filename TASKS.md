@@ -384,7 +384,40 @@ markitdown --help
 
 ---
 
-## 🐞 Known Weaknesses (from full code review) — ALL RESOLVED ✅
+## 🐞 Known Weaknesses (from 2026-06-05 brutal review) — Open
+
+- [ ] **`nl-filter` SQL field interpolation** (`server/src/routes/items.ts:874`)
+  - `i.structured->>'${field}'` interpolates the field name directly into the query string.
+  - Safe in practice: `SAFE_FIELDS` whitelist in `nlFilterService.ts` blocks anything outside a known set before this code is reached. But it violates parameterized-query discipline and would fail a standard security audit.
+  - Fix: use `jsonb_each(i.structured)` with a parameterized key comparison, or assert the SAFE_FIELDS check explicitly at the route level before building the WHERE clause.
+
+- [ ] **Ollama down = silent failure for bulk operations**
+  - `POST /api/items/reprocess-bulk` returns `{ queued: N }` immediately, then processes in the background with no way to report back if Ollama goes offline mid-batch. Users see "queued 2000" and then nothing.
+  - Fix: track success/failure counts in the `ingest_jobs` table (already exists); add a `GET /api/items/reprocess-status` endpoint; or surface an error toast via a DB-polled job record so the UI can report partial failures.
+
+- [ ] **Long route handlers — no service layer**
+  - `GET /api/items` list query (110 lines), `POST /api/items/enrich` (75 lines), `POST /api/items/reprocess-bulk` (71 lines) all live directly in the route file and share duplicated SELECT + category/tag subquery patterns.
+  - Fix: extract into an `itemService.ts` (or similar) with a shared `buildItemQuery()` helper. Reduces copy-paste risk when adding new columns (as happened with the `nl-filter` / `reminders/due` SELECT bug).
+
+- [ ] **Vault reset has no confirmation guard** (`server/src/routes/vault.ts`)
+  - `POST /api/vault/reset` is a destructive, unrecoverable operation but only checks the client-sent string `"RESET"`. No second factor, no vault password re-entry, no TOTP.
+  - Fix: require the user's vault master password (re-derived, verified against the verifier sentinel) before executing the reset.
+
+- [ ] **Remaining `any` types** (12 instances)
+  - `server/src/routes/ingest.ts`: `classifyAndUpdateBatch(...notes: any[])`
+  - `server/src/services/classifier.ts:31`: `entities?: any[]`
+  - `server/src/services/entityService.ts`: `structured: any`
+  - `client/src/pages/SemanticGraph.tsx`: multiple `any` in force-graph callbacks
+  - `client/src/lib/export.ts`: `itemsToCsv(items: any[])`
+  - Fix: replace each with the appropriate `Item`, `StructuredData`, or specific interface.
+
+- [ ] **No rate limiting on ingest endpoints**
+  - `/api/ingest/url`, `/api/ingest/text`, `/api/ingest/voice`, `/api/ingest/file` have no throttle. A misconfigured bookmarklet or script could hammer Ollama with thousands of concurrent classification requests.
+  - Fix: apply `express-rate-limit` (e.g. 30 requests / minute / IP) on the ingest router, separate from the auth rate limit.
+
+---
+
+## 🐞 Known Weaknesses (from earlier code review) — ALL RESOLVED ✅
 
 - [x] **`crypto.ts` base64 encoding is unsafe on large payloads** ✅
   - Replaced `btoa(String.fromCharCode(...))` with loop-based `toBase64`/`fromBase64` helpers.
