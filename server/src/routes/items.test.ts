@@ -12,6 +12,7 @@ vi.mock('../services/classifier', () => ({
   classify: vi.fn().mockResolvedValue({
     type: 'note', title: 'AI Title', categories: ['Personal'],
     tags: ['test'], summary: 'A summary', structured: {},
+    intent: 'reference', model: 'llama3.2', confidence: 80,
   }),
   mapToCategories: vi.fn().mockReturnValue([]),
 }))
@@ -213,6 +214,26 @@ describe('PUT /api/items/:id', () => {
   })
 })
 
+// ── GET /api/items — maxConfidence filter ────────────────────────────────────
+
+describe('GET /api/items with maxConfidence filter', () => {
+  it('returns 200 and filters by maxConfidence', async () => {
+    mockClient([{ rows: [{ total: '1' }] }, { rows: [ITEM_ROW] }])
+    const res = await request(app)
+      .get('/api/items?maxConfidence=70')
+      .set('Authorization', AUTH)
+    expect(res.status).toBe(200)
+    expect(res.body.items).toHaveLength(1)
+  })
+
+  it('rejects non-numeric maxConfidence', async () => {
+    const res = await request(app)
+      .get('/api/items?maxConfidence=abc')
+      .set('Authorization', AUTH)
+    expect(res.status).toBe(400)
+  })
+})
+
 // ── DELETE /api/items/:id ─────────────────────────────────────────────────────
 
 describe('DELETE /api/items/:id', () => {
@@ -235,5 +256,86 @@ describe('DELETE /api/items/:id', () => {
       .set('Authorization', AUTH)
 
     expect(res.status).toBe(404)
+  })
+})
+
+// ── POST /api/items/reprocess-bulk ───────────────────────────────────────────
+
+describe('POST /api/items/reprocess-bulk', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).post('/api/items/reprocess-bulk')
+    expect(res.status).toBe(401)
+  })
+
+  it('returns queued: 0 when no items match', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)
+    const res = await request(app)
+      .post('/api/items/reprocess-bulk')
+      .set('Authorization', AUTH)
+      .send({})
+    expect(res.status).toBe(200)
+    expect(res.body.queued).toBe(0)
+  })
+
+  it('returns queued count immediately for matched items', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [
+        { id: 'item-1', title: 'Note 1', content: 'Content 1' },
+        { id: 'item-2', title: 'Note 2', content: 'Content 2' },
+      ],
+    } as any)
+    const client = {
+      query: vi.fn()
+        .mockResolvedValueOnce({ rows: [{ reviewed: false }] })
+        .mockResolvedValue({ rows: [] }),
+      release: vi.fn(),
+    }
+    vi.mocked(pool.connect).mockResolvedValue(client as any)
+
+    const res = await request(app)
+      .post('/api/items/reprocess-bulk')
+      .set('Authorization', AUTH)
+      .send({})
+    expect(res.status).toBe(200)
+    expect(res.body.queued).toBe(2)
+  })
+})
+
+// ── POST /api/items/:id/re-classify ──────────────────────────────────────────
+
+describe('POST /api/items/:id/re-classify', () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).post('/api/items/item-1/re-classify')
+    expect(res.status).toBe(401)
+  })
+
+  it('returns 404 when item does not exist', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)
+    const res = await request(app)
+      .post('/api/items/ghost/re-classify')
+      .set('Authorization', AUTH)
+    expect(res.status).toBe(404)
+  })
+
+  it('returns 201 with new extraction (applied=false)', async () => {
+    const EXTRACTION_ROW = {
+      id: 'ext-1', item_id: 'item-1', model: 'llama3.2',
+      type: 'note', title: 'AI Title', summary: 'A summary',
+      structured: {}, categories: [], tags: [],
+      confidence: 80, applied: false, intent: 'reference',
+      created_at: new Date().toISOString(),
+    }
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [{ title: 'Test', content: 'Content' }] } as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'ext-1' }] } as any)
+      .mockResolvedValueOnce({ rows: [EXTRACTION_ROW] } as any)
+
+    const res = await request(app)
+      .post('/api/items/item-1/re-classify')
+      .set('Authorization', AUTH)
+    expect(res.status).toBe(201)
+    expect(res.body.id).toBe('ext-1')
+    expect(res.body.applied).toBe(false)
+    expect(res.body.intent).toBe('reference')
   })
 })

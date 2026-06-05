@@ -887,7 +887,8 @@ router.post('/nl-filter', async (req, res) => {
       `SELECT
          i.id, i.title, i.type, i.content, i.structured,
          i.source, i.source_url, i.encrypted, i.reviewed,
-         i.created_at, i.updated_at, i.confidence, i.remind_at,
+         i.created_at, i.updated_at, i.deleted_at, i.confidence,
+         i.intent, i.remind_at, i.public_token, i.share_expires_at,
          COALESCE(
            (SELECT array_agg(c.name ORDER BY ic2.depth)
             FROM item_categories ic2
@@ -924,7 +925,8 @@ router.get('/reminders/due', async (_req, res) => {
       SELECT
         i.id, i.title, i.type, i.content, i.structured,
         i.source, i.source_url, i.encrypted, i.reviewed,
-        i.created_at, i.updated_at, i.confidence, i.remind_at,
+        i.created_at, i.updated_at, i.deleted_at, i.confidence,
+        i.intent, i.remind_at, i.public_token, i.share_expires_at,
         COALESCE(
           (SELECT array_agg(c.name ORDER BY ic2.depth)
            FROM item_categories ic2

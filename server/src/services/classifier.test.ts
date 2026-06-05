@@ -159,6 +159,34 @@ describe('classify', () => {
     const result = await classify('A movie about nothing')
     expect(result.categories).toEqual(['Media', 'Movies']) // Falls back to Media > Movies because type=media
   })
+
+  it('returns intent field when present in AI response', async () => {
+    const withIntent = JSON.stringify({
+      type: 'note', title: 'Buy groceries',
+      categories: [], tags: ['todo'], summary: 'A shopping list.',
+      intent: 'actionable', structured: {},
+    })
+    mockAI(withIntent)
+    const result = await classify('Buy milk, eggs, and bread')
+    expect(result.intent).toBe('actionable')
+  })
+
+  it('defaults intent to reference when missing from AI response', async () => {
+    mockAI(NOTE_JSON) // NOTE_JSON has no intent field
+    const result = await classify('Just a random thought')
+    expect(result.intent).toBe('reference')
+  })
+
+  it('returns idea intent for brainstorm content', async () => {
+    const ideaJson = JSON.stringify({
+      type: 'note', title: 'App idea',
+      categories: [], tags: ['ideas'], summary: 'A new app concept.',
+      intent: 'idea', structured: {},
+    })
+    mockAI(ideaJson)
+    const result = await classify('What if we built an app that...')
+    expect(result.intent).toBe('idea')
+  })
 })
 
 // ── mapToCategories() ─────────────────────────────────────────────────────────

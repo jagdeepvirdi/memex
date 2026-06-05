@@ -17,7 +17,7 @@ const classificationSchema = z.object({
   multiEntity: z.boolean().optional(),
   entities: z.array(z.record(z.unknown())).optional(),
   confidence: z.number().min(0).max(100).catch(80),
-  intent: z.enum(['actionable', 'reference', 'idea']).optional().catch('reference'),
+  intent: z.enum(['actionable', 'reference', 'idea']).default('reference').catch('reference'),
 })
 
 export type ClassificationResult = {
