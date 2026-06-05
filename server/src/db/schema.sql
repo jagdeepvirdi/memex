@@ -1,4 +1,4 @@
--- Memex — canonical schema reference (reflects all 15 migrations)
+-- Memex — canonical schema reference (reflects all 16 migrations)
 -- This file is documentation only. The live DB is built by running migrations in order:
 --   npm run migrate
 -- Do not run this file directly against the DB.
