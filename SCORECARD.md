@@ -71,7 +71,7 @@ All high/medium/low action items from the 2026-05-30 review are now complete:
 - **Intent classifier:** `actionable | reference | idea` field added to `classifier.ts` prompt, `item_extractions`, `items` table (migration 016), shared types, and UI badges on Item detail + CategoryReview staged cards.
 - **Data provenance UI:** Re-classify button on Item page (single-item, always writes to history, never auto-applies). Bulk "Re-process with Current Model" row in Settings (applies to unreviewed, history-only for reviewed). Two new routes: `POST /api/items/:id/re-classify` and `POST /api/items/reprocess-bulk`.
 - **Category staging area:** `CategoryReview` rewritten as a two-tab page — "Staged Items" queue (confidence threshold selector, per-card Accept/Reassign, Accept All) + existing anomaly remap tab. `maxConfidence` filter added to `GET /api/items`.
-- **Test count: 278** unchanged (no new tests needed — new routes follow existing patterns covered by route guard and service unit tests).
+- **Test count: 289** (232 server + 57 client). Added 11 tests for `reprocess-bulk`, `re-classify`, `maxConfidence` filter, and intent field in classifier output.
 
 ### Action items
 

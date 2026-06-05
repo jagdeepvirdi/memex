@@ -200,7 +200,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 
 ## Testing
 
-- **278 tests** — 221 server + 57 client, all passing.
+- **289 tests** — 232 server + 57 client, all passing.
 - Server: `cd server && npm test`
 - Client: `cd client && npm test`
 - Coverage: `npm run coverage` in either package (threshold gates enforced).

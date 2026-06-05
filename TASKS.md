@@ -411,6 +411,10 @@ markitdown --help
   - `client/src/lib/export.ts`: `itemsToCsv(items: any[])`
   - Fix: replace each with the appropriate `Item`, `StructuredData`, or specific interface.
 
+- [ ] **`POST /api/vault/reset` has no test coverage**
+  - Destructive, unrecoverable operation (wipes all vault items + config) with zero test coverage.
+  - Fix: add tests to `vault.test.ts` — happy path (200 + DB wiped), auth guard (401), and confirm the `RESET` body is required (400 without it).
+
 - [ ] **No rate limiting on ingest endpoints**
   - `/api/ingest/url`, `/api/ingest/text`, `/api/ingest/voice`, `/api/ingest/file` have no throttle. A misconfigured bookmarklet or script could hammer Ollama with thousands of concurrent classification requests.
   - Fix: apply `express-rate-limit` (e.g. 30 requests / minute / IP) on the ingest router, separate from the auth rate limit.
