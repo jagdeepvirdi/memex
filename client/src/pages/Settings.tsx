@@ -21,7 +21,7 @@ import {
 import { Link } from 'react-router-dom'
 import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
-import { apiFetch, fetchCategories } from '../lib/api'
+import { apiFetch, fetchCategories, reprocessBulk } from '../lib/api'
 import type { Category } from '../../../shared/types'
 
 export default function SettingsPage() {
@@ -35,6 +35,7 @@ export default function SettingsPage() {
   const [ollamaStatus, setOllamaStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
   const [enrichStatus, setEnrichStatus] = useState<{ pending: number; total: number } | null>(null)
   const [enriching, setEnriching] = useState(false)
+  const [reprocessing, setReprocessing] = useState(false)
   const [markitdownInstalled, setMarkitdownInstalled] = useState<boolean | null>(null)
   const [settings, setSettings] = useState<Record<string, any>>({
     ai_model: 'llama3.2',
@@ -166,6 +167,24 @@ export default function SettingsPage() {
       setTimeout(() => setSuccess(null), 2000)
     } catch (err) {
       setError('Failed to rename')
+    }
+  }
+
+  const handleReprocess = async () => {
+    setReprocessing(true)
+    try {
+      const data = await reprocessBulk('unreviewed')
+      if (data.queued === 0) {
+        setSuccess('No unreviewed items to re-process.')
+      } else {
+        setSuccess(`Re-processing ${data.queued} items with the current model. New extractions will appear in extraction history.`)
+      }
+      setTimeout(() => setSuccess(null), 6000)
+    } catch {
+      setError('Failed to start re-processing')
+      setTimeout(() => setError(null), 3000)
+    } finally {
+      setReprocessing(false)
     }
   }
 
@@ -302,6 +321,23 @@ export default function SettingsPage() {
                    )}
                  </div>
                )}
+
+               <div className="flex items-center justify-between py-3 border-t border-white/5">
+                 <div>
+                   <p className="text-sm text-ink font-medium">Re-process with Current Model</p>
+                   <p className="text-xs text-ink-muted mt-0.5">
+                     Re-run AI classification on all unreviewed enriched items using the active model. New extractions are added to history — nothing is overwritten for reviewed items.
+                   </p>
+                 </div>
+                 <button
+                   onClick={handleReprocess}
+                   disabled={reprocessing}
+                   className="flex items-center gap-2 text-xs bg-white/5 hover:bg-white/10 text-ink border border-white/10 px-4 py-2 rounded-lg font-medium transition-all disabled:opacity-50 shrink-0 ml-6"
+                 >
+                   {reprocessing ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />}
+                   {reprocessing ? 'Queued…' : 'Re-process'}
+                 </button>
+               </div>
 
                <div className="pt-4 border-t border-white/5 flex items-center gap-4">
                   <button

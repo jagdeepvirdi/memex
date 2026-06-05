@@ -17,6 +17,7 @@ const classificationSchema = z.object({
   multiEntity: z.boolean().optional(),
   entities: z.array(z.record(z.unknown())).optional(),
   confidence: z.number().min(0).max(100).catch(80),
+  intent: z.enum(['actionable', 'reference', 'idea']).optional().catch('reference'),
 })
 
 export type ClassificationResult = {
@@ -29,6 +30,7 @@ export type ClassificationResult = {
   multiEntity?: boolean
   entities?: any[]
   confidence: number
+  intent?: 'actionable' | 'reference' | 'idea'
   model?: string  // which AI model produced this result
 }
 
@@ -56,10 +58,11 @@ If the note lists MULTIPLE distinct entities (e.g. 5 movies, 3 restaurants, or a
   "structured": {},
   "multiEntity": false,
   "entities": [],
-  "confidence": 0-100
+  "confidence": 0-100,
+  "intent": "actionable|reference|idea"
 }
 
-Category Rule: 
+Category Rule:
 You MUST pick the most specific <leaf> from this list for the last element of "categories":
 ${CANONICAL_LEAVES.join(', ')}
 
@@ -73,12 +76,18 @@ Type rules:
 - link: saved URL, video, social post
 - note: everything else
 
+Intent rules:
+- actionable: todo, task, want-to-do/buy/visit/watch, plan, recommendation requiring follow-up
+- reference: factual info, how-to guide, specs, article saved for later lookup
+- idea: brainstorm, fleeting thought, creative concept, hypothesis, shower thought
+
 Provide a "confidence" score (0-100) indicating how certain you are of this extraction.
 Return ONLY JSON. No explanation.`
 
 const STRICT_SYSTEM_PROMPT = `Return ONLY a valid JSON object. Nothing else. No explanation. No markdown.
-Shape: {"type":"note","title":"","categories":[],"tags":[],"summary":"","structured":{},"multiEntity":false,"entities":[],"confidence":90}
-Valid types: note, recipe, media, spec, stock, link, book, place`
+Shape: {"type":"note","title":"","categories":[],"tags":[],"summary":"","structured":{},"multiEntity":false,"entities":[],"confidence":90,"intent":"reference"}
+Valid types: note, recipe, media, spec, stock, link, book, place
+Valid intents: actionable, reference, idea`
 
 // ── JSON extraction helpers ───────────────────────────────────────────────────
 
@@ -109,6 +118,7 @@ function parseClassification(raw: string): ClassificationResult {
     multiEntity: validated.multiEntity,
     entities: validated.entities,
     confidence: validated.confidence,
+    intent: validated.intent,
   }
 }
 

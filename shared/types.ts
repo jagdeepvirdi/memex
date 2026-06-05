@@ -13,6 +13,8 @@ export type ItemType =
 
 export type ItemSource = 'keep' | 'manual' | 'url' | 'youtube' | 'instagram'
 
+export type ItemIntent = 'actionable' | 'reference' | 'idea'
+
 export interface Item {
   id: string
   title: string
@@ -29,6 +31,7 @@ export interface Item {
   encrypted?: boolean
   reviewed: boolean
   confidence?: number
+  intent?: ItemIntent
   remindAt?: Date | null
   publicToken?: string | null
   shareExpiresAt?: Date | null
@@ -281,6 +284,7 @@ export interface ItemExtraction {
   categories: string[]
   tags: string[]
   confidence?: number
+  intent?: ItemIntent
   applied: boolean
   created_at: string
 }

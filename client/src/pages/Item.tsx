@@ -6,7 +6,7 @@ import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
 import ItemCard from '../components/cards/ItemCard'
 import Editor from '../components/Editor'
-import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, setReminder, shareItem, unshareItem, updateItem } from '../lib/api'
+import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, reClassifyItem, setReminder, shareItem, unshareItem, updateItem } from '../lib/api'
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
 import type { Item, ItemExtraction } from '../../../shared/types'
@@ -29,6 +29,7 @@ export default function ItemPage() {
   const [extractions, setExtractions] = useState<ItemExtraction[]>([])
   const [showExtractions, setShowExtractions] = useState(false)
   const [applyingId, setApplyingId] = useState<string | null>(null)
+  const [reClassifying, setReClassifying] = useState(false)
   const [reminderInput, setReminderInput] = useState('')
   const [settingReminder, setSettingReminder] = useState(false)
   const [sharing, setSharing] = useState(false)
@@ -80,6 +81,22 @@ export default function ItemPage() {
       console.error(err)
     } finally {
       setApplyingId(null)
+    }
+  }
+
+  const handleReClassify = async () => {
+    if (!id) return
+    setReClassifying(true)
+    try {
+      const newExt = await reClassifyItem(id)
+      setExtractions(prev => [newExt, ...prev])
+      setShowExtractions(true)
+      toast.success('New extraction added — review below and apply if it looks right')
+    } catch (err) {
+      toast.error('Re-classification failed')
+      console.error(err)
+    } finally {
+      setReClassifying(false)
     }
   }
 
@@ -378,6 +395,19 @@ export default function ItemPage() {
                   Original Source
                 </a>
               )}
+
+              {item.intent && (
+                <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${
+                  item.intent === 'actionable'
+                    ? 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                    : item.intent === 'idea'
+                    ? 'bg-purple-500/10 border-purple-500/20 text-purple-400'
+                    : 'bg-white/5 border-white/5 text-ink-muted'
+                }`}>
+                  {item.intent === 'actionable' ? '⚡' : item.intent === 'idea' ? '💡' : '📖'}
+                  {item.intent}
+                </span>
+              )}
             </div>
           </div>
 
@@ -518,21 +548,32 @@ export default function ItemPage() {
           )}
 
           {/* Extraction History */}
-          {extractions.length > 0 && (
+          {(extractions.length > 0 || item) && (
             <div className="flex flex-col gap-3">
-              <button
-                onClick={() => setShowExtractions(v => !v)}
-                className="flex items-center gap-2 text-[10px] text-ink-muted uppercase tracking-widest font-bold hover:text-ink transition-colors w-fit"
-              >
-                <History size={12} />
-                Extraction History ({extractions.length})
-                {showExtractions ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-                {extractions.some(e => !e.applied) && (
-                  <span className="ml-1 px-1.5 py-0.5 bg-accent/20 text-accent rounded text-[9px] normal-case tracking-normal font-semibold">
-                    newer available
-                  </span>
-                )}
-              </button>
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setShowExtractions(v => !v)}
+                  className="flex items-center gap-2 text-[10px] text-ink-muted uppercase tracking-widest font-bold hover:text-ink transition-colors"
+                >
+                  <History size={12} />
+                  Extraction History ({extractions.length})
+                  {showExtractions ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                  {extractions.some(e => !e.applied) && (
+                    <span className="ml-1 px-1.5 py-0.5 bg-accent/20 text-accent rounded text-[9px] normal-case tracking-normal font-semibold">
+                      newer available
+                    </span>
+                  )}
+                </button>
+                <button
+                  onClick={handleReClassify}
+                  disabled={reClassifying}
+                  className="flex items-center gap-1.5 text-[10px] text-ink-muted hover:text-accent border border-white/10 hover:border-accent/30 px-2.5 py-1 rounded-lg transition-all disabled:opacity-40"
+                  title="Re-run AI classification and add to history"
+                >
+                  {reClassifying ? <Loader2 size={10} className="animate-spin" /> : <Bot size={10} />}
+                  Re-classify
+                </button>
+              </div>
 
               {showExtractions && (
                 <div className="space-y-2">

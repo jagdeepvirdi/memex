@@ -1,5 +1,5 @@
 import type { PoolClient, QueryResult } from 'pg'
-import type { Item, ItemType, ItemSource, StructuredData } from '../../../shared/types.js'
+import type { Item, ItemType, ItemSource, ItemIntent, StructuredData } from '../../../shared/types.js'
 
 // ── Row shape returned from items queries ────────────────────────────────────
 
@@ -18,6 +18,7 @@ interface ItemRow {
   categories: string[] | null
   tags: string[] | null
   confidence: number | null
+  intent: ItemIntent | null
   remind_at: Date | null
   public_token: string | null
   share_expires_at: Date | null
@@ -42,6 +43,7 @@ export function rowToItem(row: ItemRow): Item {
     categories: row.categories || [],
     tags: row.tags || [],
     confidence: row.confidence ?? undefined,
+    intent: row.intent ?? undefined,
     remindAt: row.remind_at ?? undefined,
     publicToken: row.public_token ?? undefined,
     shareExpiresAt: row.share_expires_at ?? undefined,
@@ -200,7 +202,7 @@ export async function fetchItem(client: PoolClient, id: string): Promise<Item | 
 export const ITEM_SELECT_SQL = `
   SELECT
     i.id, i.title, i.type, i.content, i.structured,
-    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence, i.remind_at, i.public_token, i.share_expires_at,
+    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence, i.intent, i.remind_at, i.public_token, i.share_expires_at,
     COALESCE(
       (SELECT array_agg(c.name ORDER BY ic2.depth)
        FROM item_categories ic2

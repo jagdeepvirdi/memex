@@ -15,7 +15,7 @@ import { classify, mapToCategories } from '../services/classifier.js'
 import { embedItem } from '../services/embedder.js'
 import { extractAndLinkEntities } from '../services/entityService.js'
 import { generateDigest } from '../services/digestService.js'
-import type { ItemType, ItemSource } from '../../../shared/types.js'
+import type { ItemType, ItemSource, ItemIntent } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
 const router = Router()
@@ -47,6 +47,7 @@ const updateItemSchema = z.object({
   reviewed: z.boolean().optional(),
   confidence: z.number().nullable().optional(),
   remindAt: z.string().datetime().nullable().optional(),
+  intent: z.enum(['actionable', 'reference', 'idea']).optional(),
 })
 
 const listQuerySchema = z.object({
@@ -59,6 +60,7 @@ const listQuerySchema = z.object({
   pendingEnrichment: z.coerce.boolean().default(false),
   enriched: z.coerce.boolean().default(false),
   hasReminder: z.coerce.boolean().default(false),
+  maxConfidence: z.coerce.number().int().min(0).max(100).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 })
@@ -81,6 +83,7 @@ interface ItemRow {
   categories: string[] | null
   tags: string[] | null
   confidence: number | null
+  intent: ItemIntent | null
   remind_at: Date | null
   public_token: string | null
   share_expires_at: Date | null
@@ -95,7 +98,7 @@ router.get('/', async (req, res) => {
     return
   }
 
-  const { type, category, tag, q, deleted, unreviewed, pendingEnrichment, enriched, hasReminder, limit, offset } = parsed.data
+  const { type, category, tag, q, deleted, unreviewed, pendingEnrichment, enriched, hasReminder, maxConfidence, limit, offset } = parsed.data
 
   const conditions: string[] = deleted ? ['i.deleted_at IS NOT NULL'] : ['i.deleted_at IS NULL']
   const params: unknown[] = []
@@ -120,6 +123,11 @@ router.get('/', async (req, res) => {
 
   if (hasReminder) {
     conditions.push(`i.remind_at IS NOT NULL`)
+  }
+
+  if (maxConfidence !== undefined) {
+    conditions.push(`i.confidence IS NOT NULL AND i.confidence <= $${p++}`)
+    params.push(maxConfidence)
   }
 
   if (category) {
@@ -160,7 +168,7 @@ router.get('/', async (req, res) => {
       const listSql = `
         SELECT
           i.id, i.title, i.type, i.content, i.structured,
-          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at, i.confidence, i.remind_at, i.public_token, i.share_expires_at,
+          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at, i.confidence, i.intent, i.remind_at, i.public_token, i.share_expires_at,
           COALESCE(
             (SELECT array_agg(c.name ORDER BY ic2.depth)
              FROM item_categories ic2
@@ -373,18 +381,18 @@ router.post('/enrich', async (_req, res) => {
           // Always write to provenance log
           await client.query(
             `INSERT INTO item_extractions
-               (item_id, model, type, title, summary, structured, categories, tags, confidence, applied)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+               (item_id, model, type, title, summary, structured, categories, tags, confidence, applied, intent)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
             [row.id, result.model ?? 'unknown', result.type, result.title, result.summary,
              JSON.stringify(structuredWithSummary), result.categories, result.tags,
-             result.confidence, !isReviewed]
+             result.confidence, !isReviewed, result.intent ?? null]
           )
 
           if (!isReviewed) {
             await client.query(
-              `UPDATE items SET type=$1, title=$2, structured=$3, extraction_model=$4, updated_at=NOW(), confidence=$5 WHERE id=$6`,
+              `UPDATE items SET type=$1, title=$2, structured=$3, extraction_model=$4, updated_at=NOW(), confidence=$5, intent=$6 WHERE id=$7`,
               [result.type, result.title, JSON.stringify(structuredWithSummary),
-               result.model ?? 'unknown', result.confidence, row.id]
+               result.model ?? 'unknown', result.confidence, result.intent ?? null, row.id]
             )
             if (result.tags.length > 0) await setItemTags(client, row.id, result.tags)
             if (result.categories.length > 0) await setItemCategories(client, row.id, result.categories)
@@ -498,6 +506,83 @@ router.get('/:id/related', async (req, res) => {
   }
 })
 
+// ── POST /api/items/reprocess-bulk — re-classify already-enriched items ──────
+// Same logic as /enrich but targets structured != '{}'. Applies to unreviewed,
+// logs to history-only for reviewed. Returns immediately, processes in background.
+
+router.post('/reprocess-bulk', async (req, res) => {
+  try {
+    const filterAll = (req.body as Record<string, unknown>)?.filter === 'all'
+    const where = filterAll
+      ? `structured != '{}'::jsonb AND deleted_at IS NULL`
+      : `structured != '{}'::jsonb AND reviewed = FALSE AND deleted_at IS NULL`
+
+    const { rows } = await pool.query<{ id: string; title: string; content: string }>(
+      `SELECT id, title, content FROM items WHERE ${where} LIMIT 2000`
+    )
+    if (rows.length === 0) {
+      res.json({ queued: 0 })
+      return
+    }
+
+    res.json({ queued: rows.length })
+
+    const limit = pLimit(3)
+    await Promise.all(rows.map(row => limit(async () => {
+      const text = [row.title, row.content].filter(t => t?.trim()).join('\n\n')
+      if (!text.trim()) return
+
+      try {
+        const result = await classify(text)
+        if (!result.title || result.title === 'Untitled') {
+          result.title = row.title || row.content.split('\n')[0]?.slice(0, 80) || 'Untitled'
+        }
+
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          const { rows: meta } = await client.query<{ reviewed: boolean }>(
+            'SELECT reviewed FROM items WHERE id = $1', [row.id]
+          )
+          const isReviewed = meta[0]?.reviewed ?? false
+          const structuredWithSummary = { ...result.structured, summary: result.summary }
+
+          await client.query(
+            `INSERT INTO item_extractions
+               (item_id, model, type, title, summary, structured, categories, tags, confidence, applied, intent)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+            [row.id, result.model ?? 'unknown', result.type, result.title, result.summary,
+             JSON.stringify(structuredWithSummary), result.categories, result.tags,
+             result.confidence, !isReviewed, result.intent ?? null]
+          )
+
+          if (!isReviewed) {
+            await client.query(
+              `UPDATE items SET type=$1,title=$2,structured=$3,extraction_model=$4,updated_at=NOW(),confidence=$5,intent=$6 WHERE id=$7`,
+              [result.type, result.title, JSON.stringify(structuredWithSummary),
+               result.model ?? 'unknown', result.confidence, result.intent ?? null, row.id]
+            )
+            if (result.tags.length > 0) await setItemTags(client, row.id, result.tags)
+            if (result.categories.length > 0) await setItemCategories(client, row.id, result.categories)
+          }
+
+          await client.query('COMMIT')
+        } catch (err) {
+          await client.query('ROLLBACK')
+          logger.error(err, `[Reprocess] DB update failed for ${row.id}`)
+        } finally {
+          client.release()
+        }
+      } catch {
+        logger.error(`[Reprocess] Classify failed for ${row.id}`)
+      }
+    })))
+    logger.info(`[Reprocess] Complete: ${rows.length} items processed`)
+  } catch (err) {
+    logger.error(err, 'POST /api/items/reprocess-bulk error')
+  }
+})
+
 // ── GET /api/items/:id/extractions ───────────────────────────────────────────
 
 router.get('/:id/extractions', async (req, res) => {
@@ -562,6 +647,52 @@ router.post('/:id/apply-extraction/:extractionId', async (req, res) => {
   }
 })
 
+// ── POST /api/items/:id/re-classify — add a new extraction without applying ───
+// Always sets applied=false so the user can review and choose to apply.
+
+router.post('/:id/re-classify', async (req, res) => {
+  try {
+    const { rows: itemRows } = await pool.query<{ title: string; content: string }>(
+      'SELECT title, content FROM items WHERE id=$1 AND deleted_at IS NULL',
+      [req.params.id]
+    )
+    if (itemRows.length === 0) {
+      res.status(404).json({ error: 'Item not found' })
+      return
+    }
+    const { title, content } = itemRows[0]
+    const text = [title, content].filter(t => t?.trim()).join('\n\n')
+
+    const result = await classify(text)
+    if (!result.title || result.title === 'Untitled') {
+      result.title = title || content.split('\n')[0]?.slice(0, 80) || 'Untitled'
+    }
+
+    const structuredWithSummary = { ...result.structured, summary: result.summary }
+
+    const { rows: extRows } = await pool.query<{ id: string }>(
+      `INSERT INTO item_extractions
+         (item_id, model, type, title, summary, structured, categories, tags, confidence, applied, intent)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,FALSE,$10)
+       RETURNING id`,
+      [req.params.id, result.model ?? 'unknown', result.type, result.title, result.summary,
+       JSON.stringify(structuredWithSummary), result.categories, result.tags, result.confidence,
+       result.intent ?? null]
+    )
+
+    const { rows: newExt } = await pool.query(
+      `SELECT id, item_id, model, type, title, summary, structured, categories, tags, confidence, applied, intent, created_at
+       FROM item_extractions WHERE id=$1`,
+      [extRows[0].id]
+    )
+
+    res.status(201).json(newExt[0])
+  } catch (err) {
+    logger.error(err, 'POST /api/items/:id/re-classify error')
+    res.status(500).json({ error: 'Re-classification failed' })
+  }
+})
+
 router.get('/:id/versions', async (req, res) => {
   try {
     const { rows } = await pool.query('SELECT id, title, content, created_at as "createdAt" FROM item_versions WHERE item_id = $1 ORDER BY created_at DESC', [req.params.id])
@@ -593,7 +724,7 @@ router.put('/:id', async (req, res) => {
     return
   }
 
-  const { title, content, categories, tags, structured, deleted, reviewed, confidence, remindAt } = parsed.data
+  const { title, content, categories, tags, structured, deleted, reviewed, confidence, remindAt, intent } = parsed.data
   const client = await pool.connect()
 
   try {
@@ -618,6 +749,7 @@ router.put('/:id', async (req, res) => {
     if (structured !== undefined) { updates.push(`structured = $${p++}`); params.push(JSON.stringify(structured)) }
     if (reviewed !== undefined) { updates.push(`reviewed = $${p++}`); params.push(reviewed) }
     if (confidence !== undefined) { updates.push(`confidence = $${p++}`); params.push(confidence) }
+    if (intent !== undefined) { updates.push(`intent = $${p++}`); params.push(intent) }
     if (remindAt !== undefined) { updates.push(`remind_at = $${p++}`); params.push(remindAt ?? null) }
     if (deleted === false) { updates.push(`deleted_at = NULL`) }
 

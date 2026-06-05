@@ -70,7 +70,7 @@ export async function createItem(item: CreateItemRequest): Promise<Item> {
   })
 }
 
-export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number, pendingEnrichment?: boolean, enriched?: boolean, q?: string, unreviewed?: boolean, hasReminder?: boolean } = {}): Promise<{ items: Item[], total: number }> {
+export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number, pendingEnrichment?: boolean, enriched?: boolean, q?: string, unreviewed?: boolean, hasReminder?: boolean, maxConfidence?: number } = {}): Promise<{ items: Item[], total: number }> {
   const params = new URLSearchParams()
   if (options.type) params.append('type', options.type)
   if (options.category) params.append('category', options.category)
@@ -81,6 +81,7 @@ export async function fetchItems(options: { type?: string, category?: string, ta
   if (options.enriched) params.append('enriched', 'true')
   if (options.unreviewed) params.append('unreviewed', 'true')
   if (options.hasReminder) params.append('hasReminder', 'true')
+  if (options.maxConfidence !== undefined) params.append('maxConfidence', options.maxConfidence.toString())
   if (options.q) params.append('q', options.q)
 
   return apiFetch<{ items: Item[], total: number }>(`/items?${params.toString()}`)
@@ -179,6 +180,17 @@ export async function fetchItemExtractions(itemId: string): Promise<ItemExtracti
 
 export async function applyExtraction(itemId: string, extractionId: string): Promise<Item> {
   return apiFetch<Item>(`/items/${itemId}/apply-extraction/${extractionId}`, { method: 'POST' })
+}
+
+export async function reClassifyItem(itemId: string): Promise<ItemExtraction> {
+  return apiFetch<ItemExtraction>(`/items/${itemId}/re-classify`, { method: 'POST' })
+}
+
+export async function reprocessBulk(filter: 'unreviewed' | 'all' = 'unreviewed'): Promise<{ queued: number }> {
+  return apiFetch<{ queued: number }>('/items/reprocess-bulk', {
+    method: 'POST',
+    body: JSON.stringify({ filter }),
+  })
 }
 
 export async function fetchDueReminders(): Promise<Item[]> {
