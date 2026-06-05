@@ -51,12 +51,13 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 
 `classify(text)` in `server/src/services/classifier.ts`:
 - Ollama JSON mode + temperature 0 + enum trick (canonical category leaf list in prompt)
-- Returns: `type`, `title`, `categories`, `tags`, `summary`, `confidence` (0–100), `structured`, `multiEntity`, `entities`
+- Returns: `type`, `title`, `categories`, `tags`, `summary`, `confidence` (0–100), `intent` (`actionable|reference|idea`), `structured`, `multiEntity`, `entities`
+- `intent` rules: `actionable` = todo/want-to-do/buy/visit/watch; `reference` = factual info, how-to, specs; `idea` = brainstorm, fleeting thought, creative concept
 - On JSON parse failure: retry once with stricter prompt → fallback to `type=note`
 - Multi-entity detection: if `multiEntity=true`, ingest route splits into N separate items
 - Fuzzy category mapping: AI output is normalised to the canonical tree before DB write
 
-## Database Migrations (15 total)
+## Database Migrations (16 total)
 
 | # | File | Summary |
 |---|---|---|
@@ -75,6 +76,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 | 013 | `013_share_expiry.sql` | `share_expires_at TIMESTAMPTZ` on items |
 | 014 | `014_ingest_jobs.sql` | `ingest_jobs` table (DB-backed job store) |
 | 015 | `015_vault_verifier.sql` | `verifier`, `verifier_iv` columns on `vault_config` |
+| 016 | `016_intent.sql` | `intent VARCHAR(20)` on `items` + `item_extractions` |
 
 ## Server Routes
 
@@ -101,6 +103,8 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 | GET | `/api/items/export/obsidian` | ZIP of Markdown files with YAML frontmatter |
 | GET | `/api/items/:id/extractions` | AI extraction history for an item |
 | POST | `/api/items/:id/apply-extraction/:eid` | Apply a past extraction to an item |
+| POST | `/api/items/:id/re-classify` | Re-run classifier, save to history (never auto-applies) |
+| POST | `/api/items/reprocess-bulk` | Batch re-classify; applies to unreviewed, history-only for reviewed |
 | POST | `/api/items/:id/share` | Mint public token (7-day expiry) |
 | DELETE | `/api/items/:id/share` | Revoke public token |
 | GET | `/api/share/:token` | Public read-only item (no auth; rejects expired tokens) |
@@ -151,7 +155,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 | `/media` | `MediaView.tsx` | Movies + books, ratings, watch status |
 | `/places` | `PlacesView.tsx` | Places, Maps links, CSV export |
 | `/graph` | `SemanticGraph.tsx` | Entity relationship graph (force-directed) |
-| `/categories/review` | `CategoryReview.tsx` | Rogue category remapping UI |
+| `/categories/review` | `CategoryReview.tsx` | Two tabs: staged items queue (low-confidence, threshold selector, Accept/Reassign) + rogue category remap |
 | `/category/:id` | `Category.tsx` | Paginated item grid |
 | `/item/:id` | `Item.tsx` | Edit, delete, move to vault, extraction history |
 | `/vault` | `Vault.tsx` | AES-256 encrypted vault; change-password modal |

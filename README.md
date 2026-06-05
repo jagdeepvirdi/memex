@@ -18,7 +18,7 @@ A self-hosted knowledge management app that ingests, auto-classifies, and organi
 - **Sharing** — generate a public link for any item (expires in 7 days by default); revokable at any time
 - **Obsidian export** — download your entire library as a ZIP of Markdown files with YAML frontmatter
 - **Bookmarklet** — one-click "Save to Memex" from any browser page; warns if a duplicate already exists
-- **Category Review** — review and remap rogue AI-generated categories to the canonical tree
+- **Category Review** — two-tab staging area: review low-confidence items before accepting them, and remap rogue AI-generated categories to the canonical tree
 - **Password vault** — AES-256-GCM client-side encryption; master password never leaves the browser
 - **Move to Vault** — one-click encryption of sensitive plain-text notes
 - **Data provenance** — every AI extraction is logged; roll back or apply any past extraction to an item
@@ -219,9 +219,10 @@ Every item is classified by Ollama with:
 - **Categories** — fuzzy-mapped to the canonical tree (no rogue AI-invented categories)
 - **Tags** — auto-extracted
 - **Summary** — 2–3 sentence overview
-- **Confidence score** — 0–100, visible in Table View for easy curation
+- **Intent** — `actionable` (todo/want-to-do), `reference` (factual/how-to), or `idea` (brainstorm/concept); shown as a badge on every item
+- **Confidence score** — 0–100, visible in Table View and the Category Review staging queue
 - **Structured data** — type-specific fields: recipe steps/ingredients, movie director/cast/rating, place city/cuisine/visitStatus, etc.
-- **Extraction history** — every AI run is logged; any past extraction can be applied or rolled back from the Item page
+- **Extraction history** — every AI run is logged; any past extraction can be applied or rolled back from the Item page; re-classify a single item or bulk re-process with the current model from Settings
 
 Multi-entity notes (e.g. "Watched: Inception, Interstellar, Dune") are automatically split into individual items.
 

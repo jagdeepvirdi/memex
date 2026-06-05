@@ -340,7 +340,27 @@ markitdown --help
   - `FileIngestPanel.tsx` updated: image thumbnail preview on drop, purple "Vision AI · model-name"
     badge when available, yellow warning + pull instructions when no vision model found, smart
     button label ("Analyse with Vision AI" vs "Convert & Classify with AI").
-  - Audio (Whisper) not yet implemented.
+
+- [x] **Intent classifier — tag items as actionable | reference | idea** ✅
+  - **Done (2026-06-05):** `intent VARCHAR(20)` added to `items` + `item_extractions` (migration 016).
+    Classifier prompt updated with intent rules: `actionable` (todo/want-to-do/buy/visit/watch),
+    `reference` (factual, how-to, specs, saved for lookup), `idea` (brainstorm, fleeting thought,
+    creative concept). Intent badge shown on Item detail page (amber ⚡ / purple 💡 / muted 📖)
+    and CategoryReview staged cards.
+
+- [x] **Data provenance — re-classify UI** ✅
+  - **Done (2026-06-05):** Re-classify button on Item page — runs classifier on current content,
+    saves extraction to history with `applied=false`, never auto-applies; user decides via existing
+    Apply button. Bulk "Re-process with Current Model" row in Settings re-classifies all unreviewed
+    items in background (pLimit 3), applies results, saves history-only for already-reviewed items.
+    New routes: `POST /api/items/:id/re-classify`, `POST /api/items/reprocess-bulk`.
+
+- [x] **Category staging area — two-tab review queue** ✅
+  - **Done (2026-06-05):** `CategoryReview` (`/categories/review`) rewritten with two tabs:
+    "Staged Items" — low-confidence unreviewed items with confidence threshold selector (50–90%,
+    default 70%), per-card Accept / Reassign with inline path input, Accept All;
+    "Category Anomalies" — existing rogue root category remap (unchanged).
+    `maxConfidence` query param added to `GET /api/items`.
 
 ---
 
