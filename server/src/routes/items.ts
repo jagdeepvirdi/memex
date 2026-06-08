@@ -13,6 +13,7 @@ import {
   rowToItem,
 } from '../db/helpers.js'
 import { classify, mapToCategories } from '../services/classifier.js'
+import { ITEM_LIST_SELECT_SQL, applyClassificationResult } from '../services/itemService.js'
 import { embedItem } from '../services/embedder.js'
 import { extractAndLinkEntities } from '../services/entityService.js'
 import { generateDigest } from '../services/digestService.js'
@@ -166,25 +167,7 @@ router.get('/', async (req, res) => {
       )
       const total = parseInt(countResult.rows[0].total, 10)
 
-      const listSql = `
-        SELECT
-          i.id, i.title, i.type, i.content, i.structured,
-          i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.deleted_at, i.confidence, i.intent, i.remind_at, i.public_token, i.share_expires_at,
-          COALESCE(
-            (SELECT array_agg(c.name ORDER BY ic2.depth)
-             FROM item_categories ic2
-             JOIN categories c ON c.id = ic2.category_id
-             WHERE ic2.item_id = i.id),
-            '{}'::text[]
-          ) AS categories,
-          COALESCE(
-            (SELECT array_agg(t.name ORDER BY t.name)
-             FROM item_tags it2
-             JOIN tags t ON t.id = it2.tag_id
-             WHERE it2.item_id = i.id),
-            '{}'::text[]
-          ) AS tags
-        FROM items i
+      const listSql = ITEM_LIST_SELECT_SQL + `
         WHERE ${where}
         ORDER BY i.created_at DESC
         LIMIT $${p++} OFFSET $${p++}
@@ -371,34 +354,11 @@ router.post('/enrich', async (_req, res) => {
         const client = await pool.connect()
         try {
           await client.query('BEGIN')
-
-          // Check reviewed status — protect manually-confirmed items from auto-overwrite
           const { rows: meta } = await client.query<{ reviewed: boolean }>(
             'SELECT reviewed FROM items WHERE id = $1', [row.id]
           )
           const isReviewed = meta[0]?.reviewed ?? false
-          const structuredWithSummary = { ...result.structured, summary: result.summary }
-
-          // Always write to provenance log
-          await client.query(
-            `INSERT INTO item_extractions
-               (item_id, model, type, title, summary, structured, categories, tags, confidence, applied, intent)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-            [row.id, result.model ?? 'unknown', result.type, result.title, result.summary,
-             JSON.stringify(structuredWithSummary), result.categories, result.tags,
-             result.confidence, !isReviewed, result.intent ?? null]
-          )
-
-          if (!isReviewed) {
-            await client.query(
-              `UPDATE items SET type=$1, title=$2, structured=$3, extraction_model=$4, updated_at=NOW(), confidence=$5, intent=$6 WHERE id=$7`,
-              [result.type, result.title, JSON.stringify(structuredWithSummary),
-               result.model ?? 'unknown', result.confidence, result.intent ?? null, row.id]
-            )
-            if (result.tags.length > 0) await setItemTags(client, row.id, result.tags)
-            if (result.categories.length > 0) await setItemCategories(client, row.id, result.categories)
-          }
-
+          await applyClassificationResult(client, row.id, result, isReviewed)
           await client.query('COMMIT')
           logger.info(`[Re-enrich] OK: ${result.title} → ${result.type}${isReviewed ? ' (extraction only)' : ''}`)
         } catch (err) {
@@ -557,27 +517,7 @@ router.post('/reprocess-bulk', async (req, res) => {
             'SELECT reviewed FROM items WHERE id = $1', [row.id]
           )
           const isReviewed = meta[0]?.reviewed ?? false
-          const structuredWithSummary = { ...result.structured, summary: result.summary }
-
-          await client.query(
-            `INSERT INTO item_extractions
-               (item_id, model, type, title, summary, structured, categories, tags, confidence, applied, intent)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-            [row.id, result.model ?? 'unknown', result.type, result.title, result.summary,
-             JSON.stringify(structuredWithSummary), result.categories, result.tags,
-             result.confidence, !isReviewed, result.intent ?? null]
-          )
-
-          if (!isReviewed) {
-            await client.query(
-              `UPDATE items SET type=$1,title=$2,structured=$3,extraction_model=$4,updated_at=NOW(),confidence=$5,intent=$6 WHERE id=$7`,
-              [result.type, result.title, JSON.stringify(structuredWithSummary),
-               result.model ?? 'unknown', result.confidence, result.intent ?? null, row.id]
-            )
-            if (result.tags.length > 0) await setItemTags(client, row.id, result.tags)
-            if (result.categories.length > 0) await setItemCategories(client, row.id, result.categories)
-          }
-
+          await applyClassificationResult(client, row.id, result, isReviewed)
           await client.query('COMMIT')
         } catch (err) {
           await client.query('ROLLBACK')
@@ -917,29 +857,7 @@ router.post('/nl-filter', async (req, res) => {
     const total = parseInt(countRows[0].total, 10)
 
     const { rows } = await pool.query(
-      `SELECT
-         i.id, i.title, i.type, i.content, i.structured,
-         i.source, i.source_url, i.encrypted, i.reviewed,
-         i.created_at, i.updated_at, i.deleted_at, i.confidence,
-         i.intent, i.remind_at, i.public_token, i.share_expires_at,
-         COALESCE(
-           (SELECT array_agg(c.name ORDER BY ic2.depth)
-            FROM item_categories ic2
-            JOIN categories c ON c.id = ic2.category_id
-            WHERE ic2.item_id = i.id),
-           '{}'::text[]
-         ) AS categories,
-         COALESCE(
-           (SELECT array_agg(t.name ORDER BY t.name)
-            FROM item_tags it2
-            JOIN tags t ON t.id = it2.tag_id
-            WHERE it2.item_id = i.id),
-           '{}'::text[]
-         ) AS tags
-       FROM items i
-       WHERE ${where}
-       ORDER BY i.created_at DESC
-       LIMIT 50`,
+      ITEM_LIST_SELECT_SQL + `WHERE ${where} ORDER BY i.created_at DESC LIMIT 50`,
       params,
     )
 
