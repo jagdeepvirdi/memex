@@ -307,10 +307,10 @@ Bulk Keep imports: notes save instantly; background queue classifies at 3 concur
 ## Running Tests
 
 ```bash
-# Server (232 tests)
+# Server (236 tests)
 cd server && npm test
 
-# Client (57 tests)
+# Client (428 tests)
 cd client && npm test
 
 # Or both from the root

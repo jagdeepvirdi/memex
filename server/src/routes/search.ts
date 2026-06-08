@@ -115,8 +115,10 @@ router.post('/', async (req, res) => {
 
 // ── GET /api/search/graph ─────────────────────────────────────────────────────
 
-router.get('/graph', async (_req, res) => {
+router.get('/graph', async (req, res) => {
   try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit as string || '100', 10), 10), 500);
+
     // 1. Fetch all items (nodes)
     const { rows: nodes } = await pool.query(`
       SELECT id, title, type 
@@ -124,26 +126,26 @@ router.get('/graph', async (_req, res) => {
       WHERE deleted_at IS NULL 
         AND embedding IS NOT NULL
       ORDER BY created_at DESC
-      LIMIT 100
-    `)
+      LIMIT $1
+    `, [limit])
 
     // 2. Build links based on semantic similarity
     // We'll use a cross-join with a distance threshold
-    // This is expensive, so we limit to 100 nodes
+    // This is expensive, so we limit to same count
     const linksSql = `
       WITH indexed_items AS (
         SELECT id, embedding FROM items 
         WHERE deleted_at IS NULL 
           AND embedding IS NOT NULL
         ORDER BY created_at DESC
-        LIMIT 100
+        LIMIT $1
       )
       SELECT a.id as source, b.id as target, (1 - (a.embedding <=> b.embedding)) as weight
       FROM indexed_items a
       JOIN indexed_items b ON a.id < b.id
       WHERE (1 - (a.embedding <=> b.embedding)) > 0.85
     `
-    const { rows: links } = await pool.query(linksSql)
+    const { rows: links } = await pool.query(linksSql, [limit])
 
     res.json({ nodes, links })
   } catch (error) {

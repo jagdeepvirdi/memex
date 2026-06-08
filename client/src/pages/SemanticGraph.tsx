@@ -23,6 +23,7 @@ interface GraphLink {
 }
 
 export default function SemanticGraphPage() {
+  const [nodeLimit, setNodeLimit] = useState(100);
   const [data, setData] = useState<{ nodes: GraphNode[], links: GraphLink[] }>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
@@ -30,12 +31,12 @@ export default function SemanticGraphPage() {
 
   useEffect(() => {
     loadGraph();
-  }, []);
+  }, [nodeLimit]);
 
   const loadGraph = async () => {
     setLoading(true);
     try {
-      const res = await apiFetch<{ nodes: GraphNode[], links: GraphLink[] }>('/search/graph');
+      const res = await apiFetch<{ nodes: GraphNode[], links: GraphLink[] }>(`/search/graph?limit=${nodeLimit}`);
       setData(res);
     } catch (err) {
       console.error(err);
@@ -64,7 +65,23 @@ export default function SemanticGraphPage() {
       <main className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]">
         <AppHeader
           left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-2"><Sparkles className="text-accent" size={18} /><h1 className="font-display text-lg text-ink">Semantic Intelligence Map</h1></div></div>}
-          actions={<div className="flex items-center gap-3"><button onClick={() => setFullscreen(!fullscreen)} className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all" title={fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>{fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button><button onClick={loadGraph} className="text-xs bg-white/5 hover:bg-white/10 text-ink px-4 py-2 rounded-lg transition-all font-medium">Refresh Map</button></div>}
+          actions={
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-ink-muted hidden sm:inline">Nodes:</span>
+              <select
+                value={nodeLimit}
+                onChange={(e) => setNodeLimit(Number(e.target.value))}
+                className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-accent/50 transition-colors text-ink font-medium"
+              >
+                <option value={50}>50 nodes</option>
+                <option value={100}>100 nodes</option>
+                <option value={200}>200 nodes</option>
+                <option value={500}>500 nodes</option>
+              </select>
+              <button onClick={() => setFullscreen(!fullscreen)} className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all" title={fullscreen ? 'Exit Fullscreen' : 'Fullscreen'}>{fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}</button>
+              <button onClick={loadGraph} className="text-xs bg-white/5 hover:bg-white/10 text-ink px-4 py-2 rounded-lg transition-all font-medium">Refresh Map</button>
+            </div>
+          }
         />
         <AppHeader.Spacer />
 

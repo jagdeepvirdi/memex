@@ -395,9 +395,9 @@ markitdown --help
   - Tracks per-item failures; marks job `failed` with error count on completion.
   - Callers can poll `GET /api/ingest/jobs/:id` for live progress and final status.
 
-- [ ] **Long route handlers — no service layer**
-  - `GET /api/items` list query (110 lines), `POST /api/items/enrich` (75 lines), `POST /api/items/reprocess-bulk` (~90 lines) all live directly in the route file and share duplicated SELECT + category/tag subquery patterns.
-  - Fix: extract into an `itemService.ts` (or similar) with a shared `buildItemQuery()` helper. Reduces copy-paste risk when adding new columns (as happened with the `nl-filter` / `reminders/due` SELECT bug).
+- [x] **Long route handlers — no service layer** ✅
+  - Extracted `GET /api/items` list query, `POST /api/items/enrich`, and `POST /api/items/reprocess-bulk` into `server/src/services/itemService.ts`.
+  - Added a shared `buildItemQuery()` helper. Refactored `/nl-filter`, `/reminders/due`, and `/:id/related` to use `buildItemQuery()`, reducing copy-paste SQL patterns.
 
 - [x] **Vault reset has no confirmation guard** ✅
   - Server requires `verifiedSentinel === 'memex-vault-v1'` when vault has a stored verifier.

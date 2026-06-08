@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import pLimit from 'p-limit';
 import { scrapeUrl } from '../services/scraper.js';
 import { summarizeAndClassify } from '../services/summarizer.js';
-import { parseKeepZip, type KeepNote } from '../services/keepImporter.js';
+import { parseKeepZipAsync, type KeepNote } from '../services/keepImporter.js';
 import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
@@ -205,7 +205,7 @@ router.post('/url', ingestLimiter, async (req, res) => {
 router.post('/keep', keepUpload.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
-    const notes = parseKeepZip(req.file.buffer);
+    const notes = await parseKeepZipAsync(req.file.buffer);
     res.json({ notes });
   } catch (error) {
     logger.error(error, 'Keep ingest error')

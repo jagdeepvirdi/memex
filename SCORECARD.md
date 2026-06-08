@@ -73,6 +73,25 @@ All high/medium/low action items from the 2026-05-30 review are now complete:
 - **Category staging area:** `CategoryReview` rewritten as a two-tab page — "Staged Items" queue (confidence threshold selector, per-card Accept/Reassign, Accept All) + existing anomaly remap tab. `maxConfidence` filter added to `GET /api/items`.
 - **Test count: 289** (232 server + 57 client). Added 11 tests for `reprocess-bulk`, `re-classify`, `maxConfidence` filter, and intent field in classifier output.
 
+### Update — 2026-06-08 (60% Overall Test Coverage Achieved)
+
+- **Test Coverage: ~8.0 → 9.5.** Massive increase in client-side coverage to pass the target threshold of 60% combined coverage.
+  - Added new comprehensive test suites for:
+    - Pages: `Settings.tsx`, `CategoryReview.tsx`, `SemanticGraph.tsx` (including mocking Canvas context drawing methods).
+    - Components: `VaultLocked.tsx`, `VaultChangePassword.tsx`, and `VaultItemForm.tsx`.
+  - Fixed JSDOM/Happy DOM environment test issues, including input-based selection state updates in `SearchModal.test.tsx` and keyboard shortcut triggers in `Dashboard.test.tsx`.
+  - **Overall Combined Coverage reaches 60.50%** (Client: 61.55% with 1,377 / 2,237 statements; Server: 59.04% with 969 / 1,641 statements).
+  - **Total Test Count: 664** (236 server + 428 client), all passing successfully.
+
+### Update — 2026-06-08 (Improvement Areas Resolved)
+
+- **Express Route Ordering Security:** Restructured and grouped all static/literal routes (e.g. `/stats`, `/digest`, `/export/obsidian`, `/reminders/due`) above dynamic/parametric `/:id` paths inside `server/src/routes/items.ts`, eliminating any risk of route shadowing.
+- **CPU Event-Loop Hardening:** Offloaded CPU-bound Google Keep ZIP parsing to a background worker thread (`worker_threads` with `eval: true` JavaScript execution string) in `server/src/services/keepImporter.ts` called asynchronously by the `/api/ingest/keep` router. This prevents event-loop blocking under heavy imports (up to 500 MB).
+- **UI Virtualization & Pagination Guards:**
+  - Added node limit customization (50, 100, 200, 500) dropdown to the client `SemanticGraph.tsx` intelligence map, passing it to a parameterized `/api/search/graph?limit=...` query selector in the backend.
+  - Implemented pagination (Previous/Next buttons, offset/limit) in client `Trash.tsx` page to handle larger volume soft-deleted items safely.
+- **Test Integrity Preserved:** Verified all 664 tests (236 server + 428 client) remain fully operational and passing.
+
 ### Action items
 
 The prioritized, checkable action items from this review live in **TASKS.md** under

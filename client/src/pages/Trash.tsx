@@ -11,16 +11,20 @@ import type { Item } from '../../../shared/types'
 export default function TrashPage() {
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
+  const [offset, setOffset] = useState(0)
+  const [total, setTotal] = useState(0)
+  const limit = 24 // 24 is ideal for 3-column card grid (3 * 8)
 
   useEffect(() => {
     loadTrash()
-  }, [])
+  }, [offset])
 
   const loadTrash = async () => {
     setLoading(true)
     try {
-      const res = await fetchItems({ deleted: true } as any)
+      const res = await fetchItems({ deleted: true, limit, offset } as any)
       setItems(res.items)
+      setTotal(res.total)
     } catch (err) {
       console.error(err)
       toast.error('Failed to load trash')
@@ -97,6 +101,31 @@ export default function TrashPage() {
                    Items in the trash are excluded from search and AI analysis. Restoring an item will re-enable all features.
                 </p>
              </div>
+          )}
+
+          {/* Pagination */}
+          {total > limit && (
+            <div className="mt-8 border-t border-white/5 pt-6 flex items-center justify-between bg-transparent">
+              <div className="text-xs text-ink-muted">
+                Showing {items.length > 0 ? offset + 1 : 0} to {offset + items.length} of {total} items
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  disabled={offset === 0}
+                  onClick={() => setOffset(prev => Math.max(0, prev - limit))}
+                  className="px-3 py-1.5 rounded-lg border border-white/10 text-xs hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-all text-ink font-medium"
+                >
+                  Previous
+                </button>
+                <button
+                  disabled={offset + limit >= total}
+                  onClick={() => setOffset(prev => prev + limit)}
+                  className="px-3 py-1.5 rounded-lg border border-white/10 text-xs hover:bg-white/5 disabled:opacity-30 disabled:hover:bg-transparent transition-all text-ink font-medium"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </main>

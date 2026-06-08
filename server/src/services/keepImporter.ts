@@ -1,5 +1,6 @@
 import AdmZip from 'adm-zip';
 import crypto from 'crypto';
+import { Worker } from 'worker_threads';
 import type { ItemSource } from '../../../shared/types.js';
 import logger from '../lib/logger.js'
 
@@ -61,3 +62,86 @@ export function parseKeepZip(buffer: Buffer): KeepNote[] {
 
   return notes;
 }
+
+const workerCode = `
+const { parentPort, workerData } = require('worker_threads');
+const AdmZip = require('adm-zip');
+const crypto = require('crypto');
+
+try {
+  const { buffer } = workerData;
+  const zip = new AdmZip(Buffer.from(buffer));
+  const zipEntries = zip.getEntries();
+  const notes = [];
+  const seenHashes = new Set();
+
+  for (const entry of zipEntries) {
+    const isKeepJson =
+      (entry.entryName.startsWith('Keep/') || entry.entryName.includes('/Keep/')) &&
+      entry.entryName.endsWith('.json');
+    if (isKeepJson) {
+      try {
+        const content = entry.getData().toString('utf8');
+        const data = JSON.parse(content);
+
+        const title = data.title || '';
+        const textContent = data.textContent || '';
+        
+        if (!title && !textContent) continue;
+
+        const labels = (data.labels || []).map((l) => l.name);
+        
+        const updatedAt = data.userEditedTimestampUsec 
+          ? new Date(data.userEditedTimestampUsec / 1000).toISOString() 
+          : new Date().toISOString();
+
+        const hash = crypto.createHash('md5').update(title + textContent).digest('hex');
+        if (seenHashes.has(hash)) continue;
+        seenHashes.add(hash);
+
+        notes.push({
+          title,
+          content: textContent,
+          labels,
+          updatedAt,
+          source: 'keep'
+        });
+      } catch (err) {
+        // ignore note-level parsing error
+      }
+    }
+  }
+  parentPort.postMessage({ notes });
+} catch (error) {
+  parentPort.postMessage({ error: error.message || String(error) });
+}
+`;
+
+export function parseKeepZipAsync(buffer: Buffer): Promise<KeepNote[]> {
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(workerCode, {
+      eval: true,
+      workerData: { buffer },
+    });
+    worker.on('message', (message) => {
+      if (message.error) {
+        reject(new Error(message.error));
+      } else {
+        // Re-hydrate Date objects after cloning across thread boundary
+        const notes = (message.notes as any[]).map((n) => ({
+          ...n,
+          updatedAt: new Date(n.updatedAt),
+        }));
+        resolve(notes);
+      }
+    });
+    worker.on('error', reject);
+    worker.on('exit', (code) => {
+      if (code !== 0) {
+        reject(new Error(`Worker stopped with exit code ${code}`));
+      }
+    });
+  });
+}
+
+

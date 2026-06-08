@@ -127,7 +127,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 | POST | `/api/categories/remap` | Bulk reassign rogue category to canonical path |
 | GET | `/api/search` | Hybrid semantic + full-text search |
 | POST | `/api/search/ask` | RAG Q&A |
-| GET | `/api/search/graph` | Entity relationship graph data |
+| GET | `/api/search/graph` | Entity relationship graph data (supports optional `limit` query param) |
 | GET/PUT | `/api/settings` | Key-value settings store |
 | POST | `/api/settings/bookmarklet-key` | Generate/regenerate persistent API key |
 | GET | `/api/vault` | List vault items |
@@ -200,7 +200,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 
 ## Testing
 
-- **289 tests** — 232 server + 57 client, all passing.
+- **664 tests** — 236 server + 428 client, all passing.
 - Server: `cd server && npm test`
 - Client: `cd client && npm test`
 - Coverage: `npm run coverage` in either package (threshold gates enforced).
