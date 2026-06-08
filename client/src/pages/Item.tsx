@@ -115,8 +115,8 @@ export default function ItemPage() {
   const handleMoveToVault = async () => {
     if (!item) return
     if (isLocked || !vaultKey) {
-      toast.error('Vault is locked. Unlock it from the Vault page first.')
-      navigate('/vault')
+      toast('Vault is locked — unlock it to complete the move.', { icon: '🔒' })
+      navigate(`/vault?migrateItemId=${item.id}`)
       return
     }
 

@@ -142,6 +142,7 @@ export interface Tag {
 
 export interface VaultItem {
   id: string
+  type: 'credential' | 'note'
   service: string
   url?: string
   username?: string

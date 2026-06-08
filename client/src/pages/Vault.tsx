@@ -1,14 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Plus, Search, Shield, Lock, LogOut, Loader2, ArrowLeft, KeyRound } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useVaultStore } from '../store/vaultStore';
 import { AppHeader } from '../components/AppHeader';
 import VaultLocked from '../components/vault/VaultLocked';
 import VaultItemForm from '../components/vault/VaultItemForm';
 import VaultCard from '../components/cards/VaultCard';
 import { VaultChangePassword } from '../components/vault/VaultChangePassword';
-import { apiFetch } from '../lib/api';
-import type { VaultItem } from '../../../shared/types';
+import { apiFetch, migrateToVault } from '../lib/api';
+import { encryptVaultItem } from '../lib/crypto';
+import { toast } from 'sonner';
+import type { Item, VaultItem } from '../../../shared/types';
 import type { VaultKey } from '../lib/crypto';
 
 export default function Vault() {
@@ -19,6 +21,8 @@ export default function Vault() {
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pendingMigrateId = searchParams.get('migrateItemId');
 
   // Lock immediately when navigating away from the vault
   useEffect(() => {
@@ -47,6 +51,33 @@ export default function Vault() {
       fetchVault();
     }
   }, [isLocked]);
+
+  useEffect(() => {
+    if (!isLocked && pendingMigrateId && vaultKey) {
+      handlePendingMigration(pendingMigrateId);
+    }
+  }, [isLocked, pendingMigrateId]);
+
+  const handlePendingMigration = async (itemId: string) => {
+    setSearchParams({}, { replace: true });
+    try {
+      const item = await apiFetch<Item>(`/items/${itemId}`);
+      if (!vaultKey) return;
+      if (!confirm(`Move "${item.title}" to your encrypted vault? The original note will be permanently deleted.`)) return;
+      const { ciphertext, iv } = await encryptVaultItem(item.content, vaultKey);
+      await migrateToVault(itemId, {
+        service: item.title,
+        url: item.sourceUrl || undefined,
+        ciphertext,
+        iv,
+      });
+      toast.success(`"${item.title}" moved to vault`);
+      fetchVault();
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to move item to vault');
+    }
+  };
 
   const fetchVault = async () => {
     setLoading(true);

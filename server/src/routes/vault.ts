@@ -88,7 +88,7 @@ router.get('/salt', async (_req, res) => {
 router.get('/', async (_req, res) => {
   try {
     const { rows } = await pool.query<VaultItem>(
-      'SELECT id, service, url, username, ciphertext, iv, created_at as "createdAt", updated_at as "updatedAt" FROM vault_items ORDER BY service ASC'
+      'SELECT id, type, service, url, username, ciphertext, iv, created_at as "createdAt", updated_at as "updatedAt" FROM vault_items ORDER BY service ASC'
     );
     res.json(rows);
   } catch (error) {
@@ -103,17 +103,17 @@ router.get('/', async (_req, res) => {
  */
 router.post('/', async (req, res) => {
   try {
-    const { service, url, username, ciphertext, iv } = req.body;
+    const { service, url, username, ciphertext, iv, type = 'credential' } = req.body;
 
     if (!service || !ciphertext || !iv) {
       return res.status(400).json({ error: 'Service, ciphertext, and iv are required' });
     }
 
     const { rows } = await pool.query<VaultItem>(
-      `INSERT INTO vault_items (service, url, username, ciphertext, iv)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, service, url, username, ciphertext, iv, created_at as "createdAt", updated_at as "updatedAt"`,
-      [service, url, username, ciphertext, iv]
+      `INSERT INTO vault_items (type, service, url, username, ciphertext, iv)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, type, service, url, username, ciphertext, iv, created_at as "createdAt", updated_at as "updatedAt"`,
+      [type, service, url, username, ciphertext, iv]
     );
 
     res.status(201).json(rows[0]);
@@ -149,10 +149,10 @@ router.post('/migrate/:itemId', async (req, res) => {
 
     // 2. Insert into vault_items
     const { rows: vaultRows } = await client.query<VaultItem>(
-      `INSERT INTO vault_items (service, url, username, ciphertext, iv)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO vault_items (type, service, url, username, ciphertext, iv)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id`,
-      [service, url, username, ciphertext, iv]
+      ['note', service, url, username, ciphertext, iv]
     );
 
     // 3. Delete from items (hard delete because it's now sensitive and moved)
@@ -249,7 +249,7 @@ router.put('/:id', async (req, res) => {
            ciphertext = COALESCE($4, ciphertext),
            iv = COALESCE($5, iv)
        WHERE id = $6
-       RETURNING id, service, url, username, ciphertext, iv, created_at as "createdAt", updated_at as "updatedAt"`,
+       RETURNING id, type, service, url, username, ciphertext, iv, created_at as "createdAt", updated_at as "updatedAt"`,
       [service, url, username, ciphertext, iv, id]
     );
 

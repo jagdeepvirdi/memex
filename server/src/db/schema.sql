@@ -1,4 +1,4 @@
--- Memex — canonical schema reference (reflects all 16 migrations)
+-- Memex — canonical schema reference (reflects all 17 migrations)
 -- This file is documentation only. The live DB is built by running migrations in order:
 --   npm run migrate
 -- Do not run this file directly against the DB.
@@ -161,6 +161,7 @@ CREATE TABLE IF NOT EXISTS settings (
 -- ── Password Vault ────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS vault_items (
   id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+  type        VARCHAR(20) NOT NULL DEFAULT 'credential',  -- 'credential' | 'note'
   service     TEXT        NOT NULL,
   url         TEXT,
   username    TEXT,

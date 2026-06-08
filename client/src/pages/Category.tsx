@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useParams, Link } from 'react-router-dom'
+import { useParams, Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Filter, SortAsc } from 'lucide-react'
 import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
@@ -12,6 +12,7 @@ type SortOption = 'newest' | 'oldest' | 'alpha' | 'type'
 
 export default function CategoryPage() {
   const { id } = useParams<{ id: string }>()
+  const navigate = useNavigate()
   const [items, setItems] = useState<Item[]>([])
   const [total, setTotal] = useState(0)
   const [category, setCategory] = useState<Category | null>(null)
@@ -88,7 +89,7 @@ export default function CategoryPage() {
             <>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500 flex-1">
                 {items.map(item => (
-                  <ItemCard key={item.id} item={item} />
+                  <ItemCard key={item.id} item={item} onClick={() => navigate(`/item/${item.id}`)} />
                 ))}
               </div>
               
