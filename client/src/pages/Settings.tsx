@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom'
 import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
 import { apiFetch, fetchCategories, reprocessBulk } from '../lib/api'
+import { deriveKey, decryptVaultItem, base64ToUint8Array } from '../lib/crypto'
 import type { Category } from '../../../shared/types'
 
 export default function SettingsPage() {
@@ -43,7 +44,8 @@ export default function SettingsPage() {
     auto_lock_timeout: '15'
   })
   const [showVaultReset, setShowVaultReset] = useState(false)
-  const [vaultResetConfirm, setVaultResetConfirm] = useState('')
+  const [vaultResetPassword, setVaultResetPassword] = useState('')
+  const [vaultResetError, setVaultResetError] = useState<string | null>(null)
   const [vaultResetting, setVaultResetting] = useState(false)
 
   useEffect(() => {
@@ -200,12 +202,40 @@ export default function SettingsPage() {
   }
 
   const handleVaultReset = async () => {
-    if (vaultResetConfirm !== 'RESET') return
+    if (!vaultResetPassword) return
     setVaultResetting(true)
+    setVaultResetError(null)
     try {
-      await apiFetch('/vault/reset', { method: 'POST' })
+      // Fetch vault status to get salt + verifier
+      const status = await apiFetch<{
+        hasSetup: boolean
+        salt?: string
+        verifier?: string | null
+        verifierIv?: string | null
+      }>('/vault/status')
+
+      let verifiedSentinel: string | undefined
+      if (status.hasSetup && status.verifier && status.verifierIv && status.salt) {
+        // Derive key from entered password and verify it decrypts the sentinel
+        const saltBytes = base64ToUint8Array(status.salt)
+        const key = await deriveKey(vaultResetPassword, saltBytes)
+        try {
+          const plaintext = await decryptVaultItem(status.verifier, status.verifierIv, key)
+          if (plaintext !== 'memex-vault-v1') throw new Error('wrong password')
+          verifiedSentinel = plaintext
+        } catch {
+          setVaultResetError('Incorrect vault password')
+          setVaultResetting(false)
+          return
+        }
+      }
+
+      await apiFetch('/vault/reset', {
+        method: 'POST',
+        body: JSON.stringify({ verifiedSentinel }),
+      })
       setShowVaultReset(false)
-      setVaultResetConfirm('')
+      setVaultResetPassword('')
       setSuccess('Vault reset — all secrets deleted and password cleared.')
       setTimeout(() => setSuccess(null), 4000)
     } catch {
@@ -554,20 +584,24 @@ export default function SettingsPage() {
                 </p>
                 <div>
                   <label className="text-xs text-ink-muted mb-1.5 block">
-                    Type <span className="font-mono text-red-400 font-bold">RESET</span> to confirm
+                    Enter your vault password to confirm
                   </label>
                   <input
-                    type="text"
-                    placeholder="RESET"
-                    className="w-full bg-bg border border-white/10 focus:border-red-400/50 rounded-lg py-2.5 px-4 text-ink outline-none transition-all font-mono"
-                    value={vaultResetConfirm}
-                    onChange={e => setVaultResetConfirm(e.target.value.toUpperCase())}
+                    type="password"
+                    placeholder="Vault password"
+                    className="w-full bg-bg border border-white/10 focus:border-red-400/50 rounded-lg py-2.5 px-4 text-ink outline-none transition-all"
+                    value={vaultResetPassword}
+                    onChange={e => { setVaultResetPassword(e.target.value); setVaultResetError(null) }}
+                    onKeyDown={e => e.key === 'Enter' && vaultResetPassword && handleVaultReset()}
                     autoFocus
                   />
+                  {vaultResetError && (
+                    <p className="text-xs text-red-400 mt-1.5">{vaultResetError}</p>
+                  )}
                 </div>
                 <div className="flex gap-3">
                   <button
-                    onClick={() => { setShowVaultReset(false); setVaultResetConfirm('') }}
+                    onClick={() => { setShowVaultReset(false); setVaultResetPassword(''); setVaultResetError(null) }}
                     disabled={vaultResetting}
                     className="flex-1 py-2.5 rounded-lg border border-white/10 text-sm text-ink-muted hover:text-ink hover:bg-white/5 transition-all disabled:opacity-40"
                   >
@@ -575,7 +609,7 @@ export default function SettingsPage() {
                   </button>
                   <button
                     onClick={handleVaultReset}
-                    disabled={vaultResetting || vaultResetConfirm !== 'RESET'}
+                    disabled={vaultResetting || !vaultResetPassword}
                     className="flex-1 py-2.5 rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 font-bold text-sm hover:bg-red-500/30 transition-all disabled:opacity-40 flex items-center justify-center gap-2"
                   >
                     {vaultResetting ? <Loader2 size={15} className="animate-spin" /> : null}

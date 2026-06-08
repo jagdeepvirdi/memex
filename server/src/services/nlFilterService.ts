@@ -7,8 +7,9 @@ export interface ParsedFilter {
   structuredFilters: Record<string, string>
 }
 
-// Only allow known structured field names to prevent JSONB key injection
-const SAFE_FIELDS = new Set([
+// Only allow known structured field names to prevent JSONB key injection.
+// Exported so the route layer can enforce the same check independently.
+export const SAFE_FIELDS = new Set([
   'cuisine', 'visitStatus', 'city', 'country', 'priceRange',
   'watchStatus', 'genre', 'director', 'streamingPlatform',
   'status', 'author', 'mealType', 'ticker', 'exchange',

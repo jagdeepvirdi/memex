@@ -4,12 +4,15 @@ import { itemsToCsv } from './export'
 const baseItem = (overrides = {}) => ({
   id: 'abc-123',
   title: 'Pad Thai',
-  type: 'recipe',
-  source: 'manual',
+  type: 'recipe' as const,
+  source: 'manual' as const,
+  content: '',
   createdAt: new Date('2024-01-15'),
+  updatedAt: new Date('2024-01-15'),
   categories: ['Food', 'Savory', 'Thai'],
   tags: ['thai', 'noodles'],
   structured: {},
+  reviewed: false,
   ...overrides,
 })
 

@@ -1,6 +1,6 @@
 import { PoolClient } from 'pg'
 import { embedQuery } from './embedder.js'
-import type { Entity, EntityType, ItemType } from '../../../shared/types.js'
+import type { Entity, EntityType, ItemType, StructuredData, MediaData, BookData, PlaceData, StockData } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
 /**
@@ -64,18 +64,19 @@ export async function extractAndLinkEntities(
   client: PoolClient,
   itemId: string,
   type: ItemType,
-  structured: any
+  structured: StructuredData | null | undefined
 ): Promise<void> {
   if (!structured) return;
 
   try {
     if (type === 'media') {
-      if (structured.director) {
-        const ent = await getOrCreateEntity(client, structured.director, 'person');
+      const s = structured as MediaData
+      if (s.director) {
+        const ent = await getOrCreateEntity(client, s.director, 'person');
         await linkItemToEntity(client, itemId, ent.id, 'director');
       }
-      if (Array.isArray(structured.cast)) {
-        for (const actor of structured.cast) {
+      if (Array.isArray(s.cast)) {
+        for (const actor of s.cast) {
           const ent = await getOrCreateEntity(client, actor, 'person');
           await linkItemToEntity(client, itemId, ent.id, 'cast');
         }
@@ -83,30 +84,31 @@ export async function extractAndLinkEntities(
     }
 
     if (type === 'book') {
-      if (structured.author) {
-        const ent = await getOrCreateEntity(client, structured.author, 'person');
+      const s = structured as BookData
+      if (s.author) {
+        const ent = await getOrCreateEntity(client, s.author, 'person');
         await linkItemToEntity(client, itemId, ent.id, 'author');
       }
     }
 
     if (type === 'place') {
-      if (structured.city) {
-        const ent = await getOrCreateEntity(client, structured.city, 'place');
+      const s = structured as PlaceData
+      if (s.city) {
+        const ent = await getOrCreateEntity(client, s.city, 'place');
         await linkItemToEntity(client, itemId, ent.id, 'city');
       }
-      if (structured.country) {
-        const ent = await getOrCreateEntity(client, structured.country, 'place');
+      if (s.country) {
+        const ent = await getOrCreateEntity(client, s.country, 'place');
         await linkItemToEntity(client, itemId, ent.id, 'country');
       }
-      // The place itself can be an entity if we wanted to link OTHER things to it
-      // but for now let's focus on the metadata.
     }
 
     if (type === 'stock') {
-       if (structured.exchange) {
-          const ent = await getOrCreateEntity(client, structured.exchange, 'organization');
-          await linkItemToEntity(client, itemId, ent.id, 'exchange');
-       }
+      const s = structured as StockData
+      if (s.exchange) {
+        const ent = await getOrCreateEntity(client, s.exchange, 'organization');
+        await linkItemToEntity(client, itemId, ent.id, 'exchange');
+      }
     }
   } catch (err) {
     logger.error(err, `Entity extraction failed for item ${itemId}`)

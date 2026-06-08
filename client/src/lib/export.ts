@@ -1,13 +1,15 @@
+import type { Item } from '../../../shared/types'
+
 /**
  * Converts an array of items to a CSV string.
  * Handles the nested 'structured' data by flattening it.
  */
-export function itemsToCsv(items: any[]): string {
+export function itemsToCsv(items: Item[]): string {
   if (items.length === 0) return ''
 
   // 1. Identify all unique headers including flattened structured fields
   const headers = new Set<string>(['id', 'title', 'type', 'source', 'created_at', 'categories', 'tags'])
-  
+
   items.forEach(item => {
     if (item.structured) {
       Object.keys(item.structured).forEach(key => headers.add(`s_${key}`))
@@ -15,21 +17,21 @@ export function itemsToCsv(items: any[]): string {
   })
 
   const headerArray = Array.from(headers)
-  
+
   // 2. Generate rows
   const rows = items.map(item => {
     return headerArray.map(header => {
-      let val: any = ''
-      
+      let val: unknown = ''
+
       if (header.startsWith('s_')) {
         const key = header.slice(2)
-        val = item.structured?.[key]
+        val = (item.structured as Record<string, unknown>)?.[key]
       } else if (header === 'categories') {
         val = item.categories?.join(' > ')
       } else if (header === 'tags') {
         val = item.tags?.join(', ')
       } else {
-        val = item[header]
+        val = (item as unknown as Record<string, unknown>)[header]
       }
 
       // Format for CSV

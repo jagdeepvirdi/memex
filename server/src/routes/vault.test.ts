@@ -312,7 +312,14 @@ describe('PUT /api/vault/rekey', () => {
 // ── POST /api/vault/reset ─────────────────────────────────────────────────────
 
 describe('POST /api/vault/reset', () => {
-  it('commits transaction and returns success', async () => {
+  it('returns 401 without auth', async () => {
+    const res = await request(app).post('/api/vault/reset')
+    expect(res.status).toBe(401)
+  })
+
+  it('resets without password when vault has no verifier set up', async () => {
+    // pool.query for SELECT verifier (not via client), then client handles BEGIN/DELETE/COMMIT
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any) // no vault_config row
     const client = mockClient()
 
     const res = await request(app)
@@ -323,10 +330,56 @@ describe('POST /api/vault/reset', () => {
     expect(res.body.success).toBe(true)
     expect(client.query).toHaveBeenCalledWith('BEGIN')
     expect(client.query).toHaveBeenCalledWith('COMMIT')
-    expect(client.release).toHaveBeenCalled()
+  })
+
+  it('returns 400 when vault has a verifier but no sentinel provided', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [{ verifier: 'enc-sentinel' }],
+    } as any)
+    mockClient()
+
+    const res = await request(app)
+      .post('/api/vault/reset')
+      .set('Authorization', AUTH)
+      .send({}) // no verifiedSentinel
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/verification required/i)
+  })
+
+  it('returns 400 when verifiedSentinel is wrong', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [{ verifier: 'enc-sentinel' }],
+    } as any)
+    mockClient()
+
+    const res = await request(app)
+      .post('/api/vault/reset')
+      .set('Authorization', AUTH)
+      .send({ verifiedSentinel: 'wrong-value' })
+
+    expect(res.status).toBe(400)
+  })
+
+  it('resets when verifiedSentinel is correct', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [{ verifier: 'enc-sentinel' }],
+    } as any)
+    const client = mockClient()
+
+    const res = await request(app)
+      .post('/api/vault/reset')
+      .set('Authorization', AUTH)
+      .send({ verifiedSentinel: 'memex-vault-v1' })
+
+    expect(res.status).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(client.query).toHaveBeenCalledWith('BEGIN')
+    expect(client.query).toHaveBeenCalledWith('COMMIT')
   })
 
   it('rolls back and returns 500 on DB error', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any) // no verifier
     const client = mockClient({
       query: vi.fn()
         .mockResolvedValueOnce({})  // BEGIN

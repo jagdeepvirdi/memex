@@ -214,10 +214,27 @@ router.put('/rekey', async (req, res) => {
  * POST /api/vault/reset
  * Deletes all vault items and clears the vault config (salt + verifier).
  * This is a destructive, unrecoverable operation — used from Settings.
+ *
+ * When the vault has a verifier stored, the client must prove it knows the
+ * master password by sending the decrypted sentinel value. This prevents
+ * accidental or CSRF-triggered resets without re-entering the vault password.
  */
 router.post('/reset', async (req, res) => {
   const client = await pool.connect();
   try {
+    // Check whether a verifier exists (vault has been set up with a password)
+    const { rows: cfgRows } = await pool.query<{ verifier: string | null }>(
+      'SELECT verifier FROM vault_config WHERE id = 1'
+    );
+    const hasVerifier = cfgRows.length > 0 && cfgRows[0].verifier != null;
+
+    if (hasVerifier) {
+      const { verifiedSentinel } = req.body;
+      if (verifiedSentinel !== 'memex-vault-v1') {
+        return res.status(400).json({ error: 'Vault password verification required to reset' });
+      }
+    }
+
     await client.query('BEGIN');
     await client.query('DELETE FROM vault_items');
     await client.query('DELETE FROM vault_config WHERE id = 1');

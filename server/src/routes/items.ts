@@ -3,6 +3,7 @@ import { z } from 'zod'
 import pLimit from 'p-limit'
 import AdmZip from 'adm-zip'
 import { randomBytes } from 'crypto'
+import { v4 as uuidv4 } from 'uuid'
 import { pool } from '../db/client.js'
 import {
   fetchItem,
@@ -525,12 +526,23 @@ router.post('/reprocess-bulk', async (req, res) => {
       return
     }
 
-    res.json({ queued: rows.length })
+    // Create a job record so callers can poll /api/ingest/jobs/:id for status
+    const jobId = uuidv4()
+    await pool.query(
+      `INSERT INTO ingest_jobs (id, status, progress, total, completed) VALUES ($1, 'processing', 0, $2, 0)`,
+      [jobId, rows.length]
+    )
 
+    res.json({ queued: rows.length, jobId })
+
+    // Background processing — failures are counted and surfaced in the job record
     const limit = pLimit(3)
+    let done = 0
+    let failed = 0
+
     await Promise.all(rows.map(row => limit(async () => {
       const text = [row.title, row.content].filter(t => t?.trim()).join('\n\n')
-      if (!text.trim()) return
+      if (!text.trim()) { done++; return }
 
       try {
         const result = await classify(text)
@@ -570,14 +582,31 @@ router.post('/reprocess-bulk', async (req, res) => {
         } catch (err) {
           await client.query('ROLLBACK')
           logger.error(err, `[Reprocess] DB update failed for ${row.id}`)
+          failed++
         } finally {
           client.release()
         }
       } catch {
         logger.error(`[Reprocess] Classify failed for ${row.id}`)
+        failed++
       }
+
+      done++
+      const pct = Math.round((done / rows.length) * 100)
+      await pool.query(
+        'UPDATE ingest_jobs SET completed=$1, progress=$2 WHERE id=$3',
+        [done, pct, jobId]
+      ).catch(() => {})
     })))
-    logger.info(`[Reprocess] Complete: ${rows.length} items processed`)
+
+    // Mark job complete; record any failures in the error field
+    const errorMsg = failed > 0 ? `${failed} of ${rows.length} items failed (Ollama unavailable or DB error)` : null
+    await pool.query(
+      `UPDATE ingest_jobs SET status=$1, error=$2, completed_at=NOW() WHERE id=$3`,
+      [failed > 0 ? 'failed' : 'completed', errorMsg, jobId]
+    ).catch(() => {})
+
+    logger.info(`[Reprocess] Complete: ${rows.length - failed} succeeded, ${failed} failed`)
   } catch (err) {
     logger.error(err, 'POST /api/items/reprocess-bulk error')
   }
@@ -844,7 +873,7 @@ router.delete('/:id', async (req, res) => {
 
 // ── POST /api/items/nl-filter — natural-language query → structured filter → items ──
 
-import { parseNLFilter } from '../services/nlFilterService.js'
+import { parseNLFilter, SAFE_FIELDS } from '../services/nlFilterService.js'
 
 router.post('/nl-filter', async (req, res) => {
   const { query } = req.body
@@ -871,7 +900,11 @@ router.post('/nl-filter', async (req, res) => {
     }
 
     for (const [field, value] of Object.entries(parsedFilter.structuredFilters)) {
-      conditions.push(`i.structured->>'${field}' ILIKE $${p++}`)
+      if (!SAFE_FIELDS.has(field)) continue  // explicit route-level guard
+      const fi = p++
+      const vi = p++
+      conditions.push(`jsonb_extract_path_text(i.structured, $${fi}) ILIKE $${vi}`)
+      params.push(field)
       params.push(`%${value}%`)
     }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import ForceGraph2D from 'react-force-graph-2d';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
@@ -7,12 +7,26 @@ import Sidebar from '../components/sidebar/Sidebar';
 import { AppHeader } from '../components/AppHeader';
 import { apiFetch } from '../lib/api';
 
+interface GraphNode {
+  id: string
+  title: string
+  type: string
+  x?: number
+  y?: number
+  __bckgDimensions?: number[]
+}
+
+interface GraphLink {
+  source: string | GraphNode
+  target: string | GraphNode
+  weight: number
+}
+
 export default function SemanticGraphPage() {
-  const [data, setData] = useState<{ nodes: any[], links: any[] }>({ nodes: [], links: [] });
+  const [data, setData] = useState<{ nodes: GraphNode[], links: GraphLink[] }>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const navigate = useNavigate();
-  const graphRef = useRef<any>();
 
   useEffect(() => {
     loadGraph();
@@ -21,7 +35,7 @@ export default function SemanticGraphPage() {
   const loadGraph = async () => {
     setLoading(true);
     try {
-      const res = await apiFetch<any>('/search/graph');
+      const res = await apiFetch<{ nodes: GraphNode[], links: GraphLink[] }>('/search/graph');
       setData(res);
     } catch (err) {
       console.error(err);
@@ -31,7 +45,7 @@ export default function SemanticGraphPage() {
     }
   };
 
-  const nodeColor = (node: any) => {
+  const nodeColor = (node: GraphNode) => {
     switch (node.type) {
       case 'recipe': return '#F59E0B'; // Amber
       case 'media': return '#8B5CF6'; // Purple
@@ -62,36 +76,39 @@ export default function SemanticGraphPage() {
              </div>
            ) : data.nodes.length > 0 ? (
              <ForceGraph2D
-                ref={graphRef}
                 graphData={data}
                 nodeLabel="title"
                 nodeColor={nodeColor}
                 nodeRelSize={6}
                 linkColor={() => 'rgba(255,255,255,0.05)'}
-                linkWidth={node => (node as any).weight * 2}
+                linkWidth={(link) => (link as GraphLink).weight * 2}
                 backgroundColor="#050505"
-                onNodeClick={(node: any) => navigate(`/item/${node.id}`)}
-                nodeCanvasObject={(node: any, ctx, globalScale) => {
-                   const label = node.title;
+                onNodeClick={(node) => navigate(`/item/${(node as GraphNode).id}`)}
+                nodeCanvasObject={(node, ctx, globalScale) => {
+                   const gNode = node as GraphNode;
+                   const label = gNode.title;
                    const fontSize = 12/globalScale;
                    ctx.font = `${fontSize}px DM Sans`;
                    const textWidth = ctx.measureText(label).width;
                    const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2);
 
                    ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-                   ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2, bckgDimensions[0] as number, bckgDimensions[1] as number);
+                   ctx.fillRect((gNode.x ?? 0) - bckgDimensions[0] / 2, (gNode.y ?? 0) - bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
 
                    ctx.textAlign = 'center';
                    ctx.textBaseline = 'middle';
-                   ctx.fillStyle = nodeColor(node);
-                   ctx.fillText(label, node.x, node.y);
+                   ctx.fillStyle = nodeColor(gNode);
+                   ctx.fillText(label, gNode.x ?? 0, gNode.y ?? 0);
 
-                   node.__bckgDimensions = bckgDimensions; // toerance for pointer events
+                   gNode.__bckgDimensions = bckgDimensions;
                 }}
-                nodePointerAreaPaint={(node: any, color, ctx) => {
+                nodePointerAreaPaint={(node, color, ctx) => {
+                  const gNode = node as GraphNode;
                   ctx.fillStyle = color;
-                  const bckgDimensions = node.__bckgDimensions;
-                  bckgDimensions && ctx.fillRect(node.x - bckgDimensions[0] / 2, node.y - bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
+                  const bckgDimensions = gNode.__bckgDimensions;
+                  if (bckgDimensions) {
+                    ctx.fillRect((gNode.x ?? 0) - bckgDimensions[0] / 2, (gNode.y ?? 0) - bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
+                  }
                 }}
              />
            ) : (

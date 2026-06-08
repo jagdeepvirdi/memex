@@ -1,10 +1,11 @@
 import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
 import pLimit from 'p-limit';
 import { scrapeUrl } from '../services/scraper.js';
 import { summarizeAndClassify } from '../services/summarizer.js';
-import { parseKeepZip } from '../services/keepImporter.js';
+import { parseKeepZip, type KeepNote } from '../services/keepImporter.js';
 import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
@@ -18,6 +19,17 @@ import type { IngestUrlRequest } from '../../../shared/types.js';
 import logger from '../lib/logger.js'
 
 const router = Router();
+
+// Throttle ingest endpoints to prevent hammering Ollama via a misconfigured
+// bookmarklet, script, or share-target. Keep ZIPs and job-status polling are
+// excluded — they're already protected by multipart limits / cheap DB reads.
+const ingestLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  limit: Number(process.env.INGEST_RATE_LIMIT_MAX ?? 30),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many ingest requests. Slow down.' },
+})
 
 // 50 MB cap for documents and images; 100 MB for audio; 500 MB for Keep ZIPs.
 const upload = multer({
@@ -65,7 +77,7 @@ async function failJob(id: string, error: string): Promise<void> {
 }
 
 // Background: classify saved items one by one and update DB records
-async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: string) {
+async function classifyAndUpdateBatch(itemIds: string[], notes: KeepNote[], jobId: string) {
   const limit = pLimit(3);
   let completed = 0;
 
@@ -171,7 +183,7 @@ async function classifyAndUpdateBatch(itemIds: string[], notes: any[], jobId: st
   await Promise.all(tasks);
 }
 
-router.post('/url', async (req, res) => {
+router.post('/url', ingestLimiter, async (req, res) => {
   try {
     const { url } = req.body as IngestUrlRequest;
     if (!url) return res.status(400).json({ error: 'URL is required' });
@@ -288,7 +300,7 @@ router.get('/vision/health', async (_req, res) => {
 
 // ── POST /api/ingest/file — image → vision model | document → MarkItDown ──────
 
-router.post('/file', upload.single('file'), async (req, res) => {
+router.post('/file', ingestLimiter, upload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
   const { originalname, buffer, mimetype } = req.file;
@@ -383,7 +395,7 @@ router.get('/whisper/health', async (_req, res) => {
 
 // ── POST /api/ingest/voice — transcribe audio → classify → preview ────────────
 
-router.post('/voice', audioUpload.single('file'), async (req, res) => {
+router.post('/voice', ingestLimiter, audioUpload.single('file'), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No audio uploaded' });
 
   const { originalname, buffer, mimetype } = req.file;
@@ -431,7 +443,7 @@ router.post('/voice', audioUpload.single('file'), async (req, res) => {
 
 // ── POST /api/ingest/quicksave — one-shot: scrape + classify + save (bookmarklet) ──
 
-router.post('/quicksave', async (req, res) => {
+router.post('/quicksave', ingestLimiter, async (req, res) => {
   const { url } = req.body;
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ error: 'URL is required' });
@@ -486,7 +498,7 @@ router.post('/quicksave', async (req, res) => {
   }
 });
 
-router.post('/text', async (req, res) => {
+router.post('/text', ingestLimiter, async (req, res) => {
   try {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: 'Text is required' });

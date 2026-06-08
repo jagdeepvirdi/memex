@@ -28,7 +28,7 @@ export type ClassificationResult = {
   summary: string
   structured: Record<string, unknown>
   multiEntity?: boolean
-  entities?: any[]
+  entities?: Record<string, unknown>[]
   confidence: number
   intent?: 'actionable' | 'reference' | 'idea'
   model?: string  // which AI model produced this result
