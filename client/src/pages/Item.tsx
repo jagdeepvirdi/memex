@@ -420,9 +420,9 @@ export default function ItemPage() {
             
             <div className="p-8 flex-1">
                {isEditing ? (
-                 <Editor content={editedContent} onChange={setEditedContent} />
+                 <Editor key={`${item.id}-edit`} content={editedContent} onChange={setEditedContent} />
                ) : (
-                 <Editor content={item.content} onChange={() => {}} readOnly />
+                 <Editor key={`${item.id}-readonly-${item.updatedAt}`} content={item.content} onChange={() => {}} readOnly />
                )}
             </div>
           </div>

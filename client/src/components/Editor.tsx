@@ -44,7 +44,6 @@ export default function Editor({ content, onChange, placeholder = 'Start writing
       onChange(editor.getHTML());
     },
   });
-
   if (!editor) {
     return null;
   }
