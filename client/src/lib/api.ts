@@ -229,3 +229,7 @@ export async function setReminder(itemId: string, remindAt: string | null): Prom
     body: JSON.stringify({ remindAt }),
   })
 }
+
+export async function summarizeItemLinks(itemId: string): Promise<Item> {
+  return apiFetch<Item>(`/items/${itemId}/summarize-links`, { method: 'POST' })
+}

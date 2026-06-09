@@ -25,6 +25,8 @@ import {
 import { embedItem } from '../services/embedder.js'
 import { extractAndLinkEntities } from '../services/entityService.js'
 import { generateDigest } from '../services/digestService.js'
+import { scrapeUrl } from '../services/scraper.js'
+import { aiChat } from '../services/ai.js'
 import type { ItemType, ItemSource, ItemIntent } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
@@ -272,9 +274,11 @@ router.get('/stats', async (_req, res) => {
   try {
     const { rows } = await pool.query(`
       SELECT
-        COUNT(*)                                                        AS total,
-        COUNT(*) FILTER (WHERE structured != '{}'::jsonb)              AS ai_enriched,
-        COUNT(*) FILTER (WHERE structured  = '{}'::jsonb)              AS pending_ai,
+        COUNT(*)                                                           AS total,
+        COUNT(*) FILTER (WHERE structured != '{}'::jsonb)                 AS ai_enriched,
+        COUNT(*) FILTER (WHERE structured  = '{}'::jsonb)                 AS pending_ai,
+        COUNT(*) FILTER (WHERE reviewed = TRUE)                           AS reviewed,
+        COUNT(*) FILTER (WHERE reviewed = FALSE)                          AS unreviewed,
         COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') AS recent
       FROM items WHERE deleted_at IS NULL
     `)
@@ -288,6 +292,8 @@ router.get('/stats', async (_req, res) => {
       totalItems:      parseInt(rows[0].total,       10),
       aiEnriched:      parseInt(rows[0].ai_enriched, 10),
       pendingAI:       parseInt(rows[0].pending_ai,  10),
+      reviewed:        parseInt(rows[0].reviewed,    10),
+      unreviewed:      parseInt(rows[0].unreviewed,  10),
       itemsByType,
       totalVaultItems: parseInt(vaultResult.rows[0].count, 10),
       recentActivity:  parseInt(rows[0].recent,      10),
@@ -717,6 +723,66 @@ router.delete('/:id/share', async (req, res) => {
   } catch (err) {
     logger.error(err, 'DELETE /api/items/:id/share error')
     res.status(500).json({ error: 'Failed to revoke sharing' })
+  }
+})
+
+// ── POST /api/items/:id/summarize-links ──────────────────────────────────────
+// Extracts all URLs from the note's HTML content, fetches each via Jina,
+// summarises with Ollama, and persists the results in structured.linkSummaries.
+// Idempotent: if linkSummaries already exists the saved result is returned as-is.
+
+function extractUrlsFromContent(html: string): string[] {
+  const seen = new Set<string>()
+  // href attributes from TipTap anchor nodes
+  for (const m of html.matchAll(/href="(https?:\/\/[^"]+)"/g)) seen.add(m[1])
+  // bare URLs in plain text (common in Google Keep notes)
+  for (const m of html.matchAll(/https?:\/\/[^\s<>"')\]]+/g)) seen.add(m[0])
+  return [...seen].slice(0, 5)
+}
+
+router.post('/:id/summarize-links', async (req, res) => {
+  const client = await pool.connect()
+  try {
+    const item = await fetchItem(client, req.params.id)
+    if (!item) { res.status(404).json({ error: 'Item not found' }); return }
+
+    const structured = item.structured as Record<string, unknown>
+    if (structured.linkSummaries) { res.json(item); return }
+
+    const urls = extractUrlsFromContent(item.content)
+    if (urls.length === 0) {
+      res.status(400).json({ error: 'No URLs found in note content' })
+      return
+    }
+
+    const limit = pLimit(3)
+    const linkSummaries = await Promise.all(
+      urls.map(url => limit(async () => {
+        try {
+          const scraped = await scrapeUrl(url)
+          const summary = await aiChat(
+            `Summarize the following webpage in 2-3 sentences:\n\nTitle: ${scraped.title}\n\n${scraped.content.slice(0, 3000)}`,
+            'You are a concise summarizer. Return only the summary text, no preamble or labels.'
+          )
+          return { url, title: scraped.title, summary: summary.trim() }
+        } catch {
+          return { url, title: url, summary: 'Could not fetch content for this URL.' }
+        }
+      }))
+    )
+
+    await pool.query(
+      'UPDATE items SET structured = $1, updated_at = NOW() WHERE id = $2',
+      [JSON.stringify({ ...structured, linkSummaries }), req.params.id]
+    )
+
+    const updated = await fetchItem(client, req.params.id)
+    res.json(updated)
+  } catch (err) {
+    logger.error(err, 'POST /api/items/:id/summarize-links error')
+    res.status(500).json({ error: 'Failed to summarize links' })
+  } finally {
+    client.release()
   }
 })
 

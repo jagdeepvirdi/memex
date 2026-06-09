@@ -227,10 +227,12 @@ router.post('/keep/bulk', async (req, res) => {
     await client.query('BEGIN');
     for (const note of notes) {
       const content = note.content || ''
+      const noteCreatedAt = note.createdAt ? new Date(note.createdAt) : new Date();
+      const noteUpdatedAt = note.updatedAt ? new Date(note.updatedAt) : noteCreatedAt;
       const { rows } = await client.query<{ id: string }>(
-        `INSERT INTO items (title, type, content, raw_content, structured, source, reviewed)
-         VALUES ($1, $2, $3, $3, $4, $5, $6) RETURNING id`,
-        [note.title || 'Untitled', 'note', content, JSON.stringify({}), 'keep', false]
+        `INSERT INTO items (title, type, content, raw_content, structured, source, reviewed, created_at, updated_at)
+         VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8) RETURNING id`,
+        [note.title || 'Untitled', 'note', content, JSON.stringify({}), 'keep', false, noteCreatedAt, noteUpdatedAt]
       );
       const itemId = rows[0].id;
       savedIds.push(itemId);

@@ -6,10 +6,10 @@ import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
 import ItemCard from '../components/cards/ItemCard'
 import Editor from '../components/Editor'
-import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, reClassifyItem, setReminder, shareItem, unshareItem, updateItem } from '../lib/api'
+import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, reClassifyItem, setReminder, shareItem, unshareItem, updateItem, summarizeItemLinks } from '../lib/api'
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
-import type { Item, ItemExtraction } from '../../../shared/types'
+import type { Item, ItemExtraction, LinkSummary } from '../../../shared/types'
 
 export default function ItemPage() {
   const { id } = useParams<{ id: string }>()
@@ -37,6 +37,7 @@ export default function ItemPage() {
   const [editingCategory, setEditingCategory] = useState(false)
   const [categoryValue, setCategoryValue] = useState('')
   const [savingCategory, setSavingCategory] = useState(false)
+  const [summarizingLinks, setSummarizingLinks] = useState(false)
   const categoryInputRef = useRef<HTMLInputElement>(null)
   const tagInputRef = useRef<HTMLInputElement>(null)
   const { vaultKey, isLocked } = useVaultStore()
@@ -267,6 +268,21 @@ export default function ItemPage() {
     setTimeout(() => setCopiedShare(false), 2000)
   }
 
+  const handleSummarizeLinks = async () => {
+    if (!id) return
+    setSummarizingLinks(true)
+    try {
+      const updated = await summarizeItemLinks(id)
+      setItem(updated)
+      toast.success('Link summaries saved')
+    } catch (err) {
+      toast.error('Failed to summarize links')
+      console.error(err)
+    } finally {
+      setSummarizingLinks(false)
+    }
+  }
+
   const startEditing = () => {
     if (!item) return
     setEditedTitle(item.title)
@@ -410,6 +426,61 @@ export default function ItemPage() {
               )}
             </div>
           </div>
+
+          {/* AI Summary */}
+          {!isEditing && (() => {
+            const s = item.structured as Record<string, unknown>
+            const hasSummary = !!s?.summary
+            const linkSummaries = Array.isArray(s?.linkSummaries) ? s.linkSummaries as LinkSummary[] : null
+            const hasUrls = /https?:\/\//.test(item.content)
+            if (!hasSummary && !linkSummaries && !hasUrls) return null
+            return (
+              <div className="bg-white/3 border border-white/5 rounded-xl px-6 py-4 flex flex-col gap-3">
+                <span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold flex items-center gap-2">
+                  <Sparkles size={11} className="text-accent" /> AI Summary
+                </span>
+
+                {hasSummary && (
+                  <p className="text-sm text-ink-muted leading-relaxed">
+                    {String(s.summary)}
+                  </p>
+                )}
+
+                {linkSummaries && (
+                  <div className="flex flex-col gap-2">
+                    <span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold flex items-center gap-1.5">
+                      <LinkIcon size={10} className="text-accent" /> Links in this note
+                    </span>
+                    {linkSummaries.map((ls, i) => (
+                      <div key={i} className="bg-white/3 border border-white/5 rounded-lg px-4 py-3 flex flex-col gap-1.5">
+                        <a
+                          href={ls.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-xs text-accent hover:underline truncate flex items-center gap-1"
+                        >
+                          <ExternalLink size={10} className="shrink-0" />
+                          {ls.title || ls.url}
+                        </a>
+                        <p className="text-xs text-ink-muted leading-relaxed">{ls.summary}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!linkSummaries && hasUrls && (
+                  <button
+                    onClick={handleSummarizeLinks}
+                    disabled={summarizingLinks}
+                    className="self-start flex items-center gap-2 text-xs bg-accent/10 hover:bg-accent/20 text-accent border border-accent/20 px-3 py-1.5 rounded-lg font-semibold transition-all disabled:opacity-40"
+                  >
+                    {summarizingLinks ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+                    {summarizingLinks ? 'Fetching links…' : 'Summarize Links'}
+                  </button>
+                )}
+              </div>
+            )
+          })()}
 
           {/* Content Area */}
           <div className="bg-surface/30 border border-white/5 rounded-2xl overflow-hidden min-h-[400px] flex flex-col shadow-2xl">

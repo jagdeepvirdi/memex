@@ -1,5 +1,6 @@
 import type { Item } from '@shared/types'
 import { CardBase, CardTitle, CardFooter, TypeBadge, Muted } from './CardBase'
+import { Calendar } from 'lucide-react'
 
 interface Props {
   item: Item
@@ -62,6 +63,11 @@ export default function LinkCard({ item, onClick }: Props) {
           ↗ {hostname ?? item.sourceUrl}
         </a>
       )}
+
+      <div className="flex items-center gap-1 text-[10px] text-ink-muted/60 mt-1">
+        <Calendar size={10} />
+        {new Date(item.createdAt).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+      </div>
 
       <CardFooter tags={item.tags} />
     </CardBase>

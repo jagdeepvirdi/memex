@@ -8,6 +8,7 @@ export interface KeepNote {
   title: string;
   content: string;
   labels: string[];
+  createdAt: Date;
   updatedAt: Date;
   source: ItemSource;
 }
@@ -36,11 +37,15 @@ export function parseKeepZip(buffer: Buffer): KeepNote[] {
         if (!title && !textContent) continue;
 
         const labels = (data.labels || []).map((l: { name: string }) => l.name);
-        
+
         // Convert microseconds to milliseconds
-        const updatedAt = data.userEditedTimestampUsec 
-          ? new Date(data.userEditedTimestampUsec / 1000) 
-          : new Date();
+        const now = new Date();
+        const createdAt = data.createdTimestampUsec
+          ? new Date(data.createdTimestampUsec / 1000)
+          : now;
+        const updatedAt = data.userEditedTimestampUsec
+          ? new Date(data.userEditedTimestampUsec / 1000)
+          : now;
 
         // Deduplicate by content hash
         const hash = crypto.createHash('md5').update(title + textContent).digest('hex');
@@ -51,6 +56,7 @@ export function parseKeepZip(buffer: Buffer): KeepNote[] {
           title,
           content: textContent,
           labels,
+          createdAt,
           updatedAt,
           source: 'keep'
         });
@@ -90,10 +96,14 @@ try {
         if (!title && !textContent) continue;
 
         const labels = (data.labels || []).map((l) => l.name);
-        
-        const updatedAt = data.userEditedTimestampUsec 
-          ? new Date(data.userEditedTimestampUsec / 1000).toISOString() 
-          : new Date().toISOString();
+
+        const now = new Date().toISOString();
+        const createdAt = data.createdTimestampUsec
+          ? new Date(data.createdTimestampUsec / 1000).toISOString()
+          : now;
+        const updatedAt = data.userEditedTimestampUsec
+          ? new Date(data.userEditedTimestampUsec / 1000).toISOString()
+          : now;
 
         const hash = crypto.createHash('md5').update(title + textContent).digest('hex');
         if (seenHashes.has(hash)) continue;
@@ -103,6 +113,7 @@ try {
           title,
           content: textContent,
           labels,
+          createdAt,
           updatedAt,
           source: 'keep'
         });
@@ -130,6 +141,7 @@ export function parseKeepZipAsync(buffer: Buffer): Promise<KeepNote[]> {
         // Re-hydrate Date objects after cloning across thread boundary
         const notes = (message.notes as any[]).map((n) => ({
           ...n,
+          createdAt: new Date(n.createdAt),
           updatedAt: new Date(n.updatedAt),
         }));
         resolve(notes);

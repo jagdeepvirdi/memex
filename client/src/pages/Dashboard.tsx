@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, HelpCircle, X, Zap, Database, Key, Clock, Sparkles, Calendar, TrendingUp, Lightbulb, Link2, Compass, Loader2 } from 'lucide-react'
+import { Plus, Search, HelpCircle, X, Zap, Database, Key, Clock, Sparkles, Calendar, TrendingUp, Lightbulb, Link2, Compass, Loader2, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -228,11 +228,11 @@ export default function Dashboard() {
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-               <StatCard 
-                 icon={<Database size={18} className="text-blue-400" />} 
-                 label="Total Items" 
-                 value={stats?.totalItems ?? 0} 
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+               <StatCard
+                 icon={<Database size={18} className="text-blue-400" />}
+                 label="Total Items"
+                 value={stats?.totalItems ?? 0}
                />
                <StatCard
                  icon={<Zap size={18} className="text-yellow-400" />}
@@ -242,15 +242,23 @@ export default function Dashboard() {
                  onClick={() => navigate('/items/enriched')}
                  onSubClick={stats && stats.pendingAI > 0 ? () => navigate('/items/pending') : undefined}
                />
-               <StatCard 
-                 icon={<Key size={18} className="text-teal-400" />} 
-                 label="Secrets in Vault" 
-                 value={stats?.totalVaultItems ?? 0} 
+               <StatCard
+                 icon={<CheckCircle size={18} className="text-green-400" />}
+                 label="Reviewed"
+                 value={stats?.reviewed ?? 0}
+                 sub={stats && stats.unreviewed > 0 ? `${stats.unreviewed} to review` : undefined}
+                 onClick={() => navigate('/items/enriched')}
+                 onSubClick={stats && stats.unreviewed > 0 ? () => navigate('/items/pending') : undefined}
                />
-               <StatCard 
-                 icon={<Clock size={18} className="text-purple-400" />} 
-                 label="Last 24h Activity" 
-                 value={stats?.recentActivity ?? 0} 
+               <StatCard
+                 icon={<Key size={18} className="text-teal-400" />}
+                 label="Secrets in Vault"
+                 value={stats?.totalVaultItems ?? 0}
+               />
+               <StatCard
+                 icon={<Clock size={18} className="text-purple-400" />}
+                 label="Last 24h Activity"
+                 value={stats?.recentActivity ?? 0}
                />
             </div>
           </section>

@@ -104,6 +104,12 @@ export interface SpecData {
   [key: string]: string | number | boolean
 }
 
+export interface LinkSummary {
+  url: string
+  title: string
+  summary: string
+}
+
 // ── Category tree ─────────────────────────────────────────────────────────────
 
 export interface Category {
@@ -236,6 +242,8 @@ export interface StatsResponse {
   totalItems: number
   aiEnriched: number   // items Ollama has classified (structured != {})
   pendingAI: number    // items still waiting for AI enrichment
+  reviewed: number     // items user has confirmed
+  unreviewed: number   // items awaiting user review
   itemsByType: Record<ItemType, number>
   totalVaultItems: number
   recentActivity: number
