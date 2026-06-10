@@ -202,10 +202,6 @@ describe('SettingsPage Component', () => {
 
     // Hover is represented in test-library by just finding the button.
     // Lucide Trash2 is rendered as a button without text, we can find it by getting all buttons or using container query
-    const trashButtons = screen.getAllByRole('button').filter(b => b.querySelector('svg'))
-    // There are several icons. Let's find by class or query or index.
-    // Let's find the delete button by clicking the trash icon.
-    // Better yet: we can target the specific button because it is next to Work text.
     const workContainer = screen.getByText('Work').closest('.group')!
     const trashBtn = workContainer.querySelector('button:last-child')!
 

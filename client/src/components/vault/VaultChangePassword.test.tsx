@@ -28,7 +28,7 @@ describe('VaultChangePassword Component', () => {
     { id: '1', service: 'S1', ciphertext: 'c1', iv: 'iv1', type: 'note', createdAt: new Date(), updatedAt: new Date() },
     { id: '2', service: 'S2', ciphertext: 'c2', iv: 'iv2', type: 'credential', createdAt: new Date(), updatedAt: new Date() },
   ]
-  const mockOldKey = { type: 'old-key' }
+  const mockOldKey = { type: 'old-key' } as unknown as CryptoKey
   const mockOnSuccess = vi.fn()
   const mockOnCancel = vi.fn()
 

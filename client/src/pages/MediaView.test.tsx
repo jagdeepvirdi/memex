@@ -35,8 +35,8 @@ vi.mock('../lib/api', () => ({
   updateItem: (...a: any[]) => mockUpdateItem(...a),
 }))
 
-const mockItemsToCsv = vi.fn(() => 'csv-data')
-const mockDownloadCsv = vi.fn()
+const mockItemsToCsv = vi.fn((..._a: any[]): string => 'csv-data')
+const mockDownloadCsv = vi.fn((..._a: any[]): void => {})
 vi.mock('../lib/export', () => ({
   itemsToCsv: (...a: any[]) => mockItemsToCsv(...a),
   downloadCsv: (...a: any[]) => mockDownloadCsv(...a),
