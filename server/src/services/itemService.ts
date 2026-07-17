@@ -7,6 +7,25 @@ import { classify, type ClassificationResult } from './classifier.js'
 import type { Item, ItemType, ItemSource, ItemIntent } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
+// ── Optional external notification (DevBrain) ─────────────────────────────────
+// Unset by default — a no-op unless the operator runs DevBrain locally and
+// wants Memex job completions surfaced there. Never throws: a notification
+// failure must never affect the re-index job it's reporting on. Reads the env
+// var at call time (not module load) so it can't go stale across a hot reload.
+async function notifyDevBrain(title: string, body: string, level: 'info' | 'success' | 'warning' | 'error'): Promise<void> {
+  const url = process.env.DEVBRAIN_NOTIFY_URL
+  if (!url) return
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ project: 'memex', title, body, level }),
+    })
+  } catch (err) {
+    logger.warn(err, 'DevBrain notification failed')
+  }
+}
+
 // ── Row type for list queries ─────────────────────────────────────────────────
 
 export interface ItemRow {
@@ -355,6 +374,13 @@ export async function reprocessBulkItems(filterAll: boolean): Promise<{ queued: 
     ).catch(() => {})
 
     logger.info(`[Reprocess] Complete: ${rows.length - failed} succeeded, ${failed} failed`)
+
+    const succeeded = rows.length - failed
+    void notifyDevBrain(
+      failed > 0 ? 'Memex re-index finished with failures' : 'Memex re-index complete',
+      `${succeeded} of ${rows.length} item(s) reprocessed${failed > 0 ? `, ${failed} failed` : ''}.`,
+      failed > 0 ? 'warning' : 'success'
+    )
   })().catch(err => {
     logger.error(err, 'Background reprocess bulk items error')
   })
