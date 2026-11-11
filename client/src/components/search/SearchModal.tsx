@@ -48,22 +48,33 @@ export default function SearchModal({ onClose }: SearchModalProps) {
     }
   }, [onClose]);
 
+  // Always-current view of state for the window listener. Registering the
+  // listener once (instead of re-attaching it in an effect on every results /
+  // selectedIndex change) avoids a window where a keypress hits a stale closure.
+  const latestRef = useRef<{ results: Item[]; selectedIndex: number; select: (id: string) => void }>({
+    results,
+    selectedIndex,
+    select: () => {},
+  });
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const { results: current, selectedIndex: index, select } = latestRef.current;
+      const count = current.length || 1;
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setSelectedIndex(prev => (prev + 1) % (results.length || 1));
+        setSelectedIndex((index + 1) % count);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setSelectedIndex(prev => (prev - 1 + (results.length || 1)) % (results.length || 1));
-      } else if (e.key === 'Enter' && results[selectedIndex]) {
-        handleSelect(results[selectedIndex].id);
+        setSelectedIndex((index - 1 + count) % count);
+      } else if (e.key === 'Enter' && current[index]) {
+        select(current[index].id);
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [results, selectedIndex]);
+  }, []);
 
   useEffect(() => {
     if (!query.trim()) {
@@ -91,6 +102,8 @@ export default function SearchModal({ onClose }: SearchModalProps) {
     navigate(`/item/${id}`);
     onClose();
   };
+
+  latestRef.current = { results, selectedIndex, select: handleSelect };
 
   return (
     <div
