@@ -550,3 +550,283 @@ markitdown --help
     dedupe in parallel, returns `{ preview, similarItems }`. `VoiceIngestPanel.tsx` — in-browser
     recorder (MediaRecorder, live timer, playback) + audio file upload. Shows install instructions
     if whisper missing. `WHISPER_MODEL` env var selects model size. Voice tab added to IngestPanel.
+
+---
+
+## 🧠 Dev Knowledge Capture (GitHub repos, AI prompts/skills, explainers from Instagram) — planned 2026-11-11
+
+> **Status: PLANNING ONLY — nothing implemented.** Manual paste only (links + captions); no Instagram
+> scraping or API. Findings below were verified against the code and the live DB (read-only).
+> **Decisions below were confirmed on 2026-11-11 ("go with your recommendations").** Implementation has not started.
+
+### Decisions (DECIDED 2026-11-11)
+- [x] **Priority:** new nullable `items.priority` (`essential|useful|skip`), user-owned. **Decided: separate column.**
+      Do NOT reuse `intent` — it is AI-assigned, defaults to `reference`, is NULL on all 725 items,
+      and `applyClassificationResult` overwrites it on re-classify of unreviewed items.
+- [x] **Skip:** **Decided: label only for MVP** (not hidden from digest/search). Revisit hiding in a later phase.
+- [x] **GitHub metadata:** **Decided: README-only (via Jina) for MVP.** GitHub API lookup (stars/language/updated)
+      is optional in v1 and must respect strict-local mode.
+- [x] **Multi-repo captions:** **Decided: split** one caption listing N repos into N items (existing `multiEntity`);
+      each split item must get its own `sourceUrl`.
+- [x] **Stray categories** (`Links` root holds 218 items, no leaf; `Tech>Link`, `Courses>Tech`, `Travel>Links`):
+      **Decided: out of scope** for this feature (kept as optional Phase 3).
+- [x] **Creator:** **Decided: handle in `structured` for MVP; link as entity in v1** (Phase 2).
+- [x] **Category parent:** **Decided: existing `Tech > AI`** (avoid a name containing `/`, which breaks the `>`/`›` path UI).
+
+### Verified findings that shape the plan
+- No new `ItemType`: `item_type` is a Postgres enum; reuse `link` (293 of 725 items already).
+  Avoids `CardBase.TYPE_BADGE` (`Record<ItemType,…>`), `ItemCard`/`SearchModal` switches, `SemanticGraph` colours.
+- **Capture drops data on save:** `IngestPanel.handleSave` sends only title/type/content/categories/tags/
+  source/sourceUrl — `structured`, `intent`, `confidence` are lost. `POST /api/items` also marks items
+  `reviewed=true`. `createItem` (db/helpers.ts) and `classifyAndUpdateBatch` don't write `intent`.
+- `/ingest/text|url|file|voice` and quicksave previews don't return `intent`; `CreateItemRequest` and
+  `createItemSchema` have no `intent` field.
+- **Classifier can't pick new leaves alone:** `normalizeCategories` maps the last AI name via flat
+  `CANONICAL_MAPPING`; unmapped → parent or `['Links']` for `link`. New leaves need entries in
+  `CANONICAL_LEAVES`, `CANONICAL_MAPPING`, and the `link` branch of `mapToCategories`.
+  Collisions: `notes`→`Finance>Notes`, `instagram`→`Links>Instagram`, and
+  `tutorial|course|design|development|programming`→bare `Tech`. Topic must beat source.
+- Manual tab hardcodes `source:'manual'`; nothing is ever tagged `instagram`. No item has `source_url`
+  (0 of 725) → no URL dedupe; `content_hash` is never written (CLAUDE.md is stale here).
+- Instagram oEmbed in `scraper.ts` is thin/placeholder (login-walled) — the pasted caption is the real source.
+- `entityService.extractAndLinkEntities` only branches on media/book/place/stock; `POST /api/items` never calls it.
+  `entity_type` is a Postgres enum (person/place/organization/other) — repo→`other`, creator→`person`,
+  owner→`organization` needs NO enum migration.
+- `digestService.ITEM_COLS` does not select `i.intent` (always undefined there); `DigestResponse` has only `recentItems`.
+- `/ingest/keep/bulk` problems to avoid: hardcodes `type='note'`/`source='keep'`, typed to `KeepNote`,
+  no rate limit/size cap, job never completes if last note is empty (early return skips `completeJob`).
+- Migrations: next is **018**. `migrate.ts` runs sorted, tracked in `_migrations`; `ALTER TYPE … ADD VALUE`
+  must be alone in its file (runs outside txn). `schema.test.ts` drift guard: sequential numbers, every
+  `CREATE TABLE` in `schema.sql`, and the "reflects all N migrations" comment must match.
+
+---
+
+### Phase 0 — Decisions & baseline (no code)
+- [x] Decisions confirmed (see "Decisions (DECIDED 2026-11-11)" above)
+- [ ] Read-only baseline: classify existing Tech + Links items with the current classifier, save the output
+      to compare after mapping changes (guards against silent re-bucketing)
+- [ ] Default (assumed, not explicitly confirmed): do NOT run `reprocess-bulk 'all'` until Phase 1 is verified;
+      the 157 unreviewed items are the only ones exposed
+      (≈580 reviewed items are already protected — `applyClassificationResult` skips reviewed)
+
+### Phase 1 — MVP: paste a GitHub link or Instagram caption → right category + priority
+*No new routes, no entity work. Files in order; migrations first.*
+
+**1. Database**
+- [ ] `server/src/db/migrations/018_priority.sql` — `ALTER TABLE items ADD COLUMN IF NOT EXISTS priority VARCHAR(20)` (no enum/CHECK, matches `intent`)
+- [ ] `server/src/db/migrations/019_ai_dev_categories.sql` — seed `Tech > AI > Repos / Prompts & Skills / Explainers / Tools`;
+      filter Tech root on `parent_id IS NULL`; `INSERT … SELECT … ON CONFLICT DO NOTHING` (idempotent; 018/019 independent)
+- [ ] `server/src/db/schema.sql` — add `priority` column + bump "reflects all 19 migrations" comment (required by `schema.test.ts`)
+
+**2. Shared types**
+- [ ] `shared/types.ts` — `ItemPriority`, `Item.priority`; `RepoData` shape
+      (`kind`, `repoName`, `repoUrl`, `owner`, `creatorHandle`, `whatItDoes`, `promptText`);
+      add `structured`, `intent`, `priority`, `confidence` to `CreateItemRequest`
+
+**3. Server persistence**
+- [ ] `server/src/db/helpers.ts` — `ItemRow`, `rowToItem`, `ITEM_SELECT_SQL`, `createItem` carry `intent` + `priority`
+- [ ] `server/src/services/itemService.ts` — list select + priority filter
+- [ ] `server/src/routes/items.ts` — `createItemSchema`, `POST` INSERT (shifts param order), `updateItemSchema`, `listQuerySchema`;
+      review the auto `reviewed=true` rule on `POST /api/items` so AI-captured items are not silently marked reviewed
+
+**4. Classification**
+- [ ] `server/src/services/classifier.ts` — add leaves to `CANONICAL_LEAVES`; `CANONICAL_MAPPING` entries
+      (repos, prompts, skills, explainers, tools, github); `link` branch; **deterministic pre-pass:**
+      `github.com/<owner>/<repo>` as main subject → Repos leaf; prompt rules for repo/prompt/skill/explainer
+      `structured` shapes; rule that topic beats `instagram` source
+- [ ] `server/src/services/summarizer.ts` — return `intent`, repo-aware summary ("what it is / what it's for")
+- [ ] `server/src/routes/ingest.ts` (`/text`, `/url`) — return `intent`; detect instagram.com URL → `source='instagram'` + `sourceUrl`;
+      regex-extract GitHub URL into `sourceUrl`
+
+**5. Client**
+- [ ] `client/src/components/ingest/IngestPanel.tsx` — send full payload (structured/intent/priority/confidence); priority picker; source auto-detect/selector
+- [ ] `client/src/components/ingest/FileIngestPanel.tsx`, `VoiceIngestPanel.tsx` — same payload fix
+- [ ] `client/src/lib/api.ts` — `fetchItems` priority filter option
+- [ ] `client/src/components/cards/LinkCard.tsx`, `client/src/pages/Item.tsx` — show repo name/URL/what-it-does; priority picker on Item page
+
+**6. Tests**
+- [ ] `classifier.test.ts` (mapping, pre-pass, collisions), `items.test.ts` (INSERT param shift, priority), `ingest.test.ts`, `schema.test.ts` (migration count)
+- [ ] Client: `IngestPanel` cases (payload includes structured/priority; instagram source detection)
+- [ ] Run the before/after classify diff against the Phase 0 baseline
+
+**Acceptance:** paste `https://github.com/owner/repo` → lands in `Tech > AI > Repos`, summary says what it is for,
+`structured` + priority saved, source URL set. Paste an Instagram caption → topic category (not `Links>Instagram`),
+`source='instagram'`.
+
+### Phase 2 — v1: entity linking, digest, bulk import
+- [ ] `server/src/services/entityService.ts` — branch on `type==='link' && structured.kind` (key on `structured.kind`, not `type`):
+      creator→`person`, owner→`organization`, repo→`other`; call from `POST /api/items`; `seedEntityGraph.ts` backfill
+- [ ] `server/src/services/digestService.ts` — add `i.intent`, `i.priority` to `ITEM_COLS`; additive `byPriority` field
+      (keep `recentItems` so `Digest.test.tsx` passes); update `Digest.tsx` + tests
+- [ ] **Bulk route** `POST /ingest/paste/bulk` (do NOT clone `/keep/bulk` as-is):
+  - [ ] Generalize `classifyAndUpdateBatch` — source, sourceUrl, intent as parameters; fix the early-return job-completion bug
+  - [ ] Add `ingestLimiter` + size cap; per-item error tracking
+  - [ ] Dedupe by normalized URL; optional `items_source_url_idx` in migration 020 (must tolerate existing duplicates)
+  - [ ] `PasteImportPanel` tab reusing Keep job polling (`GET /ingest/jobs/:id`)
+- [ ] `TableView` — priority filter + bulk triage actions (set priority on selection)
+- [ ] Optional: GitHub API lookup (stars, language, updated) — only if approved; respects strict-local mode
+- [ ] Tests for each of the above
+
+### Phase 3 — Optional / later
+- [ ] Backfill priority/intent for existing items (explicit opt-in only; all 725 are NULL intent today)
+- [ ] Fix intent plumbing on all capture paths (`classifyAndUpdateBatch`, quicksave) as a bonus
+- [ ] Clean stray categories (`Tech>Link`, `Courses>Tech`, `Travel>Links`, 218 bare-`Links` items)
+- [ ] Update stale CLAUDE.md claims (content-hash dedupe, Instagram caption scraping)
+- [ ] If `'repo'` entity type is ever wanted: own migration file with only `ALTER TYPE entity_type ADD VALUE IF NOT EXISTS 'repo'`
+      (no-txn), run before code that inserts it; update TS `EntityType` + `SemanticGraph.tsx` colours
+
+### Risks
+- **Silent re-bucketing:** new mapping keys (`ai`, `tools`, `prompts`) change every future capture; `reprocess-bulk 'all'`
+  would re-map the 157 unreviewed items. Mitigate: append-only mapping changes + the Phase 0 diff.
+- **GitHub pre-pass** must match only a repo URL as the main subject, not any mention of one.
+- **Migrations:** 018/019 idempotent; keep numbering gapless; update `schema.sql` + count comment or `schema.test.ts` fails.
+- **Re-classify clobber:** `applyClassificationResult` overwrites `intent`/categories on unreviewed items — another reason for a separate `priority`.
+- **Accuracy:** a 3B local model gives vague "what it's for" on thin READMEs; a pasted caption often explains the use case better.
+- **Strict-local mode** blocks the Jina fetch → bare GitHub links yield nothing useful; fall back to pasted text.
+- **Existing data barely affected:** only 3 of 725 items mention GitHub/Instagram URLs.
+
+---
+
+## 🤖 Multi-AI Providers + 🎬 YouTube Understanding + 🍳 Recipe Extraction — planned 2026-11-11
+
+> **Status: PLANNING ONLY — nothing implemented.** Requested by the user on 2026-11-11:
+> (1) let Memex use Claude API and Gemini API as well as local Ollama;
+> (2) understand, title, categorize and keep the many YouTube links already saved;
+> (3) on request, extract the content of a video to explain it;
+> (4) on request, extract a recipe from a video and save it as its own item.
+> Findings below were verified against the code and the live DB (read-only).
+> **Migration numbers:** 018/019 are reserved by the Dev Knowledge Capture plan above. Numbers below use
+> `0NN` and must be assigned gaplessly in whatever order the work actually ships.
+> **Decisions confirmed 2026-11-11** — see "Decisions (DECIDED …)" at the end of this section. Implementation has not started.
+
+### Verified findings
+
+**AI routing (`server/src/services/ai.ts`, `settings.ts`)**
+- `aiChat()` supports exactly two backends: Ollama, or Claude when `use_claude=true` AND `ANTHROPIC_API_KEY` is set.
+  `@anthropic-ai/sdk` is the only cloud SDK installed; no Gemini SDK (`@google/genai`) in `server/package.json`.
+- The Settings UI hardcodes one cloud option (`Claude 3.5 Sonnet (Cloud)`) and a boolean `use_claude` — a single global
+  switch, so there is no per-task choice (cheap bulk classification vs. smart on-demand explain).
+- The Claude branch **ignores `format`** (no JSON mode), hardcodes `max_tokens: 2048`, and defaults the model to
+  `claude-3-5-sonnet-20240620` (old). The classifier depends on strict JSON, so cloud classification relies on its
+  parse-retry path.
+- **`strict_local_mode` is enforced only in `scraper.ts`.** It is NOT checked in `aiChat()`. With `use_claude=true`
+  and a key set, Claude is still called while strict-local is on. Must be fixed before any cloud provider is added.
+- **Do not store API keys in the `settings` table:** `GET /api/settings` returns every row to the client (it already
+  returns `bookmarklet_key`). Keys must stay in server env vars; the UI should only see "configured: yes/no".
+- Embeddings always go through Ollama (`nomic-embed-text`, 768-dim pgvector). Changing the embedding provider would
+  invalidate every stored vector → **keep embeddings local**; only chat/generation becomes multi-provider.
+- Provenance already exists: `items.extraction_model` and versioned `item_extractions` (migration 009), so which
+  provider/model produced a result can be recorded as a string (e.g. `claude:<model>`, `gemini:<model>`) with no schema change.
+- Privacy exposure: the live DB holds plaintext credential-like items (now filed under `Personal > Bank`). Any cloud
+  path (re-classify, insights, digest, ask/RAG) could send them off-machine. Needs an explicit guard.
+
+**YouTube (`scraper.ts`, live DB)**
+- 115 active items contain a YouTube URL (types: link 70, media 32, note 12, recipe 1); **113 of them are only a bare
+  URL (<200 chars)** with titles like `YouTube Video` / `Untitled`. **0 have `source_url` set**, so the video URL
+  is just text in `content` — no dedupe, no source badge.
+- `extractYoutubeId` **does not recognise Shorts** (`youtube.com/shorts/<id>` → null; verified) → **14 saved links**
+  fall through to the generic Jina scraper. Playlist links (0 saved) are also unhandled.
+- Ingest path (`scrapeYoutube`): oEmbed title + `youtube-transcript` (unofficial package, breaks when YouTube changes).
+  On any failure it returns the literal text `Transcript unavailable.` and the item is still classified on that.
+  oEmbed also returns `author_name` (channel) which is discarded. No description, duration or publish date is kept.
+- Nothing re-enriches the existing 113 bare links; `pendingEnrichment` only covers items that failed classification.
+- Whole-transcript → classifier is untruncated in the scraper; long videos need chunk/summarise-then-classify.
+
+**Recipes**
+- There is **no `recipeParser.ts`** (CLAUDE.md is stale). Recipes only come from the classifier setting
+  `type='recipe'` + `structured: RecipeData {ingredients[], steps[], servings?, prepTime?, cookTime?, cuisine?, mealType?}`.
+  28 recipes exist; 19 have an `ingredients` field. Nothing links a recipe item back to a source item.
+
+### Recommended design
+- **Providers:** `ollama` (default, local), `claude`, `gemini`. One registry in `ai.ts`; `aiChat()` gains a `task`
+  hint (`classify | summarize | explain | extract | ask | insight`). A per-task provider map lives in `settings`
+  (`ai_provider_default`, `ai_provider_<task>`).
+- **Default routing:** bulk/background work (classify, enrich, digest) stays on local Ollama (free, private, no rate limits).
+  Cloud providers are opt-in per task, aimed at on-demand quality work (`explain`, `extract`, optionally `ask`).
+- **Privacy rule:** a `cloudSafe(item)` guard blocks sending `type='password'`, encrypted items, and anything in
+  `Personal > Bank` to a cloud provider; plus a one-time `allow_cloud_ai` consent flag. `strict_local_mode` hard-forces Ollama.
+- **YouTube:** fix recognition (Shorts, `m.`, `music.`, embed, live), store the URL in `source_url` with
+  `source='youtube'`, capture channel + title (+ description if obtainable), and keep the transcript out of `content`
+  noise by storing a capped transcript separately (`structured.transcript`) with a flag when unavailable.
+  Gemini can take a YouTube URL directly as video input (verify current API behaviour at implementation time), which would
+  cover videos that have no transcript — treat as optional, cloud-only.
+- **Backfill:** an explicit, user-triggered, resumable job over the 115 existing items (dry-run first, review queue,
+  never overwrite reviewed items) — not automatic.
+- **Explain / Extract on request:** new buttons on the Item page: *Explain this video*, *Extract recipe*.
+  Results are saved on the item (`structured.explanation`) or as a **new linked item** (recipe) via a
+  `derived_from` link back to the video item. User picks the provider per click (default = per-task setting).
+
+---
+
+### Phase A — Provider layer (foundation; do first)
+*No data migration. Touches settings + AI plumbing only. Existing behaviour (Ollama default) must be unchanged.*
+
+- [ ] **A0. Fix `strict_local_mode` enforcement inside `aiChat()`** — when on, force Ollama and refuse cloud (ship this fix on its own first; it is a latent bug today)
+- [ ] `server/package.json` — add `@google/genai` (pin exact version, ≥2 weeks old)
+- [ ] `server/src/services/ai.ts` — provider registry; `Provider { id, chat(), available() }`; `aiChat(..., { task, provider? })`;
+      `activeProvider()` returns the resolved provider; keep `aiEmbed` Ollama-only
+  - [ ] Claude: JSON mode (instruct + strip fences, or tool-use for structured output), configurable `max_tokens`, model from env/settings; update stale default model id
+  - [ ] Gemini: `responseMimeType: 'application/json'` for JSON tasks, model from `GEMINI_MODEL` env/settings
+  - [ ] Errors/timeouts/rate-limit (429) mapped to one error type; **fallback to Ollama** on provider failure for background tasks (log it), but not for user-initiated explain/extract (surface the error)
+  - [ ] Record `extraction_model` as `<provider>:<model>`
+- [ ] `server/src/services/settings.ts` — `getAiConfig()` returns `{ provider, model, perTask, allowCloud }`; keep backward compat with `use_claude`/`ai_model` (migrate old values on read)
+- [ ] `server/src/routes/ai.ts` (new) — `GET /api/ai/providers` → `[{id, configured, models[]}]` (never returns keys); `POST /api/ai/test` → one tiny round-trip to verify a provider works
+- [ ] Privacy guard — `cloudSafe(item)`; apply in re-classify, `reprocess-bulk`, insights, digest, RAG ask; unit-tested
+- [ ] `.env.example` / docs — `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `CLAUDE_MODEL`, `GEMINI_MODEL`
+- [ ] `client/src/pages/Settings.tsx` — replace hardcoded model `<select>` with provider + per-task selectors, "key configured" status, "Test connection", cloud-consent toggle, strict-local explanation
+- [ ] `client/src/lib/api.ts` — `fetchAiProviders`, `testAiProvider`
+- [ ] Tests: `ai.test.ts` (routing, strict-local, fallback, per-task, cloudSafe), Settings test update, settings route test
+- **Acceptance:** with nothing configured, behaviour is identical to today; with a Claude or Gemini key set, a chosen task runs on that provider; strict-local always forces Ollama; no key is ever returned by an API.
+
+### Phase B — YouTube understanding (organize what's saved + better capture)
+- [ ] `server/src/services/scraper.ts` — widen `extractYoutubeId` (Shorts, `m.`/`music.` hosts, `/embed/`, `/live/`); keep oEmbed `author_name`; return structured `{title, channel, videoId, transcript?, transcriptAvailable}`; cap/chunk long transcripts
+- [ ] `server/src/services/scraper.test.ts` — Shorts, mobile, `si=` params, playlist (graceful), transcript-failure cases
+- [ ] `server/src/services/summarizer.ts` / `classifier.ts` — YouTube-aware prompt: topic category (topic beats `youtube` source), tags, 2–3 sentence summary, and **detect "this is a recipe / tutorial / review / talk"** to suggest the Extract action; when no transcript, classify on title + channel and mark low confidence
+- [ ] `server/src/routes/ingest.ts` — set `source='youtube'` and `sourceUrl`; detect a YouTube URL in pasted *text* too (the Manual tab), not just the URL tab
+- [ ] `server/src/routes/items.ts` — normalised-URL dedupe check for `source_url`
+- [ ] **Backfill job** (explicit, user-triggered, resumable): `POST /api/ingest/youtube/backfill {dryRun}`
+  - [ ] Select the 115 existing items containing a YouTube URL; extract URL → `source_url`, fetch title/channel/transcript, classify
+  - [ ] Dry-run returns a before/after preview; apply writes extractions via the existing versioned `item_extractions` path; **skips reviewed items**; reuses the ingest job/progress mechanism (and fix its early-return `completeJob` bug)
+  - [ ] Rate-limit politely against YouTube; per-item failure list (private/removed videos) instead of silent `Transcript unavailable.`
+  - [ ] Multi-URL items (e.g. a note with two Gordon Ramsay links) → offer split
+- [ ] `client` — video card variant (channel, thumbnail from `https://i.ytimg.com/vi/<id>/hqdefault.jpg`, "open on YouTube"), source badge; "Backfill YouTube" action with preview + progress
+- [ ] Optional (cloud, needs Phase A): Gemini direct-URL video understanding for transcript-less videos
+- [ ] Tests: scraper, classifier YouTube cases, backfill dry-run/skip-reviewed, ingest source detection
+- **Acceptance:** pasting any YouTube/Shorts link yields a real title, channel, category, tags and summary with `source_url` set; the backfill turns bare `YouTube Video` items into named, categorised items without touching reviewed ones.
+
+### Phase C — Explain & Extract on request
+- [ ] Migration `0NN_derived_from.sql` — `items.derived_from UUID REFERENCES items(id) ON DELETE SET NULL` (+ index); mirror in `schema.sql` + migration-count comment (required by `schema.test.ts`)
+- [ ] `shared/types.ts` — `Item.derivedFrom`; `ExplainResponse`; `structured.explanation` shape; request types with optional `provider`
+- [ ] `server/src/services/explainService.ts` (new) — fetch/cached transcript (or page text) → chunk → map-reduce summary → structured explanation (key points, steps, takeaways); uses `aiChat({task:'explain'})`; honours `cloudSafe` + strict-local
+- [ ] `server/src/services/recipeExtractor.ts` (new) — transcript/text → `RecipeData` (ingredients, steps, times, servings) with validation; returns `{ recipe, confidence }`; flags "no recipe found" instead of inventing one
+- [ ] `server/src/routes/items.ts` — `POST /api/items/:id/explain` and `POST /api/items/:id/extract-recipe`:
+  - explain → saves to `structured.explanation` on the same item (sets `extraction_model`)
+  - extract-recipe → **creates a new `type='recipe'` item** under `Food`, `derived_from` = video item, `source_url` = video URL, `reviewed=false`; original video item untouched
+  - both Zod-validated, rate-limited, return 409 if already extracted (with a force flag)
+- [ ] `client/src/pages/Item.tsx` — *Explain* and *Extract recipe* buttons (shown by item kind), provider chooser, progress state, link between video item and derived recipe both ways
+- [ ] `client/src/components/cards/*` — recipe card shows "from video" link
+- [ ] `server/src/services/entityService.ts` — optional: channel as `organization` entity (YouTube channel) — only if the Phase 2 entity work above has shipped
+- [ ] Tests: explain/extract services (mocked `aiChat`), route tests (new item created + linked, duplicate guard), Item page tests
+- **Acceptance:** on a cooking video, *Extract recipe* creates a separate, editable recipe item linked to the video; on a lecture/tutorial, *Explain* stores a structured explanation; neither runs unless the user clicks.
+
+### Risks
+- **Cost & rate limits (cloud):** bulk work on cloud is billable and rate-limited — hence local default and per-task opt-in; show which provider will be used before running.
+- **Privacy:** plaintext credentials exist in the DB today; without `cloudSafe` + consent a cloud re-classify/ask could upload them. Do not enable cloud before the guard ships.
+- **Strict-local gap** (A0) is a live bug the moment `use_claude` is turned on.
+- **Key leakage:** never put provider keys in the `settings` table (returned wholesale by `GET /api/settings`).
+- **Transcript fragility:** `youtube-transcript` is unofficial; videos without captions, age-gated, removed or private will fail — backfill must report these, not fake content.
+- **JSON reliability differs by provider:** Claude/Gemini need their own JSON handling; classifier's parse-retry must be tested against each.
+- **Quality drift:** classifications from different providers differ; record `<provider>:<model>` in provenance and keep the existing "never overwrite reviewed" rule.
+- **Backfill blast radius:** 115 items, some misfiled as `media`/`note`; always dry-run first; reviewed items are protected.
+- **Migration ordering:** `derived_from` migration must take the next free number after the Dev Knowledge plan's 018/019 (and any 020 dedupe index); keep gapless.
+- **Recipe hallucination:** a small model may invent steps; require "no recipe found" path and a confidence field; mark `reviewed=false`.
+
+### Decisions (DECIDED 2026-11-11 — "go with your recommendations")
+- [x] **Cloud scope:** on-demand tasks only (explain, extract, optionally ask). Ollama handles all bulk/background work.
+- [x] **API keys:** server env vars only (`ANTHROPIC_API_KEY`, `GEMINI_API_KEY`); never in the `settings` table; UI shows "configured: yes/no" only.
+- [x] **Models per task:** deferred to implementation — check current Claude/Gemini model lists and pricing then, and put ids in env/settings (no hardcoded ids).
+- [x] **Gemini direct YouTube-URL input:** optional, last item of Phase B, cloud-only, needs Phase A.
+- [x] **YouTube backfill:** button-triggered with a dry-run preview first; never automatic; skips reviewed items.
+- [x] **Explain output:** separate `structured.explanation` block; never overwrites `content`.
+- [x] **Recipe extraction:** always creates a new linked recipe item (`derived_from`); original video item kept.
+- [x] **Privacy guard:** BLOCK `Personal > Bank`, `type='password'` and encrypted items from cloud providers (not just warn); plus `allow_cloud_ai` consent flag; `strict_local_mode` forces Ollama.
