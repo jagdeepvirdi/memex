@@ -17,6 +17,10 @@ export default defineConfig({
             handler: 'NetworkFirst',
             options: {
               cacheName: 'api-cache',
+              // If the API hasn't answered in 3s, serve the cached copy (when one
+              // exists) instead of leaving the page blank until the request ends.
+              // With nothing cached yet, the request just keeps waiting for the network.
+              networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 500,
                 maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days

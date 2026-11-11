@@ -22,7 +22,8 @@ export async function aiChat(
   prompt: string, 
   system?: string, 
   format?: string | object,
-  options?: Record<string, any>
+  options?: Record<string, any>,
+  signal?: AbortSignal
 ): Promise<string> {
   const config = await getAiConfig()
 
@@ -30,12 +31,15 @@ export async function aiChat(
     const client = getAnthropicClient()
     const model = process.env.CLAUDE_MODEL ?? 'claude-3-5-sonnet-20240620'
 
-    const message = await client.messages.create({
-      model,
-      max_tokens: 2048,
-      ...(system ? { system } : {}),
-      messages: [{ role: 'user', content: prompt }],
-    })
+    const message = await client.messages.create(
+      {
+        model,
+        max_tokens: 2048,
+        ...(system ? { system } : {}),
+        messages: [{ role: 'user', content: prompt }],
+      },
+      signal ? { signal } : undefined
+    )
 
     const block = message.content[0]
     if (block.type !== 'text') {
@@ -44,7 +48,7 @@ export async function aiChat(
     return block.text
   }
 
-  return ollamaChat(prompt, system, config.model, format, options)
+  return ollamaChat(prompt, system, config.model, format, options, signal)
 }
 
 // Embeddings always go through Ollama — Anthropic has no embeddings API.

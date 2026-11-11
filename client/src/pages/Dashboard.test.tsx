@@ -162,6 +162,46 @@ describe('Dashboard Component', () => {
     expect(screen.getByTestId('mock-item-card-2')).toBeInTheDocument()
   })
 
+  it('shows items and stats without waiting for slow LLM insights', async () => {
+    // Insights never resolve (model cold / busy) - the rest of the page must not wait.
+    mockFetchInsights.mockReturnValue(new Promise(() => {}))
+    render(<Dashboard />)
+
+    await waitFor(() => expect(screen.getByText('Total Items')).toBeInTheDocument())
+    expect(screen.getByText('42')).toBeInTheDocument()
+    expect(screen.getByTestId('mock-item-card-1')).toBeInTheDocument()
+    expect(screen.getByTestId('mock-item-card-2')).toBeInTheDocument()
+
+    // Rediscovery isn't blocked either
+    expect(screen.getByText('Card: Old Note')).toBeInTheDocument()
+
+    // Insights section is still in its loading state, with no insight cards
+    expect(screen.queryByText('Insight Event')).not.toBeInTheDocument()
+    expect(screen.queryByText(/Keep adding notes/)).not.toBeInTheDocument()
+  })
+
+  it('fills in insights when they arrive after the rest of the page', async () => {
+    let resolveInsights!: (v: typeof mockInsights) => void
+    mockFetchInsights.mockReturnValue(new Promise(res => { resolveInsights = res }))
+    render(<Dashboard />)
+
+    await waitFor(() => expect(screen.getByTestId('mock-item-card-1')).toBeInTheDocument())
+    expect(screen.queryByText('Insight Event')).not.toBeInTheDocument()
+
+    resolveInsights(mockInsights)
+    await waitFor(() => expect(screen.getByText('Insight Event')).toBeInTheDocument())
+    expect(screen.getByText('Insight Habit')).toBeInTheDocument()
+  })
+
+  it('still renders the page when insights fail', async () => {
+    mockFetchInsights.mockRejectedValue(new Error('boom'))
+    render(<Dashboard />)
+
+    await waitFor(() => expect(screen.getByTestId('mock-item-card-1')).toBeInTheDocument())
+    // Falls back to the empty-state message instead of a blank section
+    await waitFor(() => expect(screen.getByText(/Keep adding notes/)).toBeInTheDocument())
+  })
+
   it('navigates to intelligence map when CTA button is clicked', async () => {
     render(<Dashboard />)
     await waitFor(() => expect(screen.getByText('Open Intelligence Map')).toBeInTheDocument())

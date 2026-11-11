@@ -15,11 +15,13 @@ export async function ollamaChat(
   system?: string, 
   model?: string,
   format?: string | object,
-  options?: Record<string, any>
+  options?: Record<string, any>,
+  signal?: AbortSignal
 ): Promise<string> {
   const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    signal,
     body: JSON.stringify({
       model: model || CHAT_MODEL,
       stream: false,

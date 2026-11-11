@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Plus, Search, HelpCircle, X, Zap, Database, Key, Clock, Sparkles, Calendar, TrendingUp, Lightbulb, Link2, Compass, Loader2, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useNavigate, useSearchParams } from 'react-router-dom'
@@ -45,40 +45,58 @@ export default function Dashboard() {
   const [loadingInsights, setLoadingInsights] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [offset, setOffset] = useState(0)
+  // Bumped on every load and on unmount so a slow response from an older load
+  // can't overwrite newer state (or set state after the page is gone).
+  const loadSeq = useRef(0)
 
   useEffect(() => {
     loadData()
+    return () => { loadSeq.current += 1 }
   }, [])
 
   const loadData = async () => {
+    const seq = ++loadSeq.current
+    const isCurrent = () => seq === loadSeq.current
+
     setLoading(true)
     setLoadingInsights(true)
     setOffset(0)
-    try {
-      // Fire upcoming reminders check in background (non-blocking)
-      fetchItems({ hasReminder: true, limit: 5 })
-        .then(r => setUpcomingReminders(
-          r.items.filter(i => i.remindAt && new Date(i.remindAt) > new Date())
-        ))
-        .catch(() => {})
 
-      const [itemsRes, statsRes, insightsRes, rediscoveryRes] = await Promise.all([
+    // Fire upcoming reminders check in background (non-blocking)
+    fetchItems({ hasReminder: true, limit: 5 })
+      .then(r => {
+        if (!isCurrent()) return
+        setUpcomingReminders(r.items.filter(i => i.remindAt && new Date(i.remindAt) > new Date()))
+      })
+      .catch(() => {})
+
+    // Insights are LLM-generated and can take many seconds. Rediscovery is
+    // secondary content. Neither may hold up the items list and stats, so each
+    // fills in on its own when it arrives.
+    fetchInsights()
+      .catch(() => [] as Insight[])
+      .then(res => { if (isCurrent()) setInsights(res) })
+      .finally(() => { if (isCurrent()) setLoadingInsights(false) })
+
+    fetchRediscovery()
+      .catch(() => [] as RediscoveryItem[])
+      .then(res => { if (isCurrent()) setRediscovery(res) })
+
+    try {
+      const [itemsRes, statsRes] = await Promise.all([
         fetchItems({ limit: 12, offset: 0 }),
         fetchStats(),
-        fetchInsights().catch(() => []),
-        fetchRediscovery().catch(() => []),
       ])
+      if (!isCurrent()) return
       setItems(itemsRes.items)
       setTotal(itemsRes.total)
       setStats(statsRes)
-      setInsights(insightsRes)
-      setRediscovery(rediscoveryRes)
     } catch (err) {
+      if (!isCurrent()) return
       console.error(err)
       toast.error('Failed to load dashboard data')
     } finally {
-      setLoading(false)
-      setLoadingInsights(false)
+      if (isCurrent()) setLoading(false)
     }
   }
 
