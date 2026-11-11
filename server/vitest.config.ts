@@ -1,7 +1,10 @@
-import { defineConfig } from 'vitest/config'
+import { defineConfig, configDefaults } from 'vitest/config'
 
 export default defineConfig({
   test: {
+    // `npm run build` (tsc) compiles the *.test.ts files into dist/. Those copies
+    // resolve file paths relative to dist and fail, so never run them.
+    exclude: [...configDefaults.exclude, 'dist/**'],
     // setupFiles run before each test file is imported, so env vars are set
     // before modules like auth.ts/index.ts evaluate their top-level guards.
     setupFiles: ['./src/test/setup.ts'],
