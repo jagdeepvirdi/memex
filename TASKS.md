@@ -761,7 +761,8 @@ markitdown --help
 ### Phase A — Provider layer (foundation; do first)
 *No data migration. Touches settings + AI plumbing only. Existing behaviour (Ollama default) must be unchanged.*
 
-- [ ] **A0. Fix `strict_local_mode` enforcement inside `aiChat()`** — when on, force Ollama and refuse cloud (ship this fix on its own first; it is a latent bug today)
+- [x] **A0. Fix `strict_local_mode` enforcement inside `aiChat()`** — when on, force Ollama and refuse cloud (ship this fix on its own first; it is a latent bug today)
+  - **Done 2026-11-11:** `getAiConfig()` now returns `strictLocal`; `ai.ts` `claudeEnabled()` returns false when strict-local is on, used by both `aiChat()` and `activeProvider()`. New `ai.test.ts` (6 tests). Server tests 268 → 274, `tsc` clean. Not yet committed.
 - [ ] `server/package.json` — add `@google/genai` (pin exact version, ≥2 weeks old)
 - [ ] `server/src/services/ai.ts` — provider registry; `Provider { id, chat(), available() }`; `aiChat(..., { task, provider? })`;
       `activeProvider()` returns the resolved provider; keep `aiEmbed` Ollama-only

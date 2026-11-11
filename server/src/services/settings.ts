@@ -15,5 +15,6 @@ export async function getSetting<T>(key: string, defaultValue: T): Promise<T> {
 export async function getAiConfig() {
   const model = await getSetting('ai_model', 'llama3.2');
   const useClaude = await getSetting('use_claude', false);
-  return { model, useClaude };
+  const strictLocal = await getSetting('strict_local_mode', false);
+  return { model, useClaude, strictLocal };
 }

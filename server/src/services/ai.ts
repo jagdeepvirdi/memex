@@ -4,9 +4,14 @@ import { getAiConfig } from './settings.js'
 
 // Route through Claude API only when explicitly opted in.
 // Anthropic has no public embeddings endpoint, so aiEmbed always uses Ollama.
-async function useClaude(): Promise<boolean> {
-  const config = await getAiConfig()
+// Strict Local Mode always wins: nothing may leave the machine, so cloud is never used.
+function claudeEnabled(config: { useClaude?: boolean; strictLocal?: boolean }): boolean {
+  if (config.strictLocal === true) return false
   return config.useClaude === true && !!process.env.ANTHROPIC_API_KEY
+}
+
+async function useClaude(): Promise<boolean> {
+  return claudeEnabled(await getAiConfig())
 }
 
 let _anthropic: Anthropic | null = null
@@ -27,7 +32,7 @@ export async function aiChat(
 ): Promise<string> {
   const config = await getAiConfig()
 
-  if (config.useClaude && !!process.env.ANTHROPIC_API_KEY) {
+  if (claudeEnabled(config)) {
     const client = getAnthropicClient()
     const model = process.env.CLAUDE_MODEL ?? 'claude-3-5-sonnet-20240620'
 
