@@ -1,19 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 // ── Stub out the auth store before importing api ──────────────────────────────
-vi.mock('../store/authStore', () => ({
-  useAuthStore: {
-    getState: () => ({ token: 'test-token', logout: vi.fn() }),
+// A small mutable stand-in so tests can observe sign-out and token changes.
+const auth = vi.hoisted(() => ({
+  state: {
+    token: 'test-token' as string | null,
+    isAuthenticated: true,
+    logout: vi.fn(),
+    setToken: vi.fn(),
   },
 }))
+vi.mock('../store/authStore', () => ({
+  useAuthStore: { getState: () => auth.state },
+}))
 
-// Stub window.location (used on 401)
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+
+// Stub window.location so tests can prove a 401 no longer hard-redirects
 Object.defineProperty(window, 'location', {
   value: { href: '' },
   writable: true,
 })
 
+import { toast } from 'sonner'
 import {
+  SessionExpiredError,
   apiFetch, fetchItems, createItem, fetchStats, shareItem, unshareItem,
   ingestUrl, fetchItem, updateItem, deleteItem, deleteItemsBulk,
   migrateToVault, fetchInsights, askKnowledge, fetchRediscovery,
@@ -32,9 +43,33 @@ function mockFetch(status: number, body: unknown) {
   }) as unknown as typeof fetch
 }
 
+const { logout, setToken } = auth.state
+
 beforeEach(() => {
   vi.clearAllMocks()
+  window.location.href = ''
+  auth.state.token = 'test-token'
+  auth.state.isAuthenticated = true
+  // Behave like the real store: logging out clears the session.
+  logout.mockImplementation(() => { auth.state.isAuthenticated = false; auth.state.token = null })
+  setToken.mockImplementation((t: string) => { auth.state.token = t })
 })
+
+/** Builds an unsigned JWT-shaped string with the given exp (seconds). */
+function jwtWithExp(exp: number): string {
+  const b64 = (o: object) => btoa(JSON.stringify(o)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return `${b64({ alg: 'HS256' })}.${b64({ userId: 'u1', exp })}.sig`
+}
+
+function responseWith(status: number, headers: Record<string, string> = {}, body: unknown = {}) {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (name: string) => headers[Object.keys(headers).find(k => k.toLowerCase() === name.toLowerCase()) ?? ''] ?? null },
+    json: () => Promise.resolve(body),
+    text: () => Promise.resolve(JSON.stringify(body)),
+  }
+}
 
 // ── apiFetch ──────────────────────────────────────────────────────────────────
 
@@ -68,15 +103,123 @@ describe('apiFetch', () => {
     await expect(apiFetch('/items')).rejects.toThrow()
   })
 
-  it('on 401 redirects to /login', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: false,
-      status: 401,
-      text: () => Promise.resolve('{"error":"Unauthorized"}'),
-      json: () => Promise.resolve({ error: 'Unauthorized' }),
-    }) as unknown as typeof fetch
-    await expect(apiFetch('/items')).rejects.toThrow('Session expired')
-    expect(window.location.href).toBe('/login')
+  describe('on 401 (session expired)', () => {
+    const unauthorized = () => responseWith(401, {}, { error: 'Unauthorized' })
+
+    it('signs out and throws SessionExpiredError without a hard redirect', async () => {
+      global.fetch = vi.fn().mockResolvedValue(unauthorized()) as unknown as typeof fetch
+
+      const err = (await apiFetch('/items').catch((e: unknown) => e)) as Error
+      expect(err).toBeInstanceOf(SessionExpiredError)
+      expect(err.message).toBe('Session expired')
+      expect(logout).toHaveBeenCalledTimes(1)
+      // ProtectedRoute handles the redirect softly; no full page reload
+      expect(window.location.href).toBe('')
+    })
+
+    it('tells the user why they were signed out, once', async () => {
+      global.fetch = vi.fn().mockResolvedValue(unauthorized()) as unknown as typeof fetch
+      await apiFetch('/items').catch(() => {})
+      expect(toast.error).toHaveBeenCalledTimes(1)
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringMatching(/session expired/i),
+        expect.objectContaining({ id: 'session-expired' }),
+      )
+    })
+
+    it('handles several simultaneous 401s once', async () => {
+      global.fetch = vi.fn().mockResolvedValue(unauthorized()) as unknown as typeof fetch
+      const results = await Promise.allSettled([apiFetch('/items'), apiFetch('/stats'), apiFetch('/tags')])
+
+      expect(results.every(r => r.status === 'rejected')).toBe(true)
+      expect(results.every(r => r.status === 'rejected' && r.reason instanceof SessionExpiredError)).toBe(true)
+      expect(logout).toHaveBeenCalledTimes(1)
+      expect(toast.error).toHaveBeenCalledTimes(1)
+    })
+
+    it('ignores a late 401 for a token that was replaced by a newer sign-in', async () => {
+      // Request starts with 'test-token'; before its 401 arrives the user signs in again.
+      global.fetch = vi.fn().mockImplementation(async () => {
+        auth.state.token = 'brand-new-token'
+        return unauthorized()
+      }) as unknown as typeof fetch
+
+      await expect(apiFetch('/items')).rejects.toBeInstanceOf(SessionExpiredError)
+      expect(logout).not.toHaveBeenCalled()
+      expect(auth.state.isAuthenticated).toBe(true)
+    })
+
+    it('does nothing for a 401 when already signed out (no token sent)', async () => {
+      auth.state.token = null
+      auth.state.isAuthenticated = false
+      global.fetch = vi.fn().mockResolvedValue(unauthorized()) as unknown as typeof fetch
+
+      await expect(apiFetch('/items')).rejects.toBeInstanceOf(SessionExpiredError)
+      expect(logout).not.toHaveBeenCalled()
+      expect(toast.error).not.toHaveBeenCalled()
+    })
+
+    it('does not sign out on a 401 from the auth endpoints (wrong password)', async () => {
+      global.fetch = vi.fn().mockResolvedValue(
+        responseWith(401, {}, { error: 'Invalid credentials' }),
+      ) as unknown as typeof fetch
+
+      await expect(apiFetch('/auth/login', { method: 'POST' })).rejects.toThrow('Invalid credentials')
+      expect(logout).not.toHaveBeenCalled()
+      expect(toast.error).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('sliding session (renewed token)', () => {
+    const NOW = 1_800_000_000
+
+    it('adopts a renewed token that expires later than the current one', async () => {
+      auth.state.token = jwtWithExp(NOW + 3600)
+      const renewed = jwtWithExp(NOW + 7 * 86400)
+      global.fetch = vi.fn().mockResolvedValue(
+        responseWith(200, { 'X-Refreshed-Token': renewed }),
+      ) as unknown as typeof fetch
+
+      await apiFetch('/items')
+      expect(setToken).toHaveBeenCalledWith(renewed)
+    })
+
+    it('ignores an older token replayed from the service worker cache', async () => {
+      auth.state.token = jwtWithExp(NOW + 6 * 86400)
+      global.fetch = vi.fn().mockResolvedValue(
+        responseWith(200, { 'X-Refreshed-Token': jwtWithExp(NOW + 3600) }),
+      ) as unknown as typeof fetch
+
+      await apiFetch('/items')
+      expect(setToken).not.toHaveBeenCalled()
+    })
+
+    it('ignores a renewed token that is not a valid JWT', async () => {
+      auth.state.token = jwtWithExp(NOW)
+      global.fetch = vi.fn().mockResolvedValue(
+        responseWith(200, { 'X-Refreshed-Token': 'garbage' }),
+      ) as unknown as typeof fetch
+
+      await apiFetch('/items')
+      expect(setToken).not.toHaveBeenCalled()
+    })
+
+    it('adopts a renewed token when the current token cannot be decoded', async () => {
+      auth.state.token = 'opaque-legacy-token'
+      const renewed = jwtWithExp(NOW)
+      global.fetch = vi.fn().mockResolvedValue(
+        responseWith(200, { 'X-Refreshed-Token': renewed }),
+      ) as unknown as typeof fetch
+
+      await apiFetch('/items')
+      expect(setToken).toHaveBeenCalledWith(renewed)
+    })
+
+    it('does nothing when the response carries no renewed token', async () => {
+      global.fetch = vi.fn().mockResolvedValue(responseWith(200)) as unknown as typeof fetch
+      await apiFetch('/items')
+      expect(setToken).not.toHaveBeenCalled()
+    })
   })
 })
 

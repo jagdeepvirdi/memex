@@ -14,6 +14,8 @@ interface AuthState {
   // Actions
   login: (user: User, token: string) => void;
   logout: () => void;
+  /** Swap in a renewed token for the current session. No-op when signed out. */
+  setToken: (token: string) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
@@ -29,6 +31,11 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         set({ user: null, token: null, isAuthenticated: false });
+      },
+
+      // Guarded so a renewed token arriving after logout can't resurrect the session.
+      setToken: (token: string) => {
+        set(state => (state.isAuthenticated ? { token } : {}));
       },
     }),
     {

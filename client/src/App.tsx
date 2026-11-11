@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useAuthStore } from './store/authStore'
 import { fetchDueReminders, setReminder } from './lib/api'
@@ -24,7 +24,9 @@ import PublicItem from './pages/PublicItem'
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useAuthStore(state => state.isAuthenticated)
-  if (!isAuthenticated) return <Navigate to="/login" replace />
+  const location = useLocation()
+  // Remember where the user was so signing back in returns them there.
+  if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location }} />
   return <>{children}</>
 }
 

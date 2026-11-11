@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, Mail, Lock, Sparkles, UserPlus, Brain, Check, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '../store/authStore';
@@ -13,13 +13,22 @@ export default function LoginPage() {
   const [aiStatus, setAiStatus] = useState<'checking' | 'ready' | 'missing_models' | 'offline'>('checking');
   
   const navigate = useNavigate();
+  const location = useLocation();
   const { login, isAuthenticated } = useAuthStore();
+
+  // ProtectedRoute sends signed-out users here with the page they were on, so
+  // signing back in (e.g. after a session expiry) returns them to it.
+  const from = (location?.state as { from?: { pathname?: string; search?: string; hash?: string } } | null)?.from;
+  const redirectTo =
+    from?.pathname && from.pathname !== '/login'
+      ? `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`
+      : '/';
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/');
+      navigate(redirectTo);
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, redirectTo]);
 
   useEffect(() => {
     if (isSetup) {
@@ -56,7 +65,7 @@ export default function LoginPage() {
 
       login(data.user, data.token);
       toast.success(isSetup ? 'Account created' : 'Welcome back');
-      navigate(isSetup ? '/welcome' : '/');
+      navigate(isSetup ? '/welcome' : redirectTo);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Authentication failed');
     } finally {

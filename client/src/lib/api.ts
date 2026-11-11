@@ -15,18 +15,57 @@ import type {
   NLFilterResponse,
   DigestResponse,
 } from '../../../shared/types'
+import { toast } from 'sonner'
 import { useAuthStore } from '../store/authStore'
+import { tokenExpiry } from './jwt'
 
 const BASE = '/api'
+const REFRESH_HEADER = 'X-Refreshed-Token'
+
+/** Thrown when the server rejects the session token (expired or invalid). */
+export class SessionExpiredError extends Error {
+  constructor() {
+    super('Session expired')
+    this.name = 'SessionExpiredError'
+  }
+}
+
+/**
+ * Signs the user out after a 401. `ProtectedRoute` reacts to the store change
+ * with a client-side redirect to /login that remembers the current page, so
+ * there is no full reload and sign-in returns the user to where they were.
+ */
+function expireSession(tokenUsed: string | null) {
+  const { token, isAuthenticated, logout } = useAuthStore.getState()
+  // Several requests fail together when a session lapses: the first handles it.
+  // Also ignore a late 401 for a token that has since been replaced (re-login or renewal),
+  // so a stale in-flight request can't sign out a newer session.
+  if (!isAuthenticated || token !== tokenUsed) return
+  logout()
+  toast.error('Your session expired. Please sign in again.', { id: 'session-expired' })
+}
+
+/** Adopts a renewed session token from the server (sliding session). */
+function adoptRefreshedToken(res: Response) {
+  const refreshed = res.headers?.get(REFRESH_HEADER)
+  if (!refreshed) return
+  const newExp = tokenExpiry(refreshed)
+  if (newExp === null) return
+  const { token, setToken } = useAuthStore.getState()
+  const currentExp = token ? tokenExpiry(token) : null
+  // The service worker can replay cached responses carrying an old header.
+  // Only ever move the session forward, never back to an older token.
+  if (currentExp === null || newExp > currentExp) setToken(refreshed)
+}
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = useAuthStore.getState().token
-  
+
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...init?.headers as Record<string, string>
   }
-  
+
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
@@ -36,10 +75,11 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     headers,
   })
 
+  adoptRefreshedToken(res)
+
   if (res.status === 401 && !path.startsWith('/auth')) {
-    useAuthStore.getState().logout()
-    window.location.href = '/login'
-    throw new Error('Session expired')
+    expireSession(token)
+    throw new SessionExpiredError()
   }
 
   if (!res.ok) {

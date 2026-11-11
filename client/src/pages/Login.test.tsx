@@ -4,8 +4,10 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 // ── Mocks (must precede component import) ─────────────────────────────────────
 
 const mockNavigate = vi.fn()
+let mockLocationState: unknown = null
 vi.mock('react-router-dom', () => ({
   useNavigate: () => mockNavigate,
+  useLocation: () => ({ state: mockLocationState }),
 }))
 
 vi.mock('sonner', () => ({
@@ -37,6 +39,7 @@ import LoginPage from './Login'
 beforeEach(() => {
   vi.clearAllMocks()
   mockIsAuthenticated = false
+  mockLocationState = null
   mockApiFetch.mockResolvedValue({ user: { id: 'u1', email: 'a@b.com' }, token: 'tok' })
 })
 
@@ -155,5 +158,57 @@ describe('LoginPage — form submission (login mode)', () => {
     mockIsAuthenticated = true
     render(<LoginPage />)
     expect(mockNavigate).toHaveBeenCalledWith('/')
+  })
+})
+
+// ── Return to the page the user was on ────────────────────────────────────────
+
+describe('LoginPage — returning to the previous page', () => {
+  const signIn = () => {
+    fireEvent.change(screen.getByPlaceholderText('Email Address'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByText('Enter Workspace'))
+  }
+
+  it('returns to the page (with query string) the user was redirected from', async () => {
+    mockLocationState = { from: { pathname: '/item/42', search: '?tab=notes', hash: '#top' } }
+    render(<LoginPage />)
+    signIn()
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/item/42?tab=notes#top'))
+  })
+
+  it('goes to / when there is no previous page', async () => {
+    render(<LoginPage />)
+    signIn()
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'))
+  })
+
+  it('never redirects back to /login itself', async () => {
+    mockLocationState = { from: { pathname: '/login' } }
+    render(<LoginPage />)
+    signIn()
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/'))
+    expect(mockNavigate).not.toHaveBeenCalledWith('/login')
+  })
+
+  it('sends a new account to /welcome regardless of the previous page', async () => {
+    mockLocationState = { from: { pathname: '/item/42' } }
+    // Setup mode is gated on the Ollama health check, then posts to /auth/setup.
+    mockApiFetch.mockImplementation(async (path: string) =>
+      path === '/health/ollama' ? { status: 'ok' } : { user: { id: 'u1', email: 'a@b.com' }, token: 'tok' })
+    render(<LoginPage />)
+    fireEvent.click(screen.getByText('Is this a new installation? Setup here'))
+    await waitFor(() => expect(screen.getByText('Initialize Memex').closest('button')).not.toBeDisabled())
+    fireEvent.change(screen.getByPlaceholderText('Email Address'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByText('Initialize Memex'))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/welcome'))
+  })
+
+  it('returns an already-signed-in user to the previous page', () => {
+    mockIsAuthenticated = true
+    mockLocationState = { from: { pathname: '/vault' } }
+    render(<LoginPage />)
+    expect(mockNavigate).toHaveBeenCalledWith('/vault')
   })
 })

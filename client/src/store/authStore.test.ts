@@ -33,6 +33,27 @@ describe('authStore — login', () => {
   })
 })
 
+describe('authStore — setToken', () => {
+  it('swaps in a renewed token and keeps the signed-in user', () => {
+    const user = { id: 'u1', email: 'a@b.com' }
+    useAuthStore.getState().login(user, 'old-tok')
+    useAuthStore.getState().setToken('renewed-tok')
+    const state = useAuthStore.getState()
+    expect(state.token).toBe('renewed-tok')
+    expect(state.user).toEqual(user)
+    expect(state.isAuthenticated).toBe(true)
+  })
+
+  it('does not resurrect a signed-out session', () => {
+    useAuthStore.getState().login({ id: 'u1', email: 'a@b.com' }, 'tok')
+    useAuthStore.getState().logout()
+    useAuthStore.getState().setToken('late-renewal')
+    const state = useAuthStore.getState()
+    expect(state.token).toBeNull()
+    expect(state.isAuthenticated).toBe(false)
+  })
+})
+
 describe('authStore — logout', () => {
   it('clears user, token, and sets isAuthenticated=false', () => {
     useAuthStore.getState().login({ id: 'u1', email: 'a@b.com' }, 'tok-xyz')

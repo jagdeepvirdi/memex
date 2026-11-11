@@ -8,6 +8,7 @@ vi.mock('react-router-dom', () => ({
   Routes: () => null,
   Route: () => null,
   Navigate: () => null,
+  useLocation: () => ({ pathname: '/', search: '', hash: '' }),
 }))
 
 vi.mock('./components/ErrorBoundary', () => ({

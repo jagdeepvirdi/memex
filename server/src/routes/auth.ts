@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { pool } from '../db/client.js'
 import logger from '../lib/logger.js'
+import { signSessionToken } from '../lib/session.js'
 
 const router = Router()
 const JWT_SECRET = process.env.JWT_SECRET
@@ -40,7 +41,7 @@ router.post('/login', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' })
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' })
+    const token = signSessionToken({ id: user.id, email: user.email }, JWT_SECRET)
     res.json({ token, user: { id: user.id, email: user.email } })
   } catch (err) {
     logger.error(err, 'Login error')
@@ -72,7 +73,7 @@ router.post('/setup', authLimiter, async (req, res) => {
     )
 
     const user = rows[0]
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' })
+    const token = signSessionToken({ id: user.id, email: user.email }, JWT_SECRET)
     res.status(201).json({ token, user })
   } catch (err) {
     logger.error(err, 'Setup error')

@@ -27,6 +27,7 @@ import { itemTagsHandler } from './routes/tags.js'
 import { checkOllamaHealth } from './services/ollama.js'
 import { startEmbeddingWorker } from './services/embeddingWorker.js'
 import logger from './lib/logger.js'
+import { refreshedSessionToken, REFRESH_HEADER } from './lib/session.js'
 
 // Extend Express Request type
 declare global {
@@ -48,7 +49,7 @@ app.use(helmet()) // Security headers
 // CORS is intentionally open: Memex is a local-first, single-user tool that runs
 // on the user's own machine (localhost). If you ever deploy it to a shared server,
 // restrict this to specific origins, e.g. cors({ origin: 'https://your-host' }).
-app.use(cors())
+app.use(cors({ exposedHeaders: [REFRESH_HEADER] }))
 app.use(express.json({ limit: '50mb' }))
 
 // ── Auth Middleware ──────────────────────────────────────────────────────────
@@ -69,10 +70,18 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction) =
   if (!token) return res.status(401).json({ error: 'Unauthorized' })
 
   // 1. Try JWT (standard session token)
+  let payload: string | jwt.JwtPayload | null = null
   try {
-    req.user = jwt.verify(token, JWT_SECRET)
-    return next()
+    payload = jwt.verify(token, JWT_SECRET)
   } catch {}
+  if (payload) {
+    req.user = payload
+    // Sliding session: hand back a fresh token once the current one is a day
+    // old, so an actively used session doesn't expire on a fixed clock.
+    const fresh = refreshedSessionToken(payload, JWT_SECRET)
+    if (fresh) res.setHeader(REFRESH_HEADER, fresh)
+    return next()
+  }
 
   // 2. Try bookmarklet key (persistent, never expires)
   try {
