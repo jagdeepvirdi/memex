@@ -58,3 +58,9 @@ server/dist/
 *.pid
 .claude/
 .code-review-graph/
+
+# Test coverage reports
+coverage/
+
+# DevBrain session summaries
+sessions/
