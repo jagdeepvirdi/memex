@@ -2,6 +2,10 @@ const OLLAMA_BASE = process.env.OLLAMA_URL ?? 'http://localhost:11434'
 const CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL ?? 'llama3.2'
 const EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL ?? 'nomic-embed-text'
 
+// Safety bounds for chat calls; callers may override num_predict via `options` or pass their own signal.
+const NUM_PREDICT = Number(process.env.OLLAMA_NUM_PREDICT ?? 2048)
+const CHAT_TIMEOUT_MS = Number(process.env.OLLAMA_TIMEOUT_MS ?? 180_000)
+
 interface OllamaChatResponse {
   message: { content: string }
 }
@@ -21,13 +25,16 @@ export async function ollamaChat(
   const res = await fetch(`${OLLAMA_BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    signal,
+    // Without a bound, one degenerate generation (e.g. a JSON-mode loop) hangs the
+    // call forever and blocks every request queued behind it on the same model.
+    signal: signal ?? AbortSignal.timeout(CHAT_TIMEOUT_MS),
     body: JSON.stringify({
       model: model || CHAT_MODEL,
       stream: false,
       format,
       options: {
         temperature: 0, // Default to deterministic for extraction
+        num_predict: NUM_PREDICT, // Ollama's default is unlimited
         ...options
       },
       messages: [
