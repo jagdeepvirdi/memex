@@ -26,11 +26,15 @@ vi.mock('../components/AppHeader', () => {
 const mockApiFetch = vi.fn()
 const mockFetchCategories = vi.fn()
 const mockReprocessBulk = vi.fn()
+const mockFetchAiProviders = vi.fn()
+const mockTestAiProvider = vi.fn()
 
 vi.mock('../lib/api', () => ({
   apiFetch: (url: string, init?: any) => init !== undefined ? mockApiFetch(url, init) : mockApiFetch(url),
   fetchCategories: () => mockFetchCategories(),
   reprocessBulk: (mode: string) => mockReprocessBulk(mode),
+  fetchAiProviders: () => mockFetchAiProviders(),
+  testAiProvider: (id: string) => mockTestAiProvider(id),
 }))
 
 const mockDeriveKey = vi.fn()
@@ -79,6 +83,11 @@ describe('SettingsPage Component', () => {
 
     // Default API resolves
     mockFetchCategories.mockResolvedValue(mockCategories)
+    mockFetchAiProviders.mockResolvedValue([
+      { id: 'ollama', configured: true, cloud: false, models: ['llama3.2', 'gemma3:4b'] },
+      { id: 'claude', configured: true, cloud: true, models: ['claude-sonnet-5-5'] },
+      { id: 'gemini', configured: false, cloud: true, models: ['gemini-2.5-flash'] },
+    ])
     mockApiFetch.mockImplementation(async (url: string, init?: any) => {
       if (url === '/items/enrichment') {
         return { pending: 2, total: 10 }
@@ -112,35 +121,29 @@ describe('SettingsPage Component', () => {
     expect(screen.getByText('Strict Local Mode')).toBeInTheDocument()
   })
 
-  it('handles changing the AI model setting', async () => {
+  it('changes the local Ollama model from the installed-model list', async () => {
     render(<SettingsPage />)
+    await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('option', { name: 'gemma3:4b' })).toBeInTheDocument())
 
-    await waitFor(() => {
-      expect(screen.getByText('Work')).toBeInTheDocument()
-    })
-
-    const select = screen.getAllByRole('combobox')[0] // primary model select tag
-    fireEvent.change(select, { target: { value: 'gemma2:2b' } })
+    fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'gemma3:4b' } })
 
     expect(mockApiFetch).toHaveBeenCalledWith('/settings', {
       method: 'PUT',
-      body: JSON.stringify({ use_claude: false, ai_model: 'gemma2:2b' }),
+      body: JSON.stringify({ ai_model: 'gemma3:4b' }),
     })
   })
 
-  it('handles changing to Claude Sonnet cloud model', async () => {
+  it('selects a cloud provider via ai_provider (no longer the legacy use_claude flag)', async () => {
     render(<SettingsPage />)
+    await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByTestId('provider-row-claude')).toHaveTextContent('Key configured'))
 
-    await waitFor(() => {
-      expect(screen.getByText('Work')).toBeInTheDocument()
-    })
-
-    const select = screen.getAllByRole('combobox')[0]
-    fireEvent.change(select, { target: { value: 'claude-3-5-sonnet' } })
+    fireEvent.change(screen.getByLabelText('AI provider'), { target: { value: 'claude' } })
 
     expect(mockApiFetch).toHaveBeenCalledWith('/settings', {
       method: 'PUT',
-      body: JSON.stringify({ use_claude: true }),
+      body: JSON.stringify({ ai_provider: 'claude' }),
     })
   })
 
@@ -330,7 +333,7 @@ describe('SettingsPage Component', () => {
     })
 
     // Auto lock timeout change
-    const timeoutSelect = screen.getAllByRole('combobox')[1] // The second select in settings
+    const timeoutSelect = screen.getByDisplayValue('15 Minutes')
     fireEvent.change(timeoutSelect, { target: { value: '60' } })
 
     expect(mockApiFetch).toHaveBeenCalledWith('/settings', {
@@ -342,9 +345,10 @@ describe('SettingsPage Component', () => {
     const checkbox = screen.getByRole('checkbox')
     fireEvent.click(checkbox)
 
+    // Saved as a real boolean (older versions saved the string 'true').
     expect(mockApiFetch).toHaveBeenCalledWith('/settings', {
       method: 'PUT',
-      body: JSON.stringify({ strict_local_mode: 'true' }),
+      body: JSON.stringify({ strict_local_mode: true }),
     })
   })
 

@@ -97,6 +97,37 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   return res.json() as Promise<T>
 }
 
+// ── AI providers ──────────────────────────────────────────────────────────────
+
+export type AiProviderId = 'ollama' | 'claude' | 'gemini'
+
+export interface AiProviderInfo {
+  id: AiProviderId
+  /** An API key is present on the server (Ollama is always true). The key itself is never sent. */
+  configured: boolean
+  cloud: boolean
+  models: string[]
+}
+
+export interface AiTestResult {
+  ok: boolean
+  provider: AiProviderId
+  model?: string
+  latencyMs?: number
+  reply?: string
+  /** On failure: rate_limit | timeout | auth | blocked | bad_response | unavailable */
+  kind?: string
+  error?: string
+}
+
+export function fetchAiProviders(): Promise<AiProviderInfo[]> {
+  return apiFetch<AiProviderInfo[]>('/ai/providers')
+}
+
+export function testAiProvider(provider: AiProviderId): Promise<AiTestResult> {
+  return apiFetch<AiTestResult>('/ai/test', { method: 'POST', body: JSON.stringify({ provider }) })
+}
+
 export async function ingestUrl(url: string): Promise<IngestUrlResponse> {
   return apiFetch<IngestUrlResponse>('/ingest/url', {
     method: 'POST',

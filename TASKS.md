@@ -555,9 +555,10 @@ markitdown --help
 
 ## 🧠 Dev Knowledge Capture (GitHub repos, AI prompts/skills, explainers from Instagram) — planned 2026-11-11
 
-> **Status: PLANNING ONLY — nothing implemented.** Manual paste only (links + captions); no Instagram
-> scraping or API. Findings below were verified against the code and the live DB (read-only).
-> **Decisions below were confirmed on 2026-11-11 ("go with your recommendations").** Implementation has not started.
+> **Status (2026-11-12): Phase 1 implemented** except the multi-repo caption split and the before/after classify diff
+> (waiting on the baseline run). Phases 2–3 not started. Manual paste only (links + captions); no Instagram
+> scraping or API. The "Verified findings" below describe the code *before* Phase 1 and are kept as history.
+> **Decisions below were confirmed on 2026-11-11 ("go with your recommendations").**
 
 ### Decisions (DECIDED 2026-11-11)
 - [x] **Priority:** new nullable `items.priority` (`essential|useful|skip`), user-owned. **Decided: separate column.**
@@ -605,6 +606,9 @@ markitdown --help
 - [x] Decisions confirmed (see "Decisions (DECIDED 2026-11-11)" above)
 - [ ] Read-only baseline: classify existing Tech + Links items with the current classifier, save the output
       to compare after mapping changes (guards against silent re-bucketing)
+      *(in progress 2026-11-12: `server/src/scripts/classifyBaseline.ts` written; full run writes
+      `sessions/baselines/classify-baseline-2026-11-12.json` (gitignored). Tick when the run completes. Re-run with the same
+      `OLLAMA_NUM_PREDICT=768 OLLAMA_TIMEOUT_MS=60000`, then `compare`.)*
 - [ ] Default (assumed, not explicitly confirmed): do NOT run `reprocess-bulk 'all'` until Phase 1 is verified;
       the 157 unreviewed items are the only ones exposed
       (≈580 reviewed items are already protected — `applyClassificationResult` skips reviewed)
@@ -674,6 +678,8 @@ markitdown --help
 ### Phase 3 — Optional / later
 - [ ] Backfill priority/intent for existing items (explicit opt-in only; all 725 are NULL intent today)
 - [ ] Fix intent plumbing on all capture paths (`classifyAndUpdateBatch`, quicksave) as a bonus
+      *(partly done 2026-11-12: quicksave, `/text`, `/url`, `/file`, `/voice` previews pass `intent`; still open: the Keep
+      multi-entity split `createItem` call in `classifyAndUpdateBatch` omits it)*
 - [ ] Clean stray categories (`Tech>Link`, `Courses>Tech`, `Travel>Links`, 218 bare-`Links` items)
 - [ ] Update stale CLAUDE.md claims (content-hash dedupe, Instagram caption scraping)
 - [ ] If `'repo'` entity type is ever wanted: own migration file with only `ALTER TYPE entity_type ADD VALUE IF NOT EXISTS 'repo'`
@@ -767,20 +773,24 @@ markitdown --help
 
 - [x] **A0. Fix `strict_local_mode` enforcement inside `aiChat()`** — when on, force Ollama and refuse cloud (ship this fix on its own first; it is a latent bug today)
   - **Done 2026-11-11:** `getAiConfig()` now returns `strictLocal`; `ai.ts` `claudeEnabled()` returns false when strict-local is on, used by both `aiChat()` and `activeProvider()`. New `ai.test.ts` (6 tests). Server tests 268 → 274, `tsc` clean. Not yet committed.
-- [ ] `server/package.json` — add `@google/genai` (pin exact version, ≥2 weeks old)
-- [ ] `server/src/services/ai.ts` — provider registry; `Provider { id, chat(), available() }`; `aiChat(..., { task, provider? })`;
+- [x] `server/package.json` — add `@google/genai` (pin exact version, ≥2 weeks old) — **done 2026-11-12:** pinned `2.31.0` (released 2026-10-23; 3.x was only days old)
+- [x] `server/src/services/ai.ts` — provider registry; `Provider { id, chat(), available() }`; `aiChat(..., { task, provider? })`;
       `activeProvider()` returns the resolved provider; keep `aiEmbed` Ollama-only
-  - [ ] Claude: JSON mode (instruct + strip fences, or tool-use for structured output), configurable `max_tokens`, model from env/settings; update stale default model id
-  - [ ] Gemini: `responseMimeType: 'application/json'` for JSON tasks, model from `GEMINI_MODEL` env/settings
-  - [ ] Errors/timeouts/rate-limit (429) mapped to one error type; **fallback to Ollama** on provider failure for background tasks (log it), but not for user-initiated explain/extract (surface the error)
-  - [ ] Record `extraction_model` as `<provider>:<model>`
-- [ ] `server/src/services/settings.ts` — `getAiConfig()` returns `{ provider, model, perTask, allowCloud }`; keep backward compat with `use_claude`/`ai_model` (migrate old values on read)
-- [ ] `server/src/routes/ai.ts` (new) — `GET /api/ai/providers` → `[{id, configured, models[]}]` (never returns keys); `POST /api/ai/test` → one tiny round-trip to verify a provider works
-- [ ] Privacy guard — `cloudSafe(item)`; apply in re-classify, `reprocess-bulk`, insights, digest, RAG ask; unit-tested
-- [ ] `.env.example` / docs — `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `CLAUDE_MODEL`, `GEMINI_MODEL`
-- [ ] `client/src/pages/Settings.tsx` — replace hardcoded model `<select>` with provider + per-task selectors, "key configured" status, "Test connection", cloud-consent toggle, strict-local explanation
-- [ ] `client/src/lib/api.ts` — `fetchAiProviders`, `testAiProvider`
-- [ ] Tests: `ai.test.ts` (routing, strict-local, fallback, per-task, cloudSafe), Settings test update, settings route test
+  - [x] Claude: JSON mode (instruct + strip fences), configurable `max_tokens` (from `max_tokens`/`num_predict`), model from env/settings; default now `claude-sonnet-5-5`
+  - [x] Gemini: `responseMimeType: 'application/json'` for JSON tasks, model from `GEMINI_MODEL` env/settings (default `gemini-2.5-flash` — **unverified, check before relying on it**)
+  - [x] Errors/timeouts/rate-limit (429) mapped to one `AiProviderError`; **fallback to Ollama** on provider failure for background tasks (logged), but not for user-initiated/explicit calls (surface the error)
+  - [x] Record `extraction_model` as `<provider>:<model>` (via `onProvider` callback in `classify()`; old rows keep plain names)
+  - **Done 2026-11-12.** Also: explicit `provider` that can't be honoured is refused (`kind:'blocked'`), never silently downgraded; 30s/120s timeouts.
+- [x] `server/src/services/settings.ts` — `getAiConfig()` returns `{ provider, model, perTask, allowCloud, ... }`; backward compat with `use_claude`/`ai_model` (migrated on read); single query; strict-local forces ollama/no consent
+- [x] `server/src/routes/ai.ts` (new) — `GET /api/ai/providers` → `[{id, configured, cloud, models[]}]` (never returns keys); `POST /api/ai/test` → one tiny round-trip (rate-limited, errors redacted). `PUT /api/settings` now zod-validates the AI keys.
+- [x] Privacy guard — `cloudSafe(item)` in `services/cloudSafe.ts`; applied in re-classify, `enrichItems`, `reprocess-bulk`, insights, digest, RAG ask, summarize-links; bundled prompts pinned local if any item is private; unit-tested. New-content ingest passes no flag (not yet a stored item).
+- [x] `.env.example` / docs — `GEMINI_API_KEY`, `ANTHROPIC_API_KEY`, `CLAUDE_MODEL`, `GEMINI_MODEL`; stale `USE_CLAUDE` removed; CLAUDE.md AI Routing/settings/env sections updated
+- [x] `client/src/pages/Settings.tsx` — replace hardcoded model `<select>` with provider + per-task selectors, "key configured" status, "Test connection", cloud-consent toggle, strict-local explanation — **done 2026-11-12:** new `components/settings/AiProviderSettings.tsx` (provider, model, consent, per-task, per-provider key status + test); strict-local toggle now saves a real boolean; failed saves roll back the optimistic update
+- [x] `client/src/lib/api.ts` — `fetchAiProviders`, `testAiProvider`
+- [x] Tests: `ai.test.ts` (routing, strict-local, fallback, per-task, cloudSafe), Settings test update, settings route test
+  - **Done 2026-11-12:** server 274 → 386 tests, client 504 (new `AiProviderSettings.test.tsx`; `Settings.test.tsx` updated for the new controls).
+- [x] **Bug found + fixed (2026-11-12): string booleans.** The old Settings UI saved `strict_local_mode` as the string `'true'`/`'false'`. `getAiConfig` only accepted boolean `true`, so strict-local set from the UI never forced local AI (A0 was inert from the UI), and `scraper.ts` treated the string `'false'` as truthy, blocking all scraping once the toggle had been touched. New `asBool()` in `settings.ts` reads both forms (used by `getAiConfig` and `scraper`); UI now writes booleans; regression tests added.
+- **Phase A complete (2026-11-12). Not yet committed.** Follow-ups: verify the default Gemini model id (`gemini-2.5-flash` is unverified); decide whether new-content ingest should also default to local when cloud is on (currently it follows the normal provider/consent settings).
 - **Acceptance:** with nothing configured, behaviour is identical to today; with a Claude or Gemini key set, a chosen task runs on that provider; strict-local always forces Ollama; no key is ever returned by an API.
 
 ### Phase B — YouTube understanding (organize what's saved + better capture)

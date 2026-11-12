@@ -17,8 +17,8 @@ Memex is a personal knowledge management web app that ingests, auto-classifies, 
   - Classification + summarization: `llama3.2` (3B, fast) or `gemma3:4b` (better quality)
   - Embeddings: `nomic-embed-text`
   - JSON mode + Temperature 0.0 enforced for extraction reliability
-- **AI (Optional)**: Anthropic Claude API — routed through `ai.ts` only when `use_claude=true` in settings AND `ANTHROPIC_API_KEY` is set. Never called automatically for ingestion.
-- **AI Routing**: `server/src/services/ai.ts` — single `aiChat()` function that transparently dispatches to Ollama or Claude based on DB settings
+- **AI (Optional)**: Anthropic Claude and Google Gemini — cloud providers, off by default. Used only when a key is set (`ANTHROPIC_API_KEY` / `GEMINI_API_KEY`), the provider is selected in Settings, cloud consent (`allow_cloud`) is on, Strict Local Mode is off, and the content passes `cloudSafe()`.
+- **AI Routing**: `server/src/services/ai.ts` — single `aiChat()` function with a provider registry (Ollama / Claude / Gemini); dispatches by DB settings, per-task overrides and the `cloudSafe` guard
 - **Secret Storage**: AES-256-GCM client-side encryption (Web Crypto API) — no AI involved
 - **URL Parsing**: `https://r.jina.ai/{url}` — free tier, no API key needed for basic use
 - **YouTube**: `youtube-transcript` npm package — free, no API key
@@ -174,9 +174,15 @@ export async function aiChat(
 export async function aiEmbed(text: string): Promise<number[]>
 ```
 
-Routing logic:
-- If DB setting `use_claude = true` AND `ANTHROPIC_API_KEY` is set → use Claude (`CLAUDE_MODEL` env var, default `claude-3-5-sonnet-20240620`)
-- Otherwise → use Ollama with the model from DB setting `ai_model` (default `llama3.2`)
+Routing logic (`aiChat(prompt, system, format, options, signal, { task, provider, cloudSafe, userInitiated, onProvider })`):
+- Requested provider = explicit `provider` → per-task override (`ai_task_providers[task]`) → default `ai_provider` (legacy `use_claude=true` migrates to `claude` + consent on read).
+- A cloud provider is used only if ALL hold: `strict_local_mode` off, `allow_cloud` on, API key set, `cloudSafe !== false`. Otherwise the call stays on Ollama (`ai_model`, default `llama3.2`).
+- An explicit `provider` that can't be honoured is refused with `AiProviderError` (`kind: 'blocked'`), never silently downgraded.
+- Provider failures map to one `AiProviderError` (`rate_limit | timeout | auth | blocked | bad_response | unavailable`). Background calls fall back to Ollama (logged); user-initiated/explicit calls surface the error.
+- Cloud model ids: `claude_model` / `gemini_model` settings → `CLAUDE_MODEL` / `GEMINI_MODEL` env → defaults `claude-sonnet-5-5` / `gemini-2.5-flash`.
+- `items.extraction_model` records `<provider>:<model>` of the provider that actually answered.
+- Privacy guard `services/cloudSafe.ts`: encrypted/`password` items, top-level `Passwords`/`Personal` categories and `private`/`no-cloud`/`local-only` tags never leave Ollama. Calls that bundle several items (insights, digest, RAG) are pinned local if any item is private.
+- `GET /api/ai/providers` lists providers + `configured` flags + models (never keys); `POST /api/ai/test {provider}` does one tiny round-trip.
 
 ## AI Classification (100% local, zero cost)
 Classification uses JSON mode + temperature 0 + enum trick for reliability:
@@ -291,8 +297,12 @@ Entity extraction happens in `entityService.extractAndLinkEntities()` — called
 Key-value table with JSONB values. Default rows:
 | key | default |
 |---|---|
-| `ai_model` | `"llama3.2"` |
-| `use_claude` | `false` |
+| `ai_model` | `"llama3.2"` (Ollama chat model) |
+| `ai_provider` | `"ollama"` (`ollama` / `claude` / `gemini`) |
+| `ai_task_providers` | `{}` (per-task overrides, e.g. `{"explain":"gemini"}`) |
+| `allow_cloud` | `false` (consent to send item content to a cloud provider) |
+| `claude_model` / `gemini_model` | unset → env → built-in default |
+| `use_claude` | `false` (legacy; migrated on read) |
 | `auto_lock_timeout` | `15` (minutes) |
 | `strict_local_mode` | `false` |
 
@@ -387,12 +397,14 @@ JWT_SECRET=<generate a random 32-char string>
 OLLAMA_CHAT_MODEL=llama3.2
 OLLAMA_EMBED_MODEL=nomic-embed-text
 
-# Claude API (optional — only used when use_claude=true in settings)
+# Cloud providers (optional — a key only makes a provider available; see AI Routing)
 ANTHROPIC_API_KEY=
-CLAUDE_MODEL=claude-3-5-sonnet-20240620
+CLAUDE_MODEL=claude-sonnet-5-5
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
 ```
 
-AI provider (Ollama vs Claude) and model selection are runtime settings via `PUT /api/settings` — no restart needed.
+AI provider, per-task providers, cloud consent and model selection are runtime settings via `PUT /api/settings` — no restart needed. API keys are env-only and never returned by any endpoint.
 
 ## Code Style
 - TypeScript strict mode, no `any`
@@ -428,4 +440,4 @@ Key tokens:
 ## Non-Goals (v1)
 - No cloud hosting — runs on your laptop/desktop
 - No real-time collaboration
-- Claude API never called for automatic ingestion — manual opt-in only via Settings
+- Cloud AI (Claude/Gemini) is never the default — it requires a key, an explicit provider choice and cloud consent in Settings, and is blocked by Strict Local Mode and the `cloudSafe` guard

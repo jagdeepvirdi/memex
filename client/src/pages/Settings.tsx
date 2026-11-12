@@ -21,6 +21,7 @@ import {
 import { Link } from 'react-router-dom'
 import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
+import { AiProviderSettings } from '../components/settings/AiProviderSettings'
 import { apiFetch, fetchCategories, reprocessBulk } from '../lib/api'
 import { deriveKey, decryptVaultItem, base64ToUint8Array } from '../lib/crypto'
 import type { Category } from '../../../shared/types'
@@ -72,7 +73,9 @@ export default function SettingsPage() {
       setSuccess('Settings saved')
       setTimeout(() => setSuccess(null), 2000)
     } catch {
+      setSettings(settings) // roll back the optimistic update
       setError('Failed to save settings')
+      setTimeout(() => setError(null), 3000)
     }
   }
 
@@ -277,31 +280,10 @@ export default function SettingsPage() {
                <h2 className="font-display text-xl text-ink">Intelligence Engine</h2>
             </div>
             <div className="bg-surface/50 border border-white/5 rounded-2xl p-6 space-y-6">
-               <div className="flex items-center justify-between">
-                  <div>
-                     <p className="text-sm text-ink font-medium">Primary Model</p>
-                     <p className="text-xs text-ink-muted mt-0.5">Used for auto-classification and summarization.</p>
-                  </div>
-                  <select 
-                    className="bg-bg border border-white/10 rounded-lg px-3 py-1.5 text-xs text-ink outline-none cursor-pointer focus:border-accent/50 transition-colors"
-                    value={settings.use_claude ? 'claude-3-5-sonnet' : settings.ai_model}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      if (val === 'claude-3-5-sonnet') {
-                        handleUpdateSettings({ use_claude: true })
-                      } else {
-                        handleUpdateSettings({ use_claude: false, ai_model: val })
-                      }
-                    }}
-                  >
-                     <option value="llama3.2">llama3.2 (Local)</option>
-                     <option value="gemma2:2b">gemma2:2b (Local)</option>
-                     <option value="phi3:3.8b">phi3:3.8b (Local)</option>
-                     <option value="qwen2.5-coder:14b">qwen2.5-coder:14b (Heavy)</option>
-                     <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Cloud)</option>
-                  </select>
-               </div>
-               
+               <AiProviderSettings settings={settings} onUpdate={handleUpdateSettings} />
+
+               <div className="h-px bg-white/5" />
+
                <div className="flex items-center justify-between">
                   <div>
                      <p className="text-sm text-ink font-medium">Embedding Model</p>
@@ -534,14 +516,17 @@ export default function SettingsPage() {
                <div className="flex items-center justify-between">
                   <div>
                      <p className="text-sm text-ink font-medium">Strict Local Mode</p>
-                     <p className="text-xs text-ink-muted mt-0.5">Disable URL scraping and force local-only execution.</p>
+                     <p className="text-xs text-ink-muted mt-0.5 max-w-md">
+                       Runs all AI on local Ollama — Claude and Gemini are never called, even if enabled above — and blocks
+                       fetching external URLs.
+                     </p>
                   </div>
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input
                       type="checkbox"
                       className="sr-only peer"
                       checked={settings.strict_local_mode === 'true' || settings.strict_local_mode === true}
-                      onChange={(e) => handleUpdateSettings({ strict_local_mode: e.target.checked.toString() })}
+                      onChange={(e) => handleUpdateSettings({ strict_local_mode: e.target.checked })}
                     />
                     <div className="w-9 h-5 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent"></div>
                   </label>
