@@ -78,3 +78,15 @@ export async function checkOllamaHealth(): Promise<boolean> {
     return false
   }
 }
+
+/** Names of locally installed Ollama models (for the Settings picker). Empty if Ollama is unreachable. */
+export async function listOllamaModels(): Promise<string[]> {
+  try {
+    const res = await fetch(`${OLLAMA_BASE}/api/tags`, { signal: AbortSignal.timeout(3000) })
+    if (!res.ok) return []
+    const data = (await res.json()) as { models?: Array<{ name?: unknown }> }
+    return (data.models ?? []).map(m => m.name).filter((n): n is string => typeof n === 'string')
+  } catch {
+    return []
+  }
+}

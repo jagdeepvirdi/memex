@@ -113,3 +113,34 @@ describe('reprocessBulkItems — DevBrain notification', () => {
     await flush() // background failure must not produce an unhandled rejection
   })
 })
+
+describe('reprocessBulkItems — privacy guard', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    delete process.env.DEVBRAIN_NOTIFY_URL
+    global.fetch = vi.fn().mockResolvedValue({ ok: true })
+    mockPool.connect.mockResolvedValue({
+      query: vi.fn().mockResolvedValue({ rows: [{ reviewed: false }] }),
+      release: vi.fn(),
+    })
+  })
+
+  it('passes cloudSafe per item, keeping private items on local models', async () => {
+    const { classify } = await import('./classifier.js')
+    mockPool.query
+      .mockResolvedValueOnce({
+        rows: [
+          { id: 'i1', title: 'Soup', content: 'recipe', categories: ['Food'], tags: [] },
+          { id: 'i2', title: 'Bank', content: 'pin', categories: ['Passwords'], tags: [] },
+          { id: 'i3', title: 'Note', content: 'x', categories: [], tags: ['private'] },
+        ],
+      })
+      .mockResolvedValue({ rows: [] })
+
+    await reprocessBulkItems(true)
+    await flush()
+
+    const flags = vi.mocked(classify).mock.calls.map(c => [(c[0] as string).split('\n')[0], (c[1] as { cloudSafe: boolean }).cloudSafe])
+    expect(Object.fromEntries(flags)).toEqual({ Soup: true, Bank: false, Note: false })
+  })
+})

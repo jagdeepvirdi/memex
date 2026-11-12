@@ -2,8 +2,9 @@ import type { PoolClient } from 'pg'
 import pLimit from 'p-limit'
 import { v4 as uuidv4 } from 'uuid'
 import { pool } from '../db/client.js'
-import { setItemCategories, setItemTags, rowToItem } from '../db/helpers.js'
+import { setItemCategories, setItemTags, rowToItem, CLOUD_SAFE_COLS } from '../db/helpers.js'
 import { classify, type ClassificationResult } from './classifier.js'
+import { cloudSafe, type CloudSafeItem } from './cloudSafe.js'
 import type { Item, ItemType, ItemSource, ItemIntent, ItemPriority } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
@@ -256,9 +257,9 @@ export async function listItems(options: ListItemsOptions): Promise<{ items: Ite
  * Re-queues all unclassified Keep items through Ollama for background re-enrichment.
  */
 export async function enrichItems(): Promise<{ queued: number }> {
-  const { rows } = await pool.query<{ id: string; title: string; content: string }>(
-    `SELECT id, title, content FROM items
-     WHERE source = 'keep' AND structured = '{}'::jsonb AND deleted_at IS NULL
+  const { rows } = await pool.query<{ id: string; title: string; content: string } & CloudSafeItem>(
+    `SELECT i.id, i.title, i.content, ${CLOUD_SAFE_COLS} FROM items i
+     WHERE i.source = 'keep' AND i.structured = '{}'::jsonb AND i.deleted_at IS NULL
      LIMIT 2000`
   )
   if (rows.length === 0) return { queued: 0 }
@@ -273,7 +274,7 @@ export async function enrichItems(): Promise<{ queued: number }> {
       if (!text.trim()) { done++; return; }
 
       try {
-        const result = await classify(text)
+        const result = await classify(text, { cloudSafe: cloudSafe(row) })
         if (!result.title || result.title === 'Untitled') {
           result.title = row.title || row.content.split('\n')[0]?.slice(0, 80) || 'Untitled'
         }
@@ -314,11 +315,11 @@ export async function enrichItems(): Promise<{ queued: number }> {
  */
 export async function reprocessBulkItems(filterAll: boolean): Promise<{ queued: number; jobId?: string }> {
   const where = filterAll
-    ? `structured != '{}'::jsonb AND deleted_at IS NULL`
-    : `structured != '{}'::jsonb AND reviewed = FALSE AND deleted_at IS NULL`
+    ? `i.structured != '{}'::jsonb AND i.deleted_at IS NULL`
+    : `i.structured != '{}'::jsonb AND i.reviewed = FALSE AND i.deleted_at IS NULL`
 
-  const { rows } = await pool.query<{ id: string; title: string; content: string }>(
-    `SELECT id, title, content FROM items WHERE ${where} LIMIT 2000`
+  const { rows } = await pool.query<{ id: string; title: string; content: string } & CloudSafeItem>(
+    `SELECT i.id, i.title, i.content, ${CLOUD_SAFE_COLS} FROM items i WHERE ${where} LIMIT 2000`
   )
   if (rows.length === 0) {
     return { queued: 0 }
@@ -341,7 +342,7 @@ export async function reprocessBulkItems(filterAll: boolean): Promise<{ queued: 
       if (!text.trim()) { done++; return }
 
       try {
-        const result = await classify(text)
+        const result = await classify(text, { cloudSafe: cloudSafe(row) })
         if (!result.title || result.title === 'Untitled') {
           result.title = row.title || row.content.split('\n')[0]?.slice(0, 80) || 'Untitled'
         }

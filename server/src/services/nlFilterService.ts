@@ -47,7 +47,7 @@ Examples:
 "notes about machine learning" → {"type":"note","searchQuery":"machine learning","structuredFilters":{}}`
 
 export async function parseNLFilter(query: string): Promise<ParsedFilter> {
-  const raw = await aiChat(query, SYSTEM_PROMPT, 'json', { temperature: 0 })
+  const raw = await aiChat(query, SYSTEM_PROMPT, 'json', { temperature: 0 }, undefined, { task: 'nl_filter' })
 
   try {
     const start = raw.indexOf('{')

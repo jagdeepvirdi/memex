@@ -50,3 +50,23 @@ describe('askKnowledge', () => {
     expect(systemPrompt).toMatch(/citation/i)
   })
 })
+
+describe('askKnowledge privacy guard', () => {
+  const opts = () => vi.mocked(aiChat).mock.calls[0][5]
+
+  it('tags the call as task "ask" and cloud-safe when every source is ordinary', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [sourceRow] } as any)
+    vi.mocked(aiChat).mockResolvedValueOnce('answer')
+    await askKnowledge('q')
+    expect(opts()).toEqual({ task: 'ask', cloudSafe: true })
+  })
+
+  it('pins the call to local models when any retrieved source is private', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [sourceRow, { ...sourceRow, id: 's2', categories: ['Passwords'] }],
+    } as any)
+    vi.mocked(aiChat).mockResolvedValueOnce('answer')
+    await askKnowledge('q')
+    expect(opts()).toEqual({ task: 'ask', cloudSafe: false })
+  })
+})

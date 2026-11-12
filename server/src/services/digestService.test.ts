@@ -84,3 +84,23 @@ describe('generateDigest', () => {
     expect(client.release).toHaveBeenCalled()
   })
 })
+
+describe('generateDigest privacy guard', () => {
+  const opts = () => vi.mocked(aiChat).mock.calls[0][5]
+
+  it('marks the connection call cloud-safe for ordinary items', async () => {
+    const client = await getClient()
+    queue(client, [], 0, 0, [], [row({ id: 'a', type: 'recipe' }), row({ id: 'b', type: 'place' })])
+    vi.mocked(aiChat).mockResolvedValueOnce('A link.')
+    await generateDigest()
+    expect(opts()).toEqual({ task: 'digest', cloudSafe: true })
+  })
+
+  it('pins the call to local models when either item is private', async () => {
+    const client = await getClient()
+    queue(client, [], 0, 0, [], [row({ id: 'a', type: 'recipe', categories: ['Personal', 'Contacts'] }), row({ id: 'b', type: 'place' })])
+    vi.mocked(aiChat).mockResolvedValueOnce('A link.')
+    await generateDigest()
+    expect(opts()).toEqual({ task: 'digest', cloudSafe: false })
+  })
+})

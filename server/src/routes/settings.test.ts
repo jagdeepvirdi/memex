@@ -48,6 +48,47 @@ describe('PUT /api/settings', () => {
   })
 })
 
+describe('PUT /api/settings — AI provider validation', () => {
+  const put = (body: unknown) =>
+    request(app).put('/api/settings').set('Authorization', AUTH).send(body as object)
+
+  beforeEach(async () => {
+    const client = (await vi.mocked(pool.connect)()) as any
+    client.query.mockReset()
+    client.query.mockResolvedValue({ rows: [] })
+  })
+
+  it('accepts valid provider settings and stores the trimmed model names', async () => {
+    const client = (await vi.mocked(pool.connect)()) as any
+    const res = await put({
+      ai_provider: 'gemini', allow_cloud: true, gemini_model: '  gemini-x  ',
+      ai_task_providers: { explain: 'claude', classify: 'ollama' },
+    })
+    expect(res.status).toBe(200)
+    const writes = client.query.mock.calls.filter((c: any[]) => /INSERT INTO settings/.test(c[0]))
+    expect(writes.find((c: any[]) => c[1][0] === 'gemini_model')[1][1]).toBe('"gemini-x"')
+    expect(writes.map((c: any[]) => c[1][0])).toContain('ai_task_providers')
+  })
+
+  it.each([
+    ['unknown provider', { ai_provider: 'skynet' }],
+    ['unknown per-task provider', { ai_task_providers: { explain: 'openai' } }],
+    ['non-boolean consent', { allow_cloud: 'yes' }],
+    ['empty model name', { claude_model: '   ' }],
+    ['non-object body', ['x']],
+  ])('rejects %s with 400 and writes nothing', async (_n, body) => {
+    const client = (await vi.mocked(pool.connect)()) as any
+    const res = await put(body)
+    expect(res.status).toBe(400)
+    expect(client.query).not.toHaveBeenCalled()
+  })
+
+  it('still stores unrelated settings untouched', async () => {
+    const res = await put({ auto_lock_timeout: 30 })
+    expect(res.status).toBe(200)
+  })
+})
+
 describe('POST /api/settings/bookmarklet-key', () => {
   it('generates and returns a hex key', async () => {
     vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)

@@ -1,5 +1,5 @@
 import { YoutubeTranscript } from 'youtube-transcript';
-import { getSetting } from './settings.js';
+import { getSetting, asBool } from './settings.js';
 import logger from '../lib/logger.js'
 
 export interface ScrapedContent {
@@ -10,7 +10,8 @@ export interface ScrapedContent {
 }
 
 export async function scrapeUrl(url: string): Promise<ScrapedContent> {
-  const isStrictLocal = await getSetting('strict_local_mode', false);
+  // The UI historically saved this as the string 'true'/'false'; asBool() reads both forms.
+  const isStrictLocal = asBool(await getSetting<unknown>('strict_local_mode', false));
   if (isStrictLocal) {
     throw new Error('Strict Local Mode is enabled. External URL scraping is blocked.');
   }

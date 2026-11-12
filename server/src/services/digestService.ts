@@ -1,6 +1,7 @@
 import { pool } from '../db/client.js'
 import { rowToItem } from '../db/helpers.js'
 import { aiChat } from './ai.js'
+import { allCloudSafe } from './cloudSafe.js'
 import type { Item, DigestResponse, DigestConnection } from '../../../shared/types.js'
 
 const CONNECTION_PROMPT = `You are a personal knowledge assistant.
@@ -48,7 +49,10 @@ async function generateConnection(candidates: Item[]): Promise<DigestConnection 
 
   try {
     const insight = await Promise.race([
-      aiChat(prompt, CONNECTION_PROMPT, undefined, { temperature: 0.4 }),
+      aiChat(prompt, CONNECTION_PROMPT, undefined, { temperature: 0.4 }, undefined, {
+        task: 'digest',
+        cloudSafe: allCloudSafe([item1, item2]),
+      }),
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('AI timeout')), 15_000)
       ),

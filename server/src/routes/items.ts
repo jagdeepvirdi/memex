@@ -10,9 +10,11 @@ import {
   setItemCategories,
   setItemTags,
   ITEM_SELECT_SQL,
+  CLOUD_SAFE_COLS,
   rowToItem,
 } from '../db/helpers.js'
 import { classify, mapToCategories } from '../services/classifier.js'
+import { cloudSafe, type CloudSafeItem } from '../services/cloudSafe.js'
 import {
   ITEM_LIST_SELECT_SQL,
   applyClassificationResult,
@@ -656,8 +658,8 @@ router.post('/:id/apply-extraction/:extractionId', async (req, res) => {
 
 router.post('/:id/re-classify', async (req, res) => {
   try {
-    const { rows: itemRows } = await pool.query<{ title: string; content: string }>(
-      'SELECT title, content FROM items WHERE id=$1 AND deleted_at IS NULL',
+    const { rows: itemRows } = await pool.query<{ title: string; content: string } & CloudSafeItem>(
+      `SELECT i.title, i.content, ${CLOUD_SAFE_COLS} FROM items i WHERE i.id=$1 AND i.deleted_at IS NULL`,
       [req.params.id]
     )
     if (itemRows.length === 0) {
@@ -667,7 +669,7 @@ router.post('/:id/re-classify', async (req, res) => {
     const { title, content } = itemRows[0]
     const text = [title, content].filter(t => t?.trim()).join('\n\n')
 
-    const result = await classify(text)
+    const result = await classify(text, { cloudSafe: cloudSafe(itemRows[0]) })
     if (!result.title || result.title === 'Untitled') {
       result.title = title || content.split('\n')[0]?.slice(0, 80) || 'Untitled'
     }
@@ -780,7 +782,9 @@ router.post('/:id/summarize-links', async (req, res) => {
           const scraped = await scrapeUrl(url)
           const summary = await aiChat(
             `Summarize the following webpage in 2-3 sentences:\n\nTitle: ${scraped.title}\n\n${scraped.content.slice(0, 3000)}`,
-            'You are a concise summarizer. Return only the summary text, no preamble or labels.'
+            'You are a concise summarizer. Return only the summary text, no preamble or labels.',
+            undefined, undefined, undefined,
+            { task: 'summarize_links', cloudSafe: cloudSafe(item) }
           )
           return { url, title: scraped.title, summary: summary.trim() }
         } catch {

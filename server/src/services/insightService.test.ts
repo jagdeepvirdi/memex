@@ -220,3 +220,26 @@ describe('generateInsights', () => {
     })
   })
 })
+
+describe('generateInsights privacy guard', () => {
+  const opts = () => vi.mocked(aiChat).mock.calls[0][5]
+
+  it('marks the call cloud-safe for ordinary items and selects the guard columns', async () => {
+    const client = await getClient()
+    client.query.mockResolvedValueOnce(sixRows())
+    vi.mocked(aiChat).mockResolvedValueOnce(oneInsight)
+    await generateInsights()
+    expect(opts()).toEqual({ task: 'insights', cloudSafe: true })
+    expect(client.query.mock.calls[0][0]).toMatch(/encrypted/)
+  })
+
+  it('pins the call to local models when any sampled item is private', async () => {
+    const client = await getClient()
+    const rows = sixRows().rows
+    rows[2] = { ...rows[2], encrypted: true } as any
+    client.query.mockResolvedValueOnce({ rows })
+    vi.mocked(aiChat).mockResolvedValueOnce(oneInsight)
+    await generateInsights()
+    expect(opts()).toEqual({ task: 'insights', cloudSafe: false })
+  })
+})

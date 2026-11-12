@@ -407,6 +407,8 @@ function applyGithubRepo(result: ClassificationResult, ref: GithubRepoRef): Clas
 export interface ClassifyHints {
   /** Original URL of the saved item, when known (e.g. the pasted GitHub link). */
   sourceUrl?: string
+  /** `cloudSafe(item)` for an already-stored item. `false` keeps classification on local Ollama. */
+  cloudSafe?: boolean
 }
 
 /** Topic beats source: dev-knowledge items file under Tech > AI, never under Links > Instagram/YouTube. */
@@ -438,11 +440,19 @@ function fallback(text: string): ClassificationResult {
 export async function classify(text: string, hints?: ClassifyHints): Promise<ClassificationResult> {
   const { model: activeModel } = await getAiConfig()
 
+  // Records which provider/model really answered (`<provider>:<model>`), including after a fallback.
+  let usedModel = activeModel
+  const aiOpts = {
+    task: 'classify',
+    cloudSafe: hints?.cloudSafe,
+    onProvider: (p: { provider: string; model: string }) => { usedModel = `${p.provider}:${p.model}` },
+  }
+
   // ── Attempt 1: normal prompt ──────────────────────────────────────────────
   try {
-    const raw = await aiChat(text, SYSTEM_PROMPT, 'json', { temperature: 0 })
+    const raw = await aiChat(text, SYSTEM_PROMPT, 'json', { temperature: 0 }, undefined, aiOpts)
     const result = parseClassification(raw)
-    result.model = activeModel
+    result.model = usedModel
 
     const normalized = normalizeCategories(result.categories)
     result.categories = normalized.length > 0 ? normalized : mapToCategories(result.type, result.structured)
@@ -458,10 +468,12 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
       `Classify this text and return ONLY JSON:\n\n${text.slice(0, 2000)}`,
       STRICT_SYSTEM_PROMPT,
       'json',
-      { temperature: 0 }
+      { temperature: 0 },
+      undefined,
+      aiOpts
     )
     const result = parseClassification(raw)
-    result.model = activeModel
+    result.model = usedModel
 
     const normalized = normalizeCategories(result.categories)
     result.categories = normalized.length > 0 ? normalized : mapToCategories(result.type, result.structured)
@@ -472,7 +484,7 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
   }
 
   // ── Fallback: never block the user ────────────────────────────────────────
-  return applyDevKnowledge({ ...fallback(text), model: activeModel }, text, hints)
+  return applyDevKnowledge({ ...fallback(text), model: usedModel }, text, hints)
 }
 
 // ── Batch classify — one Ollama call for multiple notes ──────────────────────
@@ -485,6 +497,7 @@ Return ONLY JSON array.`
 
 export async function classifyBatch(
   items: Array<{ id: string; title: string; content: string }>,
+  opts: { cloudSafe?: boolean } = {},
 ): Promise<Array<ClassificationResult & { id: string }>> {
   const numbered = items
     .map((item, i) => `[${i + 1}] ${(item.title || 'Untitled').slice(0, 80)}: ${item.content.slice(0, 300)}`)
@@ -492,7 +505,10 @@ export async function classifyBatch(
 
   const prompt = `Classify these ${items.length} notes:\n\n${numbered}\n\nReturn ONLY the JSON array of ${items.length} objects:`
 
-  const raw = await aiChat(prompt, BATCH_SYSTEM, 'json', { temperature: 0 })
+  const raw = await aiChat(prompt, BATCH_SYSTEM, 'json', { temperature: 0 }, undefined, {
+    task: 'classify',
+    cloudSafe: opts.cloudSafe,
+  })
 
   // Extract JSON array
   const start = raw.indexOf('[')

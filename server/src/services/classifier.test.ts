@@ -283,3 +283,29 @@ describe('classifyBatch', () => {
     expect(results[0].categories).toEqual(['Food', 'Savory', 'Thai'])
   })
 })
+
+describe('classify provider wiring', () => {
+  it('passes the classify task and the caller\'s cloudSafe flag to aiChat', async () => {
+    mockAI(NOTE_JSON)
+    await classify('some text', { cloudSafe: false })
+    const opts = vi.mocked(aiChat).mock.calls[0][5] as { task: string; cloudSafe?: boolean }
+    expect(opts.task).toBe('classify')
+    expect(opts.cloudSafe).toBe(false)
+  })
+
+  it('leaves cloudSafe undefined for new, not-yet-stored content', async () => {
+    mockAI(NOTE_JSON)
+    await classify('some text')
+    expect((vi.mocked(aiChat).mock.calls[0][5] as { cloudSafe?: boolean }).cloudSafe).toBeUndefined()
+  })
+
+  it('records the provider that actually answered as <provider>:<model>', async () => {
+    vi.mocked(aiChat).mockImplementationOnce(async (...args: unknown[]) => {
+      ;(args[5] as { onProvider: (p: { provider: string; model: string }) => void })
+        .onProvider({ provider: 'claude', model: 'claude-x' })
+      return NOTE_JSON
+    })
+    const result = await classify('some text')
+    expect(result.model).toBe('claude:claude-x')
+  })
+})

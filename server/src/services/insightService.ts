@@ -1,5 +1,7 @@
 import { pool } from '../db/client.js'
+import { CLOUD_SAFE_COLS } from '../db/helpers.js'
 import { aiChat } from './ai.js'
+import { allCloudSafe, type CloudSafeItem } from './cloudSafe.js'
 import type { Insight } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
@@ -52,18 +54,19 @@ function isInsight(value: unknown): value is Insight {
 async function computeInsights(): Promise<ComputeResult> {
   // Hold the DB connection only for the query, not for the (slow) model call.
   const client = await pool.connect()
-  let items: Array<{ title: string; summary: string | null; type: string }>
+  let items: Array<{ title: string; summary: string | null; type: string } & CloudSafeItem>
   try {
     // Fetch recent and random items to find connections
+    // (CLOUD_SAFE_COLS adds type/encrypted/categories/tags for the privacy guard.)
     const result = await client.query(`
-      (SELECT title, structured->>'summary' as summary, type, created_at
-       FROM items
-       WHERE reviewed = true AND deleted_at IS NULL
-       ORDER BY created_at DESC LIMIT 20)
+      (SELECT i.title, i.structured->>'summary' AS summary, ${CLOUD_SAFE_COLS}, i.created_at
+       FROM items i
+       WHERE i.reviewed = true AND i.deleted_at IS NULL
+       ORDER BY i.created_at DESC LIMIT 20)
       UNION ALL
-      (SELECT title, structured->>'summary' as summary, type, created_at
-       FROM items
-       WHERE reviewed = true AND deleted_at IS NULL
+      (SELECT i.title, i.structured->>'summary' AS summary, ${CLOUD_SAFE_COLS}, i.created_at
+       FROM items i
+       WHERE i.reviewed = true AND i.deleted_at IS NULL
        ORDER BY RANDOM() LIMIT 10)
     `)
     items = result.rows
@@ -82,7 +85,10 @@ async function computeInsights(): Promise<ComputeResult> {
   const timer = setTimeout(() => controller.abort(), AI_TIMEOUT_MS)
   let raw: string
   try {
-    raw = await aiChat(prompt, INSIGHT_SYSTEM_PROMPT, 'json', { temperature: 0.2 }, controller.signal)
+    raw = await aiChat(prompt, INSIGHT_SYSTEM_PROMPT, 'json', { temperature: 0.2 }, controller.signal, {
+      task: 'insights',
+      cloudSafe: allCloudSafe(items),
+    })
   } catch {
     return { insights: [], ttlMs: INSIGHTS_FAILURE_TTL_MS }
   } finally {

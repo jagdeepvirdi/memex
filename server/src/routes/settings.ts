@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { randomBytes } from 'crypto';
+import { z } from 'zod';
 import { pool } from '../db/client.js';
 import logger from '../lib/logger.js'
 
@@ -21,8 +22,25 @@ router.get('/', async (req, res) => {
 });
 
 // PUT /api/settings
+const ProviderEnum = z.enum(['ollama', 'claude', 'gemini'])
+const modelName = z.string().trim().min(1).max(100)
+
+// Only the AI-provider keys are validated; every other setting is stored as before.
+const SettingsBody = z.object({
+  ai_provider: ProviderEnum.optional(),
+  ai_task_providers: z.record(z.string().min(1).max(50), ProviderEnum).optional(),
+  allow_cloud: z.boolean().optional(),
+  claude_model: modelName.optional(),
+  gemini_model: modelName.optional(),
+}).passthrough();
+
 router.put('/', async (req, res) => {
-  const settings = req.body;
+  const parsed = SettingsBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid settings', details: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) });
+    return;
+  }
+  const settings = parsed.data;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

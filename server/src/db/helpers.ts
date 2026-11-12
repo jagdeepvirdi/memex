@@ -205,6 +205,17 @@ export async function fetchItem(client: PoolClient, id: string): Promise<Item | 
   return rows[0] ? rowToItem(rows[0]) : null
 }
 
+/**
+ * Extra columns `cloudSafe()` needs (type, encrypted, root-first categories, tags).
+ * For queries over `items i`; categories are ordered by depth so categories[0] is the root.
+ */
+export const CLOUD_SAFE_COLS = `
+  i.type, i.encrypted,
+  COALESCE((SELECT array_agg(c.name ORDER BY ic.depth) FROM item_categories ic
+            JOIN categories c ON c.id = ic.category_id WHERE ic.item_id = i.id), '{}'::text[]) AS categories,
+  COALESCE((SELECT array_agg(t.name ORDER BY t.name) FROM item_tags it
+            JOIN tags t ON t.id = it.tag_id WHERE it.item_id = i.id), '{}'::text[]) AS tags`
+
 export const ITEM_SELECT_SQL = `
   SELECT
     i.id, i.title, i.type, i.content, i.structured,

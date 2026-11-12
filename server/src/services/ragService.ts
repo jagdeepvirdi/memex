@@ -2,6 +2,7 @@ import { pool } from '../db/client.js'
 import { rowToItem } from '../db/helpers.js'
 import { embedQuery } from './embedder.js'
 import { aiChat } from './ai.js'
+import { allCloudSafe } from './cloudSafe.js'
 import type { Item, AskResponse } from '../../../shared/types.js'
 
 const RAG_SYSTEM_PROMPT = `You are Memex AI, a helpful personal knowledge assistant. 
@@ -66,8 +67,11 @@ export async function askKnowledge(question: string): Promise<AskResponse> {
   const prompt = `Context:\n${contextBlock}\n\nQuestion: ${question}\n\nAnswer:`
 
   // 3. Generate synthesized answer
-  // We use the active provider (Ollama/Claude) and preferred model from settings
-  const answer = await aiChat(prompt, RAG_SYSTEM_PROMPT)
+  // Uses the configured provider/model; stays on local Ollama if any retrieved source is private.
+  const answer = await aiChat(prompt, RAG_SYSTEM_PROMPT, undefined, undefined, undefined, {
+    task: 'ask',
+    cloudSafe: allCloudSafe(sources),
+  })
 
   return {
     answer,

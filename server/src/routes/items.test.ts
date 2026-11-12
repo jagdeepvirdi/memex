@@ -415,3 +415,25 @@ describe('POST /api/items/:id/re-classify', () => {
     expect(res.body.intent).toBe('reference')
   })
 })
+
+describe('POST /api/items/:id/re-classify privacy guard', () => {
+  const run = async (itemRow: Record<string, unknown>) => {
+    const { classify } = await import('../services/classifier')
+    vi.mocked(classify).mockClear()
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [itemRow] } as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'ext-1' }] } as any)
+      .mockResolvedValueOnce({ rows: [{ id: 'ext-1', applied: false }] } as any)
+    await request(app).post('/api/items/item-1/re-classify').set('Authorization', AUTH)
+    return vi.mocked(classify).mock.calls[0][1]
+  }
+
+  it('marks an ordinary item cloud-safe', async () => {
+    expect(await run({ title: 'T', content: 'C', categories: ['Food'], tags: [] })).toEqual({ cloudSafe: true })
+  })
+
+  it('keeps a vault/private item on local models', async () => {
+    expect(await run({ title: 'T', content: 'C', categories: ['Passwords'], tags: [] })).toEqual({ cloudSafe: false })
+    expect(await run({ title: 'T', content: 'C', encrypted: true })).toEqual({ cloudSafe: false })
+  })
+})
