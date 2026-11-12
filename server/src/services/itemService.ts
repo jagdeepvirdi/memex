@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { pool } from '../db/client.js'
 import { setItemCategories, setItemTags, rowToItem } from '../db/helpers.js'
 import { classify, type ClassificationResult } from './classifier.js'
-import type { Item, ItemType, ItemSource, ItemIntent } from '../../../shared/types.js'
+import type { Item, ItemType, ItemSource, ItemIntent, ItemPriority } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
 // ── Optional external notification (DevBrain) ─────────────────────────────────
@@ -45,6 +45,7 @@ export interface ItemRow {
   tags: string[] | null
   confidence: number | null
   intent: ItemIntent | null
+  priority: ItemPriority | null
   remind_at: Date | null
   public_token: string | null
   share_expires_at: Date | null
@@ -61,6 +62,7 @@ export interface ListItemsOptions {
   enriched?: boolean
   hasReminder?: boolean
   maxConfidence?: number
+  priority?: ItemPriority | 'none'
   limit: number
   offset: number
 }
@@ -75,7 +77,7 @@ export const ITEM_LIST_SELECT_SQL = `
     i.id, i.title, i.type, i.content, i.structured,
     i.source, i.source_url, i.encrypted, i.reviewed,
     i.created_at, i.updated_at, i.deleted_at, i.confidence,
-    i.intent, i.remind_at, i.public_token, i.share_expires_at,
+    i.intent, i.priority, i.remind_at, i.public_token, i.share_expires_at,
     COALESCE(
       (SELECT array_agg(c.name ORDER BY ic2.depth)
        FROM item_categories ic2
@@ -160,7 +162,7 @@ export async function applyClassificationResult(
  * Queries the list of items based on filter criteria, returning items, count, limit, and offset.
  */
 export async function listItems(options: ListItemsOptions): Promise<{ items: Item[]; total: number }> {
-  const { type, category, tag, q, deleted, unreviewed, pendingEnrichment, enriched, hasReminder, maxConfidence, limit, offset } = options
+  const { type, category, tag, q, deleted, unreviewed, pendingEnrichment, enriched, hasReminder, maxConfidence, priority, limit, offset } = options
 
   const conditions: string[] = deleted ? ['i.deleted_at IS NOT NULL'] : ['i.deleted_at IS NULL']
   const params: unknown[] = []
@@ -190,6 +192,13 @@ export async function listItems(options: ListItemsOptions): Promise<{ items: Ite
   if (maxConfidence !== undefined) {
     conditions.push(`i.confidence IS NOT NULL AND i.confidence <= $${p++}`)
     params.push(maxConfidence)
+  }
+
+  if (priority === 'none') {
+    conditions.push(`i.priority IS NULL`)
+  } else if (priority) {
+    conditions.push(`i.priority = $${p++}`)
+    params.push(priority)
   }
 
   if (category) {

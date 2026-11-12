@@ -15,6 +15,9 @@ export type ItemSource = 'keep' | 'manual' | 'url' | 'youtube' | 'instagram'
 
 export type ItemIntent = 'actionable' | 'reference' | 'idea'
 
+/** User-owned triage level. Unlike `intent` (AI-assigned), re-classifying never changes it. */
+export type ItemPriority = 'essential' | 'useful' | 'skip'
+
 export interface Item {
   id: string
   title: string
@@ -32,6 +35,7 @@ export interface Item {
   reviewed: boolean
   confidence?: number
   intent?: ItemIntent
+  priority?: ItemPriority | null
   remindAt?: Date | null
   publicToken?: string | null
   shareExpiresAt?: Date | null
@@ -56,6 +60,21 @@ export interface RecipeData {
   cookTime?: string
   cuisine?: string
   mealType?: string
+}
+
+/** Developer knowledge saved from a link or caption (type stays 'link'). */
+export type DevKnowledgeKind = 'repo' | 'prompt' | 'skill' | 'explainer' | 'tool'
+
+export interface RepoData {
+  kind: DevKnowledgeKind
+  repoName?: string        // "owner/repo"
+  repoUrl?: string
+  owner?: string
+  creatorHandle?: string   // who posted it (e.g. an Instagram handle), without the leading @
+  platform?: 'github' | 'instagram' | 'youtube' | 'web'
+  whatItDoes?: string      // plain-English "what it is / what it's for"
+  promptText?: string      // for kind 'prompt' | 'skill'
+  summary?: string
 }
 
 export interface MediaData {
@@ -179,6 +198,10 @@ export interface CreateItemRequest {
   tags?: string[]
   source: ItemSource
   sourceUrl?: string
+  structured?: StructuredData
+  intent?: ItemIntent
+  priority?: ItemPriority | null
+  confidence?: number
 }
 
 export interface UpdateItemRequest {
@@ -186,6 +209,7 @@ export interface UpdateItemRequest {
   content?: string
   categories?: string[]
   tags?: string[]
+  priority?: ItemPriority | null
   remindAt?: string | null  // ISO datetime string, null to clear
 }
 

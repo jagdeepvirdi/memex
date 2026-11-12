@@ -1,5 +1,5 @@
 import type { PoolClient, QueryResult } from 'pg'
-import type { Item, ItemType, ItemSource, ItemIntent, StructuredData } from '../../../shared/types.js'
+import type { Item, ItemType, ItemSource, ItemIntent, ItemPriority, StructuredData } from '../../../shared/types.js'
 
 // ── Row shape returned from items queries ────────────────────────────────────
 
@@ -19,6 +19,7 @@ interface ItemRow {
   tags: string[] | null
   confidence: number | null
   intent: ItemIntent | null
+  priority: ItemPriority | null
   remind_at: Date | null
   public_token: string | null
   share_expires_at: Date | null
@@ -44,6 +45,7 @@ export function rowToItem(row: ItemRow): Item {
     tags: row.tags || [],
     confidence: row.confidence ?? undefined,
     intent: row.intent ?? undefined,
+    priority: row.priority ?? undefined,
     remindAt: row.remind_at ?? undefined,
     publicToken: row.public_token ?? undefined,
     shareExpiresAt: row.share_expires_at ?? undefined,
@@ -107,11 +109,13 @@ export async function createItem(
     tags?: string[]
     reviewed?: boolean
     confidence?: number
+    intent?: ItemIntent
+    priority?: ItemPriority | null
   },
 ): Promise<Item> {
   const { rows } = await client.query<{ id: string }>(
-    `INSERT INTO items (title, type, content, raw_content, structured, source, source_url, reviewed, confidence)
-     VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8)
+    `INSERT INTO items (title, type, content, raw_content, structured, source, source_url, reviewed, confidence, intent, priority)
+     VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, $9, $10)
      RETURNING id`,
     [
       item.title,
@@ -122,6 +126,8 @@ export async function createItem(
       item.sourceUrl || null,
       item.reviewed ?? false,
       item.confidence ?? null,
+      item.intent ?? null,
+      item.priority ?? null,
     ],
   )
   const id = rows[0].id
@@ -202,7 +208,7 @@ export async function fetchItem(client: PoolClient, id: string): Promise<Item | 
 export const ITEM_SELECT_SQL = `
   SELECT
     i.id, i.title, i.type, i.content, i.structured,
-    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence, i.intent, i.remind_at, i.public_token, i.share_expires_at,
+    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence, i.intent, i.priority, i.remind_at, i.public_token, i.share_expires_at,
     COALESCE(
       (SELECT array_agg(c.name ORDER BY ic2.depth)
        FROM item_categories ic2

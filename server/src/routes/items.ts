@@ -37,6 +37,9 @@ const router = Router()
 const ITEM_TYPES = ['note', 'recipe', 'media', 'spec', 'stock', 'password', 'link', 'book', 'place'] as const
 const ITEM_SOURCES = ['keep', 'manual', 'url', 'youtube', 'instagram'] as const
 
+const ITEM_INTENTS = ['actionable', 'reference', 'idea'] as const
+const ITEM_PRIORITIES = ['essential', 'useful', 'skip'] as const
+
 const createItemSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   type: z.enum(ITEM_TYPES).optional(),
@@ -47,6 +50,9 @@ const createItemSchema = z.object({
   sourceUrl: z.string().url().optional(),
   encrypted: z.boolean().optional(),
   structured: z.record(z.unknown()).optional(),
+  intent: z.enum(ITEM_INTENTS).optional(),
+  priority: z.enum(ITEM_PRIORITIES).nullable().optional(),
+  confidence: z.number().min(0).max(100).optional(),
 })
 
 const updateItemSchema = z.object({
@@ -59,7 +65,8 @@ const updateItemSchema = z.object({
   reviewed: z.boolean().optional(),
   confidence: z.number().nullable().optional(),
   remindAt: z.string().datetime().nullable().optional(),
-  intent: z.enum(['actionable', 'reference', 'idea']).optional(),
+  intent: z.enum(ITEM_INTENTS).optional(),
+  priority: z.enum(ITEM_PRIORITIES).nullable().optional(),
 })
 
 const listQuerySchema = z.object({
@@ -73,6 +80,7 @@ const listQuerySchema = z.object({
   enriched: z.coerce.boolean().default(false),
   hasReminder: z.coerce.boolean().default(false),
   maxConfidence: z.coerce.number().int().min(0).max(100).optional(),
+  priority: z.enum([...ITEM_PRIORITIES, 'none']).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   offset: z.coerce.number().int().min(0).default(0),
 })
@@ -121,6 +129,8 @@ router.post('/', async (req, res) => {
     let categories = body.categories ?? []
     let tags = body.tags ?? []
     let structured = body.structured ?? {}
+    let intent = body.intent
+    let confidence = body.confidence
     let reviewed = !!(body.type && body.title) // Review not needed if user provided core info
 
     if (!type || !title) {
@@ -129,6 +139,8 @@ router.post('/', async (req, res) => {
       title = title ?? classification.title
       tags = tags.length > 0 ? tags : classification.tags
       structured = Object.keys(structured).length > 0 ? structured : classification.structured
+      intent = intent ?? classification.intent
+      confidence = confidence ?? classification.confidence
 
       if (categories.length === 0) {
         categories =
@@ -140,8 +152,8 @@ router.post('/', async (req, res) => {
     }
 
     const insertResult = await client.query<{ id: string }>(
-      `INSERT INTO items (title, type, content, structured, source, source_url, encrypted, reviewed)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO items (title, type, content, structured, source, source_url, encrypted, reviewed, intent, priority, confidence)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING id`,
       [
         title ?? 'Untitled',
@@ -151,7 +163,10 @@ router.post('/', async (req, res) => {
         body.source,
         body.sourceUrl ?? null,
         body.encrypted ?? false,
-        reviewed
+        reviewed,
+        intent ?? null,
+        body.priority ?? null,
+        confidence ?? null,
       ],
     )
 
@@ -810,7 +825,7 @@ router.put('/:id', async (req, res) => {
     return
   }
 
-  const { title, content, categories, tags, structured, deleted, reviewed, confidence, remindAt, intent } = parsed.data
+  const { title, content, categories, tags, structured, deleted, reviewed, confidence, remindAt, intent, priority } = parsed.data
   const client = await pool.connect()
 
   try {
@@ -836,6 +851,7 @@ router.put('/:id', async (req, res) => {
     if (reviewed !== undefined) { updates.push(`reviewed = $${p++}`); params.push(reviewed) }
     if (confidence !== undefined) { updates.push(`confidence = $${p++}`); params.push(confidence) }
     if (intent !== undefined) { updates.push(`intent = $${p++}`); params.push(intent) }
+    if (priority !== undefined) { updates.push(`priority = $${p++}`); params.push(priority) }
     if (remindAt !== undefined) { updates.push(`remind_at = $${p++}`); params.push(remindAt ?? null) }
     if (deleted === false) { updates.push(`deleted_at = NULL`) }
 
