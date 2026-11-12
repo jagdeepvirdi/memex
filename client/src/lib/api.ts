@@ -3,6 +3,7 @@ import type {
   IngestUrlResponse,
   CreateItemRequest,
   Item,
+  ItemPriority,
   StatsResponse,
   Insight,
   AskRequest,
@@ -110,7 +111,7 @@ export async function createItem(item: CreateItemRequest): Promise<Item> {
   })
 }
 
-export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number, pendingEnrichment?: boolean, enriched?: boolean, q?: string, unreviewed?: boolean, hasReminder?: boolean, maxConfidence?: number } = {}): Promise<{ items: Item[], total: number }> {
+export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number, pendingEnrichment?: boolean, enriched?: boolean, q?: string, unreviewed?: boolean, hasReminder?: boolean, maxConfidence?: number, priority?: ItemPriority | 'none' } = {}): Promise<{ items: Item[], total: number }> {
   const params = new URLSearchParams()
   if (options.type) params.append('type', options.type)
   if (options.category) params.append('category', options.category)
@@ -122,6 +123,7 @@ export async function fetchItems(options: { type?: string, category?: string, ta
   if (options.unreviewed) params.append('unreviewed', 'true')
   if (options.hasReminder) params.append('hasReminder', 'true')
   if (options.maxConfidence !== undefined) params.append('maxConfidence', options.maxConfidence.toString())
+  if (options.priority) params.append('priority', options.priority)
   if (options.q) params.append('q', options.q)
 
   return apiFetch<{ items: Item[], total: number }>(`/items?${params.toString()}`)

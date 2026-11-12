@@ -642,14 +642,15 @@ markitdown --help
 - [ ] Still open from step 4: multi-repo caption split — each split item needs its own `sourceUrl` (`multiEntity` path in `ingest.ts`)
 
 **5. Client**
-- [ ] `client/src/components/ingest/IngestPanel.tsx` — send full payload (structured/intent/priority/confidence); priority picker; source auto-detect/selector
-- [ ] `client/src/components/ingest/FileIngestPanel.tsx`, `VoiceIngestPanel.tsx` — same payload fix
-- [ ] `client/src/lib/api.ts` — `fetchItems` priority filter option
-- [ ] `client/src/components/cards/LinkCard.tsx`, `client/src/pages/Item.tsx` — show repo name/URL/what-it-does; priority picker on Item page
+- [x] `client/src/components/ingest/IngestPanel.tsx` — send full payload (structured/intent/priority/confidence); priority picker; source auto-detect/selector
+      *(done 2026-11-12: shared `lib/ingest.ts` `previewToCreateRequest`, `PriorityPicker`; source is auto-detected server-side, no manual selector — add one only if wanted. Saves now send `reviewed` from the preview, so AI captures enter the review queue; `POST /api/items` accepts an explicit `reviewed`)*
+- [x] `client/src/components/ingest/FileIngestPanel.tsx`, `VoiceIngestPanel.tsx` — same payload fix *(server `/file` + `/voice` previews now return intent/confidence/reviewed; no route tests for those two yet)*
+- [x] `client/src/lib/api.ts` — `fetchItems` priority filter option
+- [x] `client/src/components/cards/LinkCard.tsx`, `client/src/pages/Item.tsx` — show repo name/URL/what-it-does; priority picker on Item page
 
 **6. Tests**
-- [ ] `classifier.test.ts` (mapping, pre-pass, collisions), `items.test.ts` (INSERT param shift, priority), `ingest.test.ts`, `schema.test.ts` (migration count)
-- [ ] Client: `IngestPanel` cases (payload includes structured/priority; instagram source detection)
+- [x] `classifier.devKnowledge.test.ts` (mapping, pre-pass, collisions), `items.test.ts` (INSERT param shift, priority, reviewed), `ingest.test.ts`, `sourceDetect.test.ts`, `schema.test.ts` (migration count)
+- [x] Client: `IngestPanel` cases (payload includes structured/priority; instagram source detection) + `PriorityPicker`, `LinkCard`, `Item` page, `lib/ingest`
 - [ ] Run the before/after classify diff against the Phase 0 baseline
 
 **Acceptance:** paste `https://github.com/owner/repo` → lands in `Tech > AI > Repos`, summary says what it is for,

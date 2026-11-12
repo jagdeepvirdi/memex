@@ -8,7 +8,9 @@ import KeepImportPanel from './KeepImportPanel';
 import FileIngestPanel from './FileIngestPanel';
 import VoiceIngestPanel from './VoiceIngestPanel';
 import Editor from '../Editor';
-import type { Item, ItemType, CreateItemRequest } from '../../../../shared/types';
+import PriorityPicker from '../PriorityPicker';
+import { previewToCreateRequest, type IngestPreview } from '../../lib/ingest';
+import type { Item, ItemPriority } from '../../../../shared/types';
 
 interface IngestPanelProps {
   onSuccess?: (item: Item) => void;
@@ -25,7 +27,8 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
   const [manualText, setManualText] = useState(initialText || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [preview, setPreview] = useState<Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'embedding'> | null>(null);
+  const [preview, setPreview] = useState<IngestPreview | null>(null);
+  const [priority, setPriority] = useState<ItemPriority | null>(null);
   const [similarItems, setSimilarItems] = useState<SimilarItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -36,6 +39,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
     setLoading(true);
     setError(null);
     setPreview(null);
+    setPriority(null);
     setSimilarItems([]);
 
     try {
@@ -59,6 +63,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
     setLoading(true);
     setError(null);
     setPreview(null);
+    setPriority(null);
     setSimilarItems([]);
 
     try {
@@ -71,7 +76,8 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
       if (!res.ok) throw new Error('Classification failed');
 
       const data = await res.json();
-      setPreview({ ...data.preview, content: manualText, source: 'manual' });
+      // Keep the server's source/sourceUrl: pasted Instagram captions and GitHub links are detected there.
+      setPreview({ ...data.preview, content: manualText });
       setSimilarItems(data.similarItems ?? []);
       toast.success('Note classified successfully');
     } catch (err) {
@@ -90,22 +96,13 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
     setError(null);
 
     try {
-      const createReq: CreateItemRequest = {
-        title: preview.title,
-        type: preview.type as ItemType,
-        content: preview.content,
-        categories: preview.categories,
-        tags: preview.tags,
-        source: preview.source,
-        sourceUrl: preview.sourceUrl,
-      };
-      
-      const savedItem = await createItem(createReq);
+      const savedItem = await createItem(previewToCreateRequest(preview, priority));
       onSuccess?.(savedItem);
       toast.success('Item saved to Memex');
       setUrl('');
       setManualText('');
       setPreview(null);
+      setPriority(null);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to save item';
       setError(msg);
@@ -205,7 +202,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
                 </button>
               </form>
             ) : (
-              <PreviewState preview={preview} setPreview={setPreview} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} />
+              <PreviewState preview={preview} setPreview={setPreview} priority={priority} setPriority={setPriority} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} />
             )}
           </>
         ) : activeTab === 'url' ? (
@@ -241,7 +238,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
                 </button>
               </form>
             ) : (
-              <PreviewState preview={preview} setPreview={setPreview} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} />
+              <PreviewState preview={preview} setPreview={setPreview} priority={priority} setPriority={setPriority} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} />
             )}
           </>
         ) : activeTab === 'keep' ? (
@@ -257,15 +254,17 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
 }
 
 interface PreviewStateProps {
-  preview: Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'embedding'>;
+  preview: IngestPreview;
   setPreview: (val: null) => void;
+  priority: ItemPriority | null;
+  setPriority: (val: ItemPriority | null) => void;
   handleSave: () => Promise<void>;
   isSaving: boolean;
   error: string | null;
   similarItems?: SimilarItem[];
 }
 
-function PreviewState({ preview, setPreview, handleSave, isSaving, error, similarItems = [] }: PreviewStateProps) {
+function PreviewState({ preview, setPreview, priority, setPriority, handleSave, isSaving, error, similarItems = [] }: PreviewStateProps) {
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       {/* Duplicate warning */}
@@ -310,6 +309,11 @@ function PreviewState({ preview, setPreview, handleSave, isSaving, error, simila
             updatedAt: new Date(),
           }}
         />
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs text-ink-muted">How important is this?</span>
+        <PriorityPicker value={priority} onChange={setPriority} disabled={isSaving} />
       </div>
 
       <div className="flex gap-3">

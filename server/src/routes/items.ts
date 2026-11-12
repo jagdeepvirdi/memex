@@ -53,6 +53,7 @@ const createItemSchema = z.object({
   intent: z.enum(ITEM_INTENTS).optional(),
   priority: z.enum(ITEM_PRIORITIES).nullable().optional(),
   confidence: z.number().min(0).max(100).optional(),
+  reviewed: z.boolean().optional(),
 })
 
 const updateItemSchema = z.object({
@@ -131,7 +132,9 @@ router.post('/', async (req, res) => {
     let structured = body.structured ?? {}
     let intent = body.intent
     let confidence = body.confidence
-    let reviewed = !!(body.type && body.title) // Review not needed if user provided core info
+    // An explicit flag wins: AI-classified previews are sent with reviewed=false so they land in the
+    // review queue. Without one, supplying both type and title means the user chose them themselves.
+    let reviewed = body.reviewed ?? !!(body.type && body.title)
 
     if (!type || !title) {
       const classification = await classify(body.content)

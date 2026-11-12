@@ -3,7 +3,8 @@ import { Loader2, Mic, Square, Upload, AlertCircle, X, ExternalLink, AlertTriang
 import { createItem, fetchWhisperHealth } from '../../lib/api';
 import type { SimilarItem } from '../../lib/api';
 import ItemCard from '../cards/ItemCard';
-import type { Item, CreateItemRequest } from '../../../../shared/types';
+import { previewToCreateRequest } from '../../lib/ingest';
+import type { Item } from '../../../../shared/types';
 
 interface Props {
   onSuccess?: (item: Item) => void;
@@ -107,15 +108,7 @@ export default function VoiceIngestPanel({ onSuccess }: Props) {
     if (!preview) return;
     setSaving(true);
     try {
-      const req: CreateItemRequest = {
-        title: preview.title,
-        type: preview.type,
-        content: preview.content,
-        categories: preview.categories,
-        tags: preview.tags,
-        source: preview.source,
-      };
-      const saved = await createItem(req);
+      const saved = await createItem(previewToCreateRequest(preview));
       if (audioUrl) URL.revokeObjectURL(audioUrl);
       onSuccess?.(saved);
     } catch (err) {

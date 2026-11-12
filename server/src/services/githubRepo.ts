@@ -39,6 +39,12 @@ export function detectGithubRepoSubject(text: string, sourceUrl?: string): Githu
   if (fromSource) mentioned.add(`${fromSource.owner}/${fromSource.repo}`.toLowerCase())
   if (mentioned.size > 1) return null
   if (fromSource) return fromSource
-  const firstLine = text.split('\n').find((l) => l.trim()) ?? ''
+  // The Manual tab's editor posts HTML (`<p>https://github.com/a/b</p>`): turn block tags into line breaks
+  // and strip the rest so the "leading line is just the URL" rule still works.
+  const plain = text
+    .replace(/<\/(?:p|div|li|h[1-6])>|<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&nbsp;/g, ' ')
+  const firstLine = plain.split('\n').find((l) => l.trim()) ?? ''
   return parseGithubRepoUrl(firstLine)
 }

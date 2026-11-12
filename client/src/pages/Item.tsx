@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield, Plus, History, ChevronDown, ChevronUp, Check, Bot, Bell, BellOff, Share2, Copy, Link as LinkIcon } from 'lucide-react'
+import { ArrowLeft, Calendar, Tag, Folder, ExternalLink, Trash2, Edit2, Loader2, Save, X, Sparkles, Shield, Plus, History, ChevronDown, ChevronUp, Check, Bot, Bell, BellOff, Share2, Copy, Link as LinkIcon, Flag } from 'lucide-react'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
@@ -9,7 +9,16 @@ import Editor from '../components/Editor'
 import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, reClassifyItem, setReminder, shareItem, unshareItem, updateItem, summarizeItemLinks } from '../lib/api'
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
-import type { Item, ItemExtraction, LinkSummary } from '../../../shared/types'
+import PriorityPicker from '../components/PriorityPicker'
+import type { Item, ItemExtraction, ItemPriority, LinkSummary, RepoData } from '../../../shared/types'
+
+const DEV_KIND_LABEL: Record<string, string> = {
+  repo: 'Repository',
+  prompt: 'Prompt',
+  skill: 'Skill',
+  explainer: 'Explainer',
+  tool: 'Tool',
+}
 
 export default function ItemPage() {
   const { id } = useParams<{ id: string }>()
@@ -204,6 +213,19 @@ export default function ItemPage() {
       toast.error('Failed to clear reminder')
     } finally {
       setSettingReminder(false)
+    }
+  }
+
+  // Priority is user-owned triage. Optimistic: show the new value at once, roll back if the save fails.
+  const handlePriorityChange = async (next: ItemPriority | null) => {
+    if (!item) return
+    const previous = item.priority ?? null
+    setItem({ ...item, priority: next })
+    try {
+      await updateItem(item.id, { priority: next })
+    } catch {
+      setItem((current) => (current ? { ...current, priority: previous } : current))
+      toast.error('Failed to update priority')
     }
   }
 
@@ -427,6 +449,34 @@ export default function ItemPage() {
             </div>
           </div>
 
+          {/* Developer knowledge: repo / prompt / skill / explainer / tool */}
+          {!isEditing && (() => {
+            const s = (item.structured ?? {}) as Partial<RepoData>
+            if (!s.kind || !(s.kind in DEV_KIND_LABEL)) return null
+            return (
+              <div data-testid="dev-knowledge" className="bg-white/3 border border-white/5 rounded-xl px-6 py-4 flex flex-col gap-3">
+                <span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">
+                  {DEV_KIND_LABEL[s.kind]}
+                </span>
+                {s.repoName && (
+                  s.repoUrl ? (
+                    <a href={s.repoUrl} target="_blank" rel="noopener noreferrer"
+                       className="font-mono text-sm text-accent hover:underline flex items-center gap-1.5 w-fit">
+                      <ExternalLink size={12} /> {s.repoName}
+                    </a>
+                  ) : (
+                    <span className="font-mono text-sm text-ink">{s.repoName}</span>
+                  )
+                )}
+                {s.whatItDoes && <p className="text-sm text-ink-muted leading-relaxed">{s.whatItDoes}</p>}
+                {s.creatorHandle && <span className="text-xs text-ink-muted">Shared by @{s.creatorHandle.replace(/^@/, '')}</span>}
+                {s.promptText && (
+                  <pre className="text-xs text-ink bg-bg border border-white/5 rounded-lg p-3 whitespace-pre-wrap font-mono">{s.promptText}</pre>
+                )}
+              </div>
+            )
+          })()}
+
           {/* AI Summary */}
           {!isEditing && (() => {
             const s = item.structured as Record<string, unknown>
@@ -572,6 +622,16 @@ export default function ItemPage() {
                   Create public link
                 </button>
               )}
+            </div>
+          )}
+
+          {/* Priority */}
+          {!isEditing && (
+            <div className="flex flex-col gap-3">
+              <h3 className="text-[10px] text-ink-muted uppercase tracking-widest font-bold flex items-center gap-2">
+                <Flag size={12} /> Priority
+              </h3>
+              <PriorityPicker value={item.priority} onChange={handlePriorityChange} />
             </div>
           )}
 

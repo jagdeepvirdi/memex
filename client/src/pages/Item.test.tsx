@@ -47,6 +47,7 @@ vi.mock('../lib/crypto', () => ({
 
 const mockApiFetch = vi.fn()
 const mockFetchItemExtractions = vi.fn()
+const mockUpdateItem = vi.fn()
 vi.mock('../lib/api', () => ({
   apiFetch: (...a: any[]) => mockApiFetch(...a),
   migrateToVault: vi.fn(),
@@ -56,7 +57,7 @@ vi.mock('../lib/api', () => ({
   setReminder: vi.fn(),
   shareItem: vi.fn(),
   unshareItem: vi.fn(),
-  updateItem: vi.fn(),
+  updateItem: (...a: any[]) => mockUpdateItem(...a),
 }))
 
 import ItemPage from './Item'
@@ -265,5 +266,90 @@ describe('ItemPage — source URL', () => {
     await waitFor(() =>
       expect(screen.queryByText('Original Source')).not.toBeInTheDocument()
     )
+  })
+})
+
+// ── Priority ──────────────────────────────────────────────────────────────────
+
+describe('ItemPage — priority', () => {
+  const load = (over: Record<string, unknown> = {}) =>
+    mockApiFetch.mockResolvedValueOnce(makeItem(over)).mockResolvedValueOnce([])
+
+  it('shows the current priority as pressed', async () => {
+    load({ priority: 'useful' })
+    render(<ItemPage />)
+    const btn = await screen.findByRole('button', { name: 'Useful' })
+    expect(btn).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: 'Essential' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('saves a new priority through updateItem and reflects it immediately', async () => {
+    load()
+    mockUpdateItem.mockResolvedValue(makeItem({ priority: 'essential' }))
+    render(<ItemPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Essential' }))
+
+    expect(screen.getByRole('button', { name: 'Essential' })).toHaveAttribute('aria-pressed', 'true')
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledWith('item-123', { priority: 'essential' }))
+  })
+
+  it('clears the priority by clicking the active option', async () => {
+    load({ priority: 'skip' })
+    mockUpdateItem.mockResolvedValue(makeItem())
+    render(<ItemPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Skip' }))
+    await waitFor(() => expect(mockUpdateItem).toHaveBeenCalledWith('item-123', { priority: null }))
+  })
+
+  it('rolls back and reports an error when the save fails', async () => {
+    load({ priority: 'useful' })
+    mockUpdateItem.mockRejectedValue(new Error('500'))
+    render(<ItemPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Essential' }))
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Useful' })).toHaveAttribute('aria-pressed', 'true')
+    )
+    expect(screen.getByRole('button', { name: 'Essential' })).toHaveAttribute('aria-pressed', 'false')
+  })
+})
+
+// ── Developer knowledge ───────────────────────────────────────────────────────
+
+describe('ItemPage — developer knowledge block', () => {
+  it('shows repo name (linked), what-it-does and creator for a repo item', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(makeItem({
+        type: 'link',
+        structured: {
+          kind: 'repo', repoName: 'anthropics/claude-code', repoUrl: 'https://github.com/anthropics/claude-code',
+          whatItDoes: 'A terminal coding agent.', creatorHandle: '@someone',
+        },
+      }))
+      .mockResolvedValueOnce([])
+    render(<ItemPage />)
+
+    const block = await screen.findByTestId('dev-knowledge')
+    expect(block).toHaveTextContent('Repository')
+    expect(screen.getByRole('link', { name: /anthropics\/claude-code/ })).toHaveAttribute('href', 'https://github.com/anthropics/claude-code')
+    expect(block).toHaveTextContent('A terminal coding agent.')
+    expect(block).toHaveTextContent('Shared by @someone')
+  })
+
+  it('shows prompt text for a prompt item', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(makeItem({ type: 'link', structured: { kind: 'prompt', promptText: 'You are a reviewer.' } }))
+      .mockResolvedValueOnce([])
+    render(<ItemPage />)
+    expect(await screen.findByTestId('dev-knowledge')).toHaveTextContent('You are a reviewer.')
+  })
+
+  it('does not render for ordinary items or an unknown kind', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(makeItem({ structured: { kind: 'bogus', summary: 'x' } }))
+      .mockResolvedValueOnce([])
+    render(<ItemPage />)
+    await screen.findByText('Understanding Sourdough')
+    expect(screen.queryByTestId('dev-knowledge')).not.toBeInTheDocument()
   })
 })

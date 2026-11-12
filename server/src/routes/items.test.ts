@@ -174,6 +174,82 @@ describe('POST /api/items', () => {
     expect(res.status).toBe(201)
     expect(res.body.id).toBe('item-1')
   })
+
+  // INSERT params: [title, type, content, structured, source, sourceUrl, encrypted, reviewed, intent, priority, confidence]
+  const insertParams = (client: ReturnType<typeof mockClient>) =>
+    client.query.mock.calls.find((c) => String(c[0]).includes('INSERT INTO items'))![1] as unknown[]
+
+  it('persists structured, intent, priority and confidence in the right INSERT slots', async () => {
+    const client = mockClient([null, { rows: [{ id: 'item-1' }] }, null, { rows: [ITEM_ROW] }])
+    const res = await request(app)
+      .post('/api/items')
+      .set('Authorization', AUTH)
+      .send({
+        content: 'c', source: 'url', sourceUrl: 'https://github.com/a/b', type: 'link', title: 'a/b',
+        structured: { kind: 'repo', repoName: 'a/b' }, intent: 'reference', priority: 'essential', confidence: 88,
+      })
+
+    expect(res.status).toBe(201)
+    const p = insertParams(client)
+    expect(p[4]).toBe('url')
+    expect(p[5]).toBe('https://github.com/a/b')
+    expect(JSON.parse(p[3] as string)).toEqual({ kind: 'repo', repoName: 'a/b' })
+    expect(p.slice(8)).toEqual(['reference', 'essential', 88])
+  })
+
+  it('stores NULL for intent, priority and confidence when omitted', async () => {
+    const client = mockClient([null, { rows: [{ id: 'item-1' }] }, null, { rows: [ITEM_ROW] }])
+    await request(app).post('/api/items').set('Authorization', AUTH)
+      .send({ content: 'c', source: 'manual', type: 'note', title: 't' })
+    expect(insertParams(client).slice(8)).toEqual([null, null, null])
+  })
+
+  it('honours an explicit reviewed=false even when type and title are supplied', async () => {
+    const client = mockClient([null, { rows: [{ id: 'item-1' }] }, null, { rows: [ITEM_ROW] }])
+    await request(app).post('/api/items').set('Authorization', AUTH)
+      .send({ content: 'c', source: 'manual', type: 'note', title: 't', reviewed: false })
+    expect(insertParams(client)[7]).toBe(false)
+  })
+
+  it('still defaults reviewed=true when the caller supplies type and title', async () => {
+    const client = mockClient([null, { rows: [{ id: 'item-1' }] }, null, { rows: [ITEM_ROW] }])
+    await request(app).post('/api/items').set('Authorization', AUTH)
+      .send({ content: 'c', source: 'manual', type: 'note', title: 't' })
+    expect(insertParams(client)[7]).toBe(true)
+  })
+
+  it('rejects an invalid priority and an out-of-range confidence', async () => {
+    const base = { content: 'c', source: 'manual', type: 'note', title: 't' }
+    expect((await request(app).post('/api/items').set('Authorization', AUTH).send({ ...base, priority: 'urgent' })).status).toBe(400)
+    expect((await request(app).post('/api/items').set('Authorization', AUTH).send({ ...base, confidence: 101 })).status).toBe(400)
+  })
+})
+
+// ── priority on PUT and list ─────────────────────────────────────────────────
+
+describe('priority', () => {
+  it('PUT accepts a valid priority, null (clear) and rejects an invalid one', async () => {
+    for (const priority of ['skip', null]) {
+      const client = mockClient([null, { rows: [{ id: 'item-1' }] }, null, null, { rows: [ITEM_ROW] }])
+      const res = await request(app).put('/api/items/item-1').set('Authorization', AUTH).send({ priority })
+      expect(res.status).toBe(200)
+      const update = client.query.mock.calls.find((c) => String(c[0]).includes('priority ='))
+      expect(update![1]).toContain(priority)
+    }
+    const bad = await request(app).put('/api/items/item-1').set('Authorization', AUTH).send({ priority: 'urgent' })
+    expect(bad.status).toBe(400)
+  })
+
+  it('GET filters by priority, supports none, and rejects an invalid value', async () => {
+    for (const [value, expected] of [['essential', 'essential'], ['none', null]] as const) {
+      const client = mockClient([{ rows: [{ total: '1' }] }, { rows: [ITEM_ROW] }])
+      const res = await request(app).get(`/api/items?priority=${value}`).set('Authorization', AUTH)
+      expect(res.status).toBe(200)
+      const sql = client.query.mock.calls.map((c) => String(c[0])).join('\n')
+      expect(sql).toContain(expected ? 'i.priority = $' : 'i.priority IS NULL')
+    }
+    expect((await request(app).get('/api/items?priority=bogus').set('Authorization', AUTH)).status).toBe(400)
+  })
 })
 
 // ── PUT /api/items/:id ────────────────────────────────────────────────────────

@@ -45,6 +45,13 @@ describe('detectGithubRepoSubject', () => {
     expect(detectGithubRepoSubject('# README for the thing', 'https://github.com/a/b')?.repo).toBe('b')
   })
 
+  it('sees through the HTML the Manual-tab editor posts', () => {
+    expect(detectGithubRepoSubject('<p>https://github.com/a/b</p>')?.repo).toBe('b')
+    expect(detectGithubRepoSubject('<p></p><p><a href="https://github.com/a/b">https://github.com/a/b</a></p><p>notes</p>')?.repo).toBe('b')
+    expect(detectGithubRepoSubject('<p>intro</p><p>https://github.com/a/b</p>')).toBeNull()
+    expect(detectGithubRepoSubject('<p>https://github.com/a/b</p><p>https://github.com/c/d</p>')).toBeNull()
+  })
+
   it('does not match a repo merely mentioned in prose', () => {
     expect(detectGithubRepoSubject('I found this great tool at https://github.com/a/b last week')).toBeNull()
     expect(detectGithubRepoSubject('Great caption.\nhttps://github.com/a/b')).toBeNull()

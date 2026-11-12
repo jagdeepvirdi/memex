@@ -1,5 +1,6 @@
-import type { Item } from '@shared/types'
+import type { Item, RepoData, DevKnowledgeKind } from '@shared/types'
 import { CardBase, CardTitle, CardFooter, TypeBadge, Muted } from './CardBase'
+import { PriorityBadge } from '../PriorityPicker'
 import { Calendar } from 'lucide-react'
 
 interface Props {
@@ -23,11 +24,24 @@ const SOURCE_COLOR: Record<string, string> = {
   manual:    '#9CC4E8',
 }
 
+const DEV_KIND_LABEL: Record<DevKnowledgeKind, string> = {
+  repo:      'Repo',
+  prompt:    'Prompt',
+  skill:     'Skill',
+  explainer: 'Explainer',
+  tool:      'Tool',
+}
+
 export default function LinkCard({ item, onClick }: Props) {
   const sourceLabel = SOURCE_LABEL[item.source] ?? 'Link'
   const sourceColor = SOURCE_COLOR[item.source] ?? '#9CC4E8'
 
-  const summary = (item.structured as Record<string, unknown>)?.summary as string | undefined
+  const structured = (item.structured ?? {}) as Partial<RepoData> & { summary?: string }
+  const devKind = structured.kind && structured.kind in DEV_KIND_LABEL ? structured.kind : undefined
+  // Dev-knowledge items lead with what they are; the source (Instagram, Web…) moves to the chip below.
+  const badgeLabel = devKind ? DEV_KIND_LABEL[devKind] : sourceLabel
+
+  const summary = devKind ? (structured.whatItDoes ?? structured.summary) : structured.summary
   const preview = (summary ?? item.content).trim().replace(/\s+/g, ' ').slice(0, 100)
 
   const hostname = item.sourceUrl
@@ -38,14 +52,22 @@ export default function LinkCard({ item, onClick }: Props) {
     <CardBase onClick={onClick}>
       {/* Header */}
       <div className="flex items-center justify-between gap-2">
-        <TypeBadge type="link" label={sourceLabel} />
-        {hostname && (
-          <Muted className="truncate max-w-[120px]">{hostname}</Muted>
-        )}
+        <TypeBadge type="link" label={badgeLabel} />
+        <div className="flex items-center gap-1.5 min-w-0">
+          <PriorityBadge value={item.priority} />
+          {hostname && (
+            <Muted className="truncate max-w-[120px]">{hostname}</Muted>
+          )}
+        </div>
       </div>
 
       {/* Title */}
       <CardTitle>{item.title}</CardTitle>
+
+      {/* owner/repo */}
+      {devKind === 'repo' && structured.repoName && (
+        <span className="font-mono text-xs text-ink-muted truncate">{structured.repoName}</span>
+      )}
 
       {/* Summary / content preview */}
       {preview && <Muted>{preview}{preview.length >= 100 ? '…' : ''}</Muted>}

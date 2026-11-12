@@ -3,7 +3,8 @@ import { Loader2, Upload, FileText, AlertCircle, X, ExternalLink, Eye, ImageIcon
 import { apiFetch, createItem, fetchVisionHealth } from '../../lib/api';
 import type { SimilarItem } from '../../lib/api';
 import ItemCard from '../cards/ItemCard';
-import type { Item, CreateItemRequest } from '../../../../shared/types';
+import { previewToCreateRequest } from '../../lib/ingest';
+import type { Item } from '../../../../shared/types';
 
 const IMAGE_EXTS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp']);
 
@@ -103,15 +104,7 @@ export default function FileIngestPanel({ onSuccess }: Props) {
     if (!preview) return;
     setSaving(true);
     try {
-      const req: CreateItemRequest = {
-        title: preview.title,
-        type: preview.type,
-        content: preview.content,
-        categories: preview.categories,
-        tags: preview.tags,
-        source: preview.source,
-      };
-      const saved = await createItem(req);
+      const saved = await createItem(previewToCreateRequest(preview));
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
       onSuccess?.(saved);
     } catch (err) {

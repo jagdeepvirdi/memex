@@ -202,6 +202,8 @@ export interface CreateItemRequest {
   intent?: ItemIntent
   priority?: ItemPriority | null
   confidence?: number
+  /** Omit for the server default; send false for AI-classified captures so they enter the review queue. */
+  reviewed?: boolean
 }
 
 export interface UpdateItemRequest {
