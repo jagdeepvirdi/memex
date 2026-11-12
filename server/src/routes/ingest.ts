@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import pLimit from 'p-limit';
 import { scrapeUrl } from '../services/scraper.js';
 import { summarizeAndClassify } from '../services/summarizer.js';
+import { detectPasteSource } from '../services/sourceDetect.js';
 import { parseKeepZipAsync, type KeepNote } from '../services/keepImporter.js';
 import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
@@ -474,6 +475,8 @@ router.post('/quicksave', ingestLimiter, async (req, res) => {
         sourceUrl: preview.sourceUrl,
         categories: preview.categories,
         tags: preview.tags,
+        confidence: preview.confidence,
+        intent: preview.intent,
         reviewed: false,
       });
       await client.query('COMMIT');
@@ -505,8 +508,12 @@ router.post('/text', ingestLimiter, async (req, res) => {
     const { text } = req.body;
     if (!text) return res.status(400).json({ error: 'Text is required' });
 
+    // Pasted text keeps its provenance: an Instagram caption is `instagram`, a bare repo link
+    // is `url` with sourceUrl set, anything else stays `manual`.
+    const { source, sourceUrl } = detectPasteSource(text);
+
     const [classification, embedding] = await Promise.all([
-      classify(text),
+      classify(text, { sourceUrl }),
       embedQuery(text.slice(0, 2000)),
     ]);
 
@@ -519,7 +526,10 @@ router.post('/text', ingestLimiter, async (req, res) => {
         structured: { ...classification.structured, summary: classification.summary },
         categories: classification.categories,
         tags: classification.tags,
-        source: 'manual',
+        source,
+        sourceUrl,
+        confidence: classification.confidence,
+        intent: classification.intent,
         reviewed: false,
       },
       similarItems,

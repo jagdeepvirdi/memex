@@ -630,13 +630,16 @@ markitdown --help
       **still open:** review the auto `reviewed=true` rule on `POST /api/items` so AI-captured items are not silently marked reviewed
 
 **4. Classification**
-- [ ] `server/src/services/classifier.ts` — add leaves to `CANONICAL_LEAVES`; `CANONICAL_MAPPING` entries
+- [x] *(done 2026-11-12; GitHub helpers live in `githubRepo.ts`, source detection in `sourceDetect.ts`; `/quicksave` now persists intent/confidence)*
+      `server/src/services/classifier.ts` — add leaves to `CANONICAL_LEAVES`; `CANONICAL_MAPPING` entries
       (repos, prompts, skills, explainers, tools, github); `link` branch; **deterministic pre-pass:**
       `github.com/<owner>/<repo>` as main subject → Repos leaf; prompt rules for repo/prompt/skill/explainer
       `structured` shapes; rule that topic beats `instagram` source
-- [ ] `server/src/services/summarizer.ts` — return `intent`, repo-aware summary ("what it is / what it's for")
-- [ ] `server/src/routes/ingest.ts` (`/text`, `/url`) — return `intent`; detect instagram.com URL → `source='instagram'` + `sourceUrl`;
+- [x] `server/src/services/summarizer.ts` — return `intent`, repo-aware summary ("what it is / what it's for")
+      (summary comes from the classifier prompt's `whatItDoes` rule; passes `sourceUrl` hint to `classify`)
+- [x] `server/src/routes/ingest.ts` (`/text`, `/url`) — return `intent`; detect instagram.com URL → `source='instagram'` + `sourceUrl`;
       regex-extract GitHub URL into `sourceUrl`
+- [ ] Still open from step 4: multi-repo caption split — each split item needs its own `sourceUrl` (`multiEntity` path in `ingest.ts`)
 
 **5. Client**
 - [ ] `client/src/components/ingest/IngestPanel.tsx` — send full payload (structured/intent/priority/confidence); priority picker; source auto-detect/selector

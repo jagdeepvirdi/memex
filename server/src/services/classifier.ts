@@ -1,7 +1,10 @@
 import { z } from 'zod'
 import { aiChat } from './ai.js'
 import { getAiConfig } from './settings.js'
-import type { ItemType, RecipeData, MediaData, BookData, StockData, PlaceData } from '../../../shared/types.js'
+import { detectGithubRepoSubject, type GithubRepoRef } from './githubRepo.js'
+
+export { parseGithubRepoUrl, detectGithubRepoSubject, type GithubRepoRef } from './githubRepo.js'
+import type { ItemType, RecipeData, MediaData, BookData, StockData, PlaceData, RepoData, DevKnowledgeKind } from '../../../shared/types.js'
 
 // ── Zod schema — validates & coerces the AI's JSON response ──────────────────
 
@@ -41,7 +44,8 @@ const CANONICAL_LEAVES = [
   'Action', 'Drama', 'Horror', 'Comedy', 'Fiction', 'Non-Fiction', 'Technical',
   'Laptops', 'Cameras', 'Phones', 'Specs', 'Stocks', 'Crypto', 'Notes',
   'Destinations', 'Hotels', 'Restaurants', 'Attractions',
-  'YouTube', 'Instagram', 'Articles', 'Docs', 'Numbers', 'Contacts'
+  'YouTube', 'Instagram', 'Articles', 'Docs', 'Numbers', 'Contacts',
+  'Repos', 'Prompts & Skills', 'Explainers', 'Tools',
 ]
 
 const SYSTEM_PROMPT = `You are a knowledge classifier. Given raw text or a note, return ONLY valid JSON with no preamble.
@@ -74,6 +78,10 @@ Type rules:
 - stock: stock ticker — structured: { "ticker": "", "exchange": "" }
 - spec: technical specs — structured key-value pairs
 - link: saved URL, video, social post
+  Developer knowledge is also type link: a GitHub repo, an AI prompt or skill, an explainer about a dev/AI tool, or a tool.
+  Use categories ["Tech", "AI", "<Repos|Prompts & Skills|Explainers|Tools>"] and structured:
+  { "kind": "repo|prompt|skill|explainer|tool", "repoName": "owner/repo", "repoUrl": "", "creatorHandle": "", "whatItDoes": "<plain-English: what it is and what it is for>", "promptText": "" }
+  Choose the category by TOPIC, never by where it was posted: an Instagram or YouTube caption about a repo is Repos, not Instagram or YouTube.
 - note: everything else
 
 Intent rules:
@@ -227,6 +235,20 @@ export const CANONICAL_MAPPING: Record<string, string[]> = {
   attractions: ['Travel', 'Attractions'],
   cafe: ['Travel', 'Restaurants'],
   cafes: ['Travel', 'Restaurants'],
+
+  // Developer knowledge (append-only: never reorder or change keys above)
+  ai: ['Tech', 'AI'],
+  repo: ['Tech', 'AI', 'Repos'],
+  repos: ['Tech', 'AI', 'Repos'],
+  github: ['Tech', 'AI', 'Repos'],
+  prompt: ['Tech', 'AI', 'Prompts & Skills'],
+  prompts: ['Tech', 'AI', 'Prompts & Skills'],
+  skill: ['Tech', 'AI', 'Prompts & Skills'],
+  skills: ['Tech', 'AI', 'Prompts & Skills'],
+  'prompts & skills': ['Tech', 'AI', 'Prompts & Skills'],
+  explainer: ['Tech', 'AI', 'Explainers'],
+  explainers: ['Tech', 'AI', 'Explainers'],
+  tools: ['Tech', 'AI', 'Tools'],
 }
 
 /**
@@ -326,7 +348,7 @@ export function mapToCategories(
     case 'spec':
       return ['Tech', 'Specs']
     case 'link':
-      return ['Links']
+      return mapDevKnowledgeCategories(structured) ?? ['Links']
     case 'place':
       return mapPlaceCategories(structured as unknown as PlaceData)
     default:
@@ -340,6 +362,62 @@ function mapPlaceCategories(s: PlaceData): string[] {
   if (s.type === 'attraction') return ['Travel', 'Attractions']
   if (s.type === 'destination') return ['Travel', 'Destinations']
   return ['Travel']
+}
+
+// ── Developer knowledge: GitHub repos, prompts, skills, explainers, tools ─────
+
+const DEV_ROOT = ['Tech', 'AI']
+const DEV_KIND_LEAF: Record<DevKnowledgeKind, string> = {
+  repo: 'Repos',
+  prompt: 'Prompts & Skills',
+  skill: 'Prompts & Skills',
+  explainer: 'Explainers',
+  tool: 'Tools',
+}
+
+function devKindOf(structured: Record<string, unknown>): DevKnowledgeKind | null {
+  const kind = structured?.kind
+  return typeof kind === 'string' && kind in DEV_KIND_LEAF ? (kind as DevKnowledgeKind) : null
+}
+
+function mapDevKnowledgeCategories(structured: Record<string, unknown>): string[] | null {
+  const kind = devKindOf(structured)
+  return kind ? [...DEV_ROOT, DEV_KIND_LEAF[kind]] : null
+}
+
+function applyGithubRepo(result: ClassificationResult, ref: GithubRepoRef): ClassificationResult {
+  const prior = result.structured as Partial<RepoData>
+  const structured: RepoData = {
+    ...prior,
+    kind: 'repo',
+    repoName: `${ref.owner}/${ref.repo}`,
+    repoUrl: ref.url,
+    owner: ref.owner,
+    platform: 'github',
+    whatItDoes: prior.whatItDoes || result.summary || undefined,
+  }
+  return {
+    ...result,
+    type: 'link',
+    categories: [...DEV_ROOT, DEV_KIND_LEAF.repo],
+    structured: structured as unknown as Record<string, unknown>,
+  }
+}
+
+export interface ClassifyHints {
+  /** Original URL of the saved item, when known (e.g. the pasted GitHub link). */
+  sourceUrl?: string
+}
+
+/** Topic beats source: dev-knowledge items file under Tech > AI, never under Links > Instagram/YouTube. */
+function applyDevKnowledge(result: ClassificationResult, text: string, hints?: ClassifyHints): ClassificationResult {
+  const repo = detectGithubRepoSubject(text, hints?.sourceUrl)
+  if (repo) return applyGithubRepo(result, repo)
+  if (result.type === 'link') {
+    const categories = mapDevKnowledgeCategories(result.structured)
+    if (categories) return { ...result, categories }
+  }
+  return result
 }
 
 // ── Main classify function ────────────────────────────────────────────────────
@@ -357,7 +435,7 @@ function fallback(text: string): ClassificationResult {
   }
 }
 
-export async function classify(text: string): Promise<ClassificationResult> {
+export async function classify(text: string, hints?: ClassifyHints): Promise<ClassificationResult> {
   const { model: activeModel } = await getAiConfig()
 
   // ── Attempt 1: normal prompt ──────────────────────────────────────────────
@@ -369,7 +447,7 @@ export async function classify(text: string): Promise<ClassificationResult> {
     const normalized = normalizeCategories(result.categories)
     result.categories = normalized.length > 0 ? normalized : mapToCategories(result.type, result.structured)
 
-    return result
+    return applyDevKnowledge(result, text, hints)
   } catch {
     // fall through to retry
   }
@@ -388,13 +466,13 @@ export async function classify(text: string): Promise<ClassificationResult> {
     const normalized = normalizeCategories(result.categories)
     result.categories = normalized.length > 0 ? normalized : mapToCategories(result.type, result.structured)
 
-    return result
+    return applyDevKnowledge(result, text, hints)
   } catch {
     // fall through to fallback
   }
 
   // ── Fallback: never block the user ────────────────────────────────────────
-  return { ...fallback(text), model: activeModel }
+  return applyDevKnowledge({ ...fallback(text), model: activeModel }, text, hints)
 }
 
 // ── Batch classify — one Ollama call for multiple notes ──────────────────────

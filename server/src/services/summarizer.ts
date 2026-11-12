@@ -6,9 +6,10 @@ export async function summarizeAndClassify(scraped: ScrapedContent): Promise<Ing
   // Use the AI to classify the scraped content
   // We pass the scraped title as a hint if the content is sparse
   const textToClassify = `Title: ${scraped.title}\n\nContent: ${scraped.content}`;
-  const result = await classify(textToClassify);
+  // The saved URL lets the classifier recognise a GitHub repo page as the subject of the item
+  const result = await classify(textToClassify, { sourceUrl: scraped.sourceUrl });
 
-  // For 'link' types (url, youtube, instagram), we store the summary in 'structured' 
+  // For 'link' types (url, youtube, instagram), we store the summary in 'structured'
   // so the UI can display it easily, as seen in LinkCard.tsx
   const structuredWithSummary = {
     ...result.structured,
@@ -24,6 +25,8 @@ export async function summarizeAndClassify(scraped: ScrapedContent): Promise<Ing
     tags: result.tags,
     source: scraped.source,
     sourceUrl: scraped.sourceUrl,
+    confidence: result.confidence,
+    intent: result.intent,
     reviewed: false,
   };
 }

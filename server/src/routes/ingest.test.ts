@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken'
 import AdmZip from 'adm-zip'
 import { app } from '../index'
 import { pool } from '../db/client'
+import { classify } from '../services/classifier'
 
 vi.mock('../db/client', () => ({
   pool: { query: vi.fn(), connect: vi.fn() },
@@ -205,5 +206,44 @@ describe('POST /api/ingest/text', () => {
     expect(res.status).toBe(200)
     expect(res.body.preview).toBeDefined()
     expect(res.body.preview.source).toBe('manual')
+    expect(res.body.preview.sourceUrl).toBeUndefined()
+  })
+
+  it('returns intent and confidence from the classifier', async () => {
+    vi.mocked(classify).mockResolvedValueOnce({
+      type: 'note', title: 'T', categories: [], tags: [], summary: '', structured: {},
+      confidence: 77, intent: 'idea',
+    })
+    const res = await request(app)
+      .post('/api/ingest/text')
+      .set('Authorization', AUTH)
+      .send({ text: 'a fleeting thought' })
+
+    expect(res.body.preview.intent).toBe('idea')
+    expect(res.body.preview.confidence).toBe(77)
+  })
+
+  it('tags an Instagram caption as instagram and keeps the post URL', async () => {
+    const res = await request(app)
+      .post('/api/ingest/text')
+      .set('Authorization', AUTH)
+      .send({ text: 'Top AI repos! https://www.instagram.com/p/Cabc123/ #ai' })
+
+    expect(res.body.preview.source).toBe('instagram')
+    expect(res.body.preview.sourceUrl).toBe('https://www.instagram.com/p/Cabc123/')
+  })
+
+  it('tags a pasted GitHub repo link as url and hints the classifier with it', async () => {
+    const res = await request(app)
+      .post('/api/ingest/text')
+      .set('Authorization', AUTH)
+      .send({ text: 'https://github.com/anthropics/claude-code' })
+
+    expect(res.body.preview.source).toBe('url')
+    expect(res.body.preview.sourceUrl).toBe('https://github.com/anthropics/claude-code')
+    expect(vi.mocked(classify)).toHaveBeenLastCalledWith(
+      'https://github.com/anthropics/claude-code',
+      { sourceUrl: 'https://github.com/anthropics/claude-code' },
+    )
   })
 })
