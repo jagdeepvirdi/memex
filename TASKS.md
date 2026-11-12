@@ -612,22 +612,22 @@ markitdown --help
 ### Phase 1 — MVP: paste a GitHub link or Instagram caption → right category + priority
 *No new routes, no entity work. Files in order; migrations first.*
 
-**1. Database**
-- [ ] `server/src/db/migrations/018_priority.sql` — `ALTER TABLE items ADD COLUMN IF NOT EXISTS priority VARCHAR(20)` (no enum/CHECK, matches `intent`)
-- [ ] `server/src/db/migrations/019_ai_dev_categories.sql` — seed `Tech > AI > Repos / Prompts & Skills / Explainers / Tools`;
+**1. Database** *(done 2026-11-12, committed 9a07fae / 6d55bba; also added `020_priority_check.sql` — dedupe-index migration below is now 021)*
+- [x] `server/src/db/migrations/018_priority.sql` — `ALTER TABLE items ADD COLUMN IF NOT EXISTS priority VARCHAR(20)` (no enum/CHECK, matches `intent`)
+- [x] `server/src/db/migrations/019_ai_dev_categories.sql` — seed `Tech > AI > Repos / Prompts & Skills / Explainers / Tools`;
       filter Tech root on `parent_id IS NULL`; `INSERT … SELECT … ON CONFLICT DO NOTHING` (idempotent; 018/019 independent)
-- [ ] `server/src/db/schema.sql` — add `priority` column + bump "reflects all 19 migrations" comment (required by `schema.test.ts`)
+- [x] `server/src/db/schema.sql` — add `priority` column + bump "reflects all 19 migrations" comment (required by `schema.test.ts`)
 
 **2. Shared types**
-- [ ] `shared/types.ts` — `ItemPriority`, `Item.priority`; `RepoData` shape
+- [x] `shared/types.ts` — `ItemPriority`, `Item.priority`; `RepoData` shape
       (`kind`, `repoName`, `repoUrl`, `owner`, `creatorHandle`, `whatItDoes`, `promptText`);
       add `structured`, `intent`, `priority`, `confidence` to `CreateItemRequest`
 
 **3. Server persistence**
-- [ ] `server/src/db/helpers.ts` — `ItemRow`, `rowToItem`, `ITEM_SELECT_SQL`, `createItem` carry `intent` + `priority`
-- [ ] `server/src/services/itemService.ts` — list select + priority filter
-- [ ] `server/src/routes/items.ts` — `createItemSchema`, `POST` INSERT (shifts param order), `updateItemSchema`, `listQuerySchema`;
-      review the auto `reviewed=true` rule on `POST /api/items` so AI-captured items are not silently marked reviewed
+- [x] `server/src/db/helpers.ts` — `ItemRow`, `rowToItem`, `ITEM_SELECT_SQL`, `createItem` carry `intent` + `priority`
+- [x] `server/src/services/itemService.ts` — list select + priority filter
+- [x] `server/src/routes/items.ts` — `createItemSchema`, `POST` INSERT (shifts param order), `updateItemSchema`, `listQuerySchema`;
+      **still open:** review the auto `reviewed=true` rule on `POST /api/items` so AI-captured items are not silently marked reviewed
 
 **4. Classification**
 - [ ] `server/src/services/classifier.ts` — add leaves to `CANONICAL_LEAVES`; `CANONICAL_MAPPING` entries
@@ -661,7 +661,7 @@ markitdown --help
 - [ ] **Bulk route** `POST /ingest/paste/bulk` (do NOT clone `/keep/bulk` as-is):
   - [ ] Generalize `classifyAndUpdateBatch` — source, sourceUrl, intent as parameters; fix the early-return job-completion bug
   - [ ] Add `ingestLimiter` + size cap; per-item error tracking
-  - [ ] Dedupe by normalized URL; optional `items_source_url_idx` in migration 020 (must tolerate existing duplicates)
+  - [ ] Dedupe by normalized URL; optional `items_source_url_idx` in migration 021 (must tolerate existing duplicates)
   - [ ] `PasteImportPanel` tab reusing Keep job polling (`GET /ingest/jobs/:id`)
 - [ ] `TableView` — priority filter + bulk triage actions (set priority on selection)
 - [ ] Optional: GitHub API lookup (stars, language, updated) — only if approved; respects strict-local mode
