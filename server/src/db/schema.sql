@@ -1,4 +1,4 @@
--- Memex — canonical schema reference (reflects all 19 migrations)
+-- Memex — canonical schema reference (reflects all 20 migrations)
 -- This file is documentation only. The live DB is built by running migrations in order:
 --   npm run migrate
 -- Do not run this file directly against the DB.
@@ -45,6 +45,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS categories_child_uniq
 --   013: share_expires_at
 --   016: intent
 --   018: priority
+--   020: priority CHECK constraint
 CREATE TABLE IF NOT EXISTS items (
   id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
   title            TEXT        NOT NULL,
