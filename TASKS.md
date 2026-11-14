@@ -824,8 +824,8 @@ markitdown --help
 - **Acceptance:** pasting any YouTube/Shorts link yields a real title, channel, category, tags and summary with `source_url` set; the backfill turns bare `YouTube Video` items into named, categorised items without touching reviewed ones.
 
 ### Phase C — Explain & Extract on request
-- [ ] Migration `0NN_derived_from.sql` — `items.derived_from UUID REFERENCES items(id) ON DELETE SET NULL` (+ index); mirror in `schema.sql` + migration-count comment (required by `schema.test.ts`)
-- [ ] `shared/types.ts` — `Item.derivedFrom`; `ExplainResponse`; `structured.explanation` shape; request types with optional `provider`
+- [x] Migration `0NN_derived_from.sql` — `items.derived_from UUID REFERENCES items(id) ON DELETE SET NULL` (+ index); mirror in `schema.sql` + migration-count comment (required by `schema.test.ts`)
+- [ ] `shared/types.ts` — `Item.derivedFrom` (done); `ExplainResponse`; `structured.explanation` shape; request types with optional `provider`
 - [ ] `server/src/services/explainService.ts` (new) — fetch/cached transcript (or page text) → chunk → map-reduce summary → structured explanation (key points, steps, takeaways); uses `aiChat({task:'explain'})`; honours `cloudSafe` + strict-local
 - [ ] `server/src/services/recipeExtractor.ts` (new) — transcript/text → `RecipeData` (ingredients, steps, times, servings) with validation; returns `{ recipe, confidence }`; flags "no recipe found" instead of inventing one
 - [ ] `server/src/routes/items.ts` — `POST /api/items/:id/explain` and `POST /api/items/:id/extract-recipe`:

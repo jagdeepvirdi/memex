@@ -36,6 +36,8 @@ export interface Item {
   confidence?: number
   intent?: ItemIntent
   priority?: ItemPriority | null
+  /** Id of the item this one was derived from (e.g. recipe extracted from a video). */
+  derivedFrom?: string | null
   remindAt?: Date | null
   publicToken?: string | null
   shareExpiresAt?: Date | null

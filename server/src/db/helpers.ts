@@ -20,6 +20,7 @@ interface ItemRow {
   confidence: number | null
   intent: ItemIntent | null
   priority: ItemPriority | null
+  derived_from?: string | null
   remind_at: Date | null
   public_token: string | null
   share_expires_at: Date | null
@@ -46,6 +47,7 @@ export function rowToItem(row: ItemRow): Item {
     confidence: row.confidence ?? undefined,
     intent: row.intent ?? undefined,
     priority: row.priority ?? undefined,
+    derivedFrom: row.derived_from ?? undefined,
     remindAt: row.remind_at ?? undefined,
     publicToken: row.public_token ?? undefined,
     shareExpiresAt: row.share_expires_at ?? undefined,

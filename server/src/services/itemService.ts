@@ -47,6 +47,7 @@ export interface ItemRow {
   confidence: number | null
   intent: ItemIntent | null
   priority: ItemPriority | null
+  derived_from?: string | null
   remind_at: Date | null
   public_token: string | null
   share_expires_at: Date | null
@@ -78,7 +79,7 @@ export const ITEM_LIST_SELECT_SQL = `
     i.id, i.title, i.type, i.content, i.structured,
     i.source, i.source_url, i.encrypted, i.reviewed,
     i.created_at, i.updated_at, i.deleted_at, i.confidence,
-    i.intent, i.priority, i.remind_at, i.public_token, i.share_expires_at,
+    i.intent, i.priority, i.derived_from, i.remind_at, i.public_token, i.share_expires_at,
     COALESCE(
       (SELECT array_agg(c.name ORDER BY ic2.depth)
        FROM item_categories ic2
