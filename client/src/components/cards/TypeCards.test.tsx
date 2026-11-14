@@ -403,6 +403,20 @@ describe('LinkCard', () => {
     expect(screen.getByText('YouTube')).toBeInTheDocument()
   })
 
+  it('renders thumbnail, channel and open-link for a YouTube video', () => {
+    const yt = { ...item, source: 'youtube' as const, structured: { videoId: 'dQw4w9WgXcQ', channel: 'Rick' } }
+    const { container } = render(<LinkCard item={yt} />)
+    expect(container.querySelector('img')?.getAttribute('src')).toBe('https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg')
+    expect(screen.getByText('Rick')).toBeInTheDocument()
+    expect(screen.getByText('▶ Open on YouTube')).toBeInTheDocument()
+  })
+
+  it('ignores a malformed videoId (no thumbnail)', () => {
+    const yt = { ...item, source: 'youtube' as const, structured: { videoId: '../evil' } }
+    const { container } = render(<LinkCard item={yt} />)
+    expect(container.querySelector('img')).toBeNull()
+  })
+
   it('falls back to content when no summary in structured', () => {
     const noSummary = { ...item, structured: {} }
     render(<LinkCard item={noSummary} />)

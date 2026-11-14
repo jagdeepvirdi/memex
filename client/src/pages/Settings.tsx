@@ -22,6 +22,7 @@ import { Link } from 'react-router-dom'
 import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
 import { AiProviderSettings } from '../components/settings/AiProviderSettings'
+import YouTubeBackfillPanel from '../components/settings/YouTubeBackfillPanel'
 import { apiFetch, fetchCategories, reprocessBulk } from '../lib/api'
 import { deriveKey, decryptVaultItem, base64ToUint8Array } from '../lib/crypto'
 import type { Category } from '../../../shared/types'
@@ -463,6 +464,8 @@ export default function SettingsPage() {
                   </div>
                   <span className="text-[10px] uppercase font-bold text-accent">Active in Ingest</span>
                </div>
+
+               <YouTubeBackfillPanel />
             </div>
           </section>
 

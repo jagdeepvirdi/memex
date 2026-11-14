@@ -818,7 +818,7 @@ markitdown --help
   - [x] Job helpers moved to `services/ingestJobs.ts`; **fixed the early-return bug** in `classifyAndUpdateBatch` — `completeJob` now runs once after `Promise.all`, so a trailing empty note no longer leaves the job `processing` forever (regression test added). `reprocessBulkItems` already completed after `Promise.all`; its `if (!text.trim()) { done++; return }` still skips a progress update (minor, left as-is)
   - Files: `services/youtubeBackfill.ts`, `services/ingestJobs.ts`, `routes/ingest.ts`; tests `youtubeBackfill.test.ts` (18) + route/regression cases in `ingest.test.ts`. Server suite 472 passing, `tsc` clean.
   - **Open:** multi-video notes are only *reported* (`needs-split`) — an actual split action is not built; `note-with-link` items get no `source_url` (decision: leave untouched); dry-run `before.type` is not populated for samples.
-- [ ] `client` — video card variant (channel, thumbnail from `https://i.ytimg.com/vi/<id>/hqdefault.jpg`, "open on YouTube"), source badge; "Backfill YouTube" action with preview + progress
+- [x] `client` — video card variant (channel, thumbnail from `https://i.ytimg.com/vi/<id>/hqdefault.jpg`, "open on YouTube"), source badge; "Backfill YouTube" action with preview + progress
 - [ ] Optional (cloud, needs Phase A): Gemini direct-URL video understanding for transcript-less videos
 - [x] Tests: scraper, classifier YouTube cases, backfill dry-run/skip-reviewed, ingest source detection ✅ (all server-side tests done; client tests come with the client item)
 - **Acceptance:** pasting any YouTube/Shorts link yields a real title, channel, category, tags and summary with `source_url` set; the backfill turns bare `YouTube Video` items into named, categorised items without touching reviewed ones.

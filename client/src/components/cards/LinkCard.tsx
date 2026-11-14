@@ -36,7 +36,10 @@ export default function LinkCard({ item, onClick }: Props) {
   const sourceLabel = SOURCE_LABEL[item.source] ?? 'Link'
   const sourceColor = SOURCE_COLOR[item.source] ?? '#9CC4E8'
 
-  const structured = (item.structured ?? {}) as Partial<RepoData> & { summary?: string }
+  const structured = (item.structured ?? {}) as Partial<RepoData> & { summary?: string; videoId?: string; channel?: string }
+  const videoId = item.source === 'youtube' && structured.videoId && /^[\w-]{11}$/.test(structured.videoId)
+    ? structured.videoId
+    : undefined
   const devKind = structured.kind && structured.kind in DEV_KIND_LABEL ? structured.kind : undefined
   // Dev-knowledge items lead with what they are; the source (Instagram, Web…) moves to the chip below.
   const badgeLabel = devKind ? DEV_KIND_LABEL[devKind] : sourceLabel
@@ -61,8 +64,23 @@ export default function LinkCard({ item, onClick }: Props) {
         </div>
       </div>
 
+      {/* Video thumbnail */}
+      {videoId && (
+        <img
+          src={`https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`}
+          alt=""
+          loading="lazy"
+          className="w-full aspect-video object-cover rounded-lg bg-white/5"
+        />
+      )}
+
       {/* Title */}
       <CardTitle>{item.title}</CardTitle>
+
+      {/* Channel */}
+      {videoId && structured.channel && (
+        <span className="text-xs text-ink-muted truncate">{structured.channel}</span>
+      )}
 
       {/* owner/repo */}
       {devKind === 'repo' && structured.repoName && (
@@ -82,7 +100,7 @@ export default function LinkCard({ item, onClick }: Props) {
           className="self-start font-body text-xs truncate max-w-full"
           style={{ color: sourceColor, textDecoration: 'none' }}
         >
-          ↗ {hostname ?? item.sourceUrl}
+          {videoId ? '▶ Open on YouTube' : `↗ ${hostname ?? item.sourceUrl}`}
         </a>
       )}
 
