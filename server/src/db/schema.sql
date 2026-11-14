@@ -1,4 +1,4 @@
--- Memex — canonical schema reference (reflects all 20 migrations)
+-- Memex — canonical schema reference (reflects all 21 migrations)
 -- This file is documentation only. The live DB is built by running migrations in order:
 --   npm run migrate
 -- Do not run this file directly against the DB.
@@ -193,7 +193,9 @@ CREATE TABLE IF NOT EXISTS ingest_jobs (
   completed    INTEGER     NOT NULL DEFAULT 0,
   started_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
-  error        TEXT
+  error        TEXT,
+  kind         TEXT,           -- job type, e.g. 'youtube-backfill' (migration 021)
+  details      JSONB           -- per-item results for jobs that report them (migration 021)
 );
 CREATE INDEX IF NOT EXISTS ingest_jobs_status_idx ON ingest_jobs (status);
 

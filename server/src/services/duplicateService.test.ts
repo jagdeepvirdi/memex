@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { findSimilarItems } from './duplicateService'
+import { findSimilarItems, findItemsBySourceUrl, mergeSimilar } from './duplicateService'
 import { pool } from '../db/client'
 
 vi.mock('../db/client', () => ({ pool: { query: vi.fn() } }))
@@ -50,5 +50,62 @@ describe('findSimilarItems', () => {
     const sql = vi.mocked(pool.query).mock.calls[0][0] as string
     expect(sql).toMatch(/deleted_at IS NULL/i)
     expect(sql).toMatch(/embedding IS NOT NULL/i)
+  })
+})
+
+describe('findItemsBySourceUrl', () => {
+  const row = (id: string, source_url: string) => ({ id, title: `T${id}`, type: 'link', source_url })
+
+  it('matches the same YouTube video saved under a different URL form', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [row('a', 'https://youtu.be/dQw4w9WgXcQ?si=zzz'), row('b', 'https://www.youtube.com/watch?v=AAAAAAAAAAA')],
+    } as any)
+    const r = await findItemsBySourceUrl('https://www.youtube.com/shorts/dQw4w9WgXcQ')
+    expect(r).toEqual([{ id: 'a', title: 'Ta', type: 'link', similarity: 1 }])
+  })
+
+  it('narrows candidates by the video id, with LIKE wildcards escaped', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)
+    await findItemsBySourceUrl('https://youtu.be/dQw4w9WgXcQ')
+    expect(vi.mocked(pool.query).mock.calls[0][1]).toEqual(['%dQw4w9WgXcQ%'])
+
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)
+    await findItemsBySourceUrl('https://example.com/100%_off')
+    expect(vi.mocked(pool.query).mock.calls[1][1]).toEqual(['%example.com/100\\%\\_off%'])
+  })
+
+  it('filters out LIKE false positives (same prefix, different page)', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [row('a', 'https://example.com/post-2'), row('b', 'https://www.example.com/post/?utm_source=x')],
+    } as any)
+    const r = await findItemsBySourceUrl('https://example.com/post')
+    expect(r.map((i) => i.id)).toEqual(['b'])
+  })
+
+  it('only looks at live items and respects the limit', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({
+      rows: [row('a', 'https://example.com/p'), row('b', 'https://example.com/p/'), row('c', 'http://example.com/p')],
+    } as any)
+    const r = await findItemsBySourceUrl('https://example.com/p', 2)
+    expect(r).toHaveLength(2)
+    expect(vi.mocked(pool.query).mock.calls[0][0]).toMatch(/deleted_at IS NULL/i)
+  })
+
+  it('returns [] without querying for an unparseable URL', async () => {
+    expect(await findItemsBySourceUrl('not a url')).toEqual([])
+    expect(pool.query).not.toHaveBeenCalled()
+  })
+
+  it('never throws — returns [] on a DB error', async () => {
+    vi.mocked(pool.query).mockRejectedValueOnce(new Error('db down'))
+    expect(await findItemsBySourceUrl('https://example.com/p')).toEqual([])
+  })
+})
+
+describe('mergeSimilar', () => {
+  const s = (id: string, similarity: number) => ({ id, title: id, type: 'note' as const, similarity })
+
+  it('keeps list order (URL matches first) and drops repeated ids', () => {
+    expect(mergeSimilar([s('a', 1)], [s('b', 0.95), s('a', 0.97)]).map((i) => [i.id, i.similarity])).toEqual([['a', 1], ['b', 0.95]])
   })
 })

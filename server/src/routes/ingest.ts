@@ -11,13 +11,17 @@ import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
 import { transcribeAudio, checkWhisperInstalled, isAudioMime } from '../services/whisperService.js';
-import { findSimilarItems } from '../services/duplicateService.js';
+import { findSimilarItems, findItemsBySourceUrl, mergeSimilar } from '../services/duplicateService.js';
 import { embedQuery, embedItem } from '../services/embedder.js';
 import { pool } from '../db/client.js';
 import { setItemCategories, setItemTags, createItem } from '../db/helpers.js';
 import { extractAndLinkEntities } from '../services/entityService.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
 import logger from '../lib/logger.js'
+import { createJob, updateJobProgress, completeJob, failJob, hasRunningJob } from '../services/ingestJobs.js'
+import { z } from 'zod'
+import { getSetting, asBool } from '../services/settings.js'
+import { loadBackfillPlan, previewSample, runBackfill, BACKFILL_KIND, DELAY_MIN_MS, DELAY_MAX_MS } from '../services/youtubeBackfill.js'
 
 const router = Router();
 
@@ -45,37 +49,6 @@ const keepUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 500 * 1024 * 1024 },
 })
-
-// ── Job helpers — DB-backed so progress survives server restarts ──────────────
-
-async function createJob(id: string, total: number): Promise<void> {
-  await pool.query(
-    `INSERT INTO ingest_jobs (id, status, progress, total, completed)
-     VALUES ($1, 'processing', 0, $2, 0)`,
-    [id, total],
-  )
-}
-
-async function updateJobProgress(id: string, completed: number, total: number): Promise<void> {
-  await pool.query(
-    'UPDATE ingest_jobs SET completed=$1, progress=$2 WHERE id=$3',
-    [completed, Math.round((completed / total) * 100), id],
-  )
-}
-
-async function completeJob(id: string): Promise<void> {
-  await pool.query(
-    "UPDATE ingest_jobs SET status='completed', completed_at=NOW() WHERE id=$1",
-    [id],
-  )
-}
-
-async function failJob(id: string, error: string): Promise<void> {
-  await pool.query(
-    "UPDATE ingest_jobs SET status='failed', error=$2, completed_at=NOW() WHERE id=$1",
-    [id, error],
-  )
-}
 
 // Background: classify saved items one by one and update DB records
 async function classifyAndUpdateBatch(itemIds: string[], notes: KeepNote[], jobId: string) {
@@ -176,12 +149,11 @@ async function classifyAndUpdateBatch(itemIds: string[], notes: KeepNote[], jobI
 
     completed++;
     await updateJobProgress(jobId, completed, itemIds.length).catch(() => {});
-    if (completed >= itemIds.length) {
-      await completeJob(jobId).catch(() => {});
-    }
   }));
 
   await Promise.all(tasks);
+  // Complete once, after every task (including empty-note early returns) has settled.
+  await completeJob(jobId).catch(() => {});
 }
 
 router.post('/url', ingestLimiter, async (req, res) => {
@@ -195,8 +167,9 @@ router.post('/url', ingestLimiter, async (req, res) => {
       embedQuery(scraped.content.slice(0, 2000)),
     ]);
 
-    const similarItems = await findSimilarItems(embedding);
-    res.json({ preview, similarItems });
+    // Same page saved before (any URL spelling) is listed first, then near-duplicate content.
+    const [sameUrl, similar] = await Promise.all([findItemsBySourceUrl(url), findSimilarItems(embedding)]);
+    res.json({ preview, similarItems: mergeSimilar(sameUrl, similar) });
   } catch (error) {
     logger.error(error, 'Ingest URL error')
     res.status(500).json({ error: 'Failed to ingest URL' });
@@ -280,12 +253,74 @@ router.get('/jobs/:id', async (req, res) => {
       startedAt: startedMs,
       completedAt: completedMs ?? undefined,
       elapsed,
+      ...(row.error ? { error: row.error } : {}),
+      ...(row.details ? { details: row.details } : {}),
     })
   } catch (err) {
     logger.error(err, 'GET /api/ingest/jobs/:id error')
     res.status(500).json({ error: 'Failed to fetch job' })
   }
 });
+
+// ── POST /api/ingest/youtube/backfill ─────────────────────────────────────────
+// Re-reads existing items that are (just) a YouTube link: sets source_url, fetches
+// title/channel/transcript, re-classifies with the video hint and writes through the
+// versioned item_extractions path. Reviewed items and long notes are never touched.
+// dryRun (default) writes nothing; `preview: N` fetches + classifies N sample items.
+
+const backfillSchema = z.object({
+  dryRun: z.boolean().default(true),
+  preview: z.number().int().min(0).max(5).default(0),
+})
+
+router.post('/youtube/backfill', async (req, res) => {
+  const parsed = backfillSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() })
+  const { dryRun, preview } = parsed.data
+
+  try {
+    if (asBool(await getSetting<unknown>('strict_local_mode', false))) {
+      return res.status(409).json({ error: 'Strict Local Mode is on — YouTube fetching is blocked.' })
+    }
+
+    const plan = await loadBackfillPlan()
+
+    if (dryRun) {
+      const samples = preview > 0 ? await previewSample(plan.candidates.slice(0, preview), new Map()) : []
+      const perItemSeconds = (DELAY_MIN_MS + DELAY_MAX_MS) / 2000 + 8 // delay + fetch + local classify (rough)
+      return res.json({
+        dryRun: true,
+        counts: {
+          candidates: plan.candidates.length,
+          skipped: plan.skipped.length,
+          duplicates: plan.duplicates.length,
+        },
+        estimateSeconds: Math.round(plan.candidates.length * perItemSeconds),
+        candidates: plan.candidates,
+        skipped: plan.skipped,
+        duplicates: plan.duplicates,
+        samples,
+      })
+    }
+
+    if (await hasRunningJob(BACKFILL_KIND)) {
+      return res.status(409).json({ error: 'A YouTube backfill is already running.' })
+    }
+    if (plan.candidates.length === 0) {
+      return res.json({ dryRun: false, jobId: null, total: 0, skipped: plan.skipped, duplicates: plan.duplicates })
+    }
+
+    const jobId = uuidv4()
+    await createJob(jobId, plan.candidates.length, BACKFILL_KIND)
+    // Fire and forget — progress via GET /api/ingest/jobs/:id (details = per-item results)
+    runBackfill(jobId, plan).catch((err) => logger.error(err, `[YT backfill] job ${jobId} crashed`))
+    logger.info(`[YT backfill] started job ${jobId}: ${plan.candidates.length} items`)
+    res.status(202).json({ dryRun: false, jobId, total: plan.candidates.length, skipped: plan.skipped.length, duplicates: plan.duplicates.length })
+  } catch (err) {
+    logger.error(err, 'POST /api/ingest/youtube/backfill error')
+    res.status(500).json({ error: 'Failed to run YouTube backfill' })
+  }
+})
 
 // ── GET /api/ingest/markitdown/health ─────────────────────────────────────────
 
@@ -462,6 +497,17 @@ router.post('/quicksave', ingestLimiter, async (req, res) => {
   }
 
   try {
+    // The bookmarklet saves without a confirmation step, so saving the same page twice is a no-op:
+    // return the existing item instead of creating a copy (and skip the scrape/classify work).
+    const [existing] = await findItemsBySourceUrl(url, 1);
+    if (existing) {
+      return res.json({
+        item: { id: existing.id, title: existing.title, type: existing.type },
+        similarItems: [],
+        duplicate: true,
+      });
+    }
+
     const scraped = await scrapeUrl(url);
 
     const [preview, embedding] = await Promise.all([
@@ -526,7 +572,11 @@ router.post('/text', ingestLimiter, async (req, res) => {
       embedQuery(text.slice(0, 2000)),
     ]);
 
-    const similarItems = await findSimilarItems(embedding);
+    const [sameUrl, similar] = await Promise.all([
+      sourceUrl ? findItemsBySourceUrl(sourceUrl) : Promise.resolve([]),
+      findSimilarItems(embedding),
+    ]);
+    const similarItems = mergeSimilar(sameUrl, similar);
     res.json({
       preview: {
         title: classification.title,

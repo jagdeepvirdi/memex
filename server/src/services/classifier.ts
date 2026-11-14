@@ -404,11 +404,64 @@ function applyGithubRepo(result: ClassificationResult, ref: GithubRepoRef): Clas
   }
 }
 
+// ── YouTube videos ────────────────────────────────────────────────────────────
+
+export const VIDEO_KINDS = ['recipe', 'tutorial', 'review', 'talk', 'other'] as const
+export type VideoKind = (typeof VIDEO_KINDS)[number]
+
+/** Confidence ceiling when a video was classified from title + channel only. */
+export const NO_TRANSCRIPT_MAX_CONFIDENCE = 40
+
+export interface VideoHint {
+  videoId?: string
+  channel?: string
+  transcriptAvailable: boolean
+}
+
+const YOUTUBE_ADDENDUM = `
+
+This item is a YouTube video. You are given its title, channel and (usually) a transcript excerpt.
+- type MUST be "link". A cooking video is still a link; the recipe is extracted later, on request.
+- Choose "categories" by the video's TOPIC, never by the platform: a pasta video is Food, a laptop review is Tech.
+  Use ["Links","YouTube"] only when no topic category fits.
+- Put "videoKind" in "structured": "recipe" (cooks a dish), "tutorial" (teaches how to do or build something),
+  "review" (evaluates a product, film or book), "talk" (lecture, interview, podcast, presentation) or "other".
+- If the transcript is unavailable, classify from title and channel only, keep the summary to what they support, and use confidence 40 or lower.
+- Never invent details that are not in the text.`
+
+function parseVideoKind(value: unknown): VideoKind | undefined {
+  return typeof value === 'string' && (VIDEO_KINDS as readonly string[]).includes(value) ? (value as VideoKind) : undefined
+}
+
+/** Makes a YouTube result consistent: always a link, topic-first categories, honest confidence, video metadata. */
+function applyYoutube(result: ClassificationResult, video: VideoHint): ClassificationResult {
+  const { videoKind: rawKind, ...rest } = result.structured
+  const videoKind = parseVideoKind(rawKind)
+  const structured: Record<string, unknown> = {
+    ...rest,
+    ...(videoKind ? { videoKind } : {}),
+    ...(video.videoId ? { videoId: video.videoId } : {}),
+    ...(video.channel ? { channel: video.channel } : {}),
+    transcriptAvailable: video.transcriptAvailable,
+  }
+  // Source is only the fallback bucket: any topic category the model found wins.
+  const hasTopic = result.categories.length > 0 && !(result.categories.length === 1 && result.categories[0] === 'Links')
+  return {
+    ...result,
+    type: 'link',
+    structured,
+    categories: hasTopic ? result.categories : ['Links', 'YouTube'],
+    confidence: video.transcriptAvailable ? result.confidence : Math.min(result.confidence, NO_TRANSCRIPT_MAX_CONFIDENCE),
+  }
+}
+
 export interface ClassifyHints {
   /** Original URL of the saved item, when known (e.g. the pasted GitHub link). */
   sourceUrl?: string
   /** `cloudSafe(item)` for an already-stored item. `false` keeps classification on local Ollama. */
   cloudSafe?: boolean
+  /** Set for YouTube videos: switches on the video prompt and post-processing. */
+  video?: VideoHint
 }
 
 /** Topic beats source: dev-knowledge items file under Tech > AI, never under Links > Instagram/YouTube. */
@@ -448,16 +501,23 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
     onProvider: (p: { provider: string; model: string }) => { usedModel = `${p.provider}:${p.model}` },
   }
 
+  // Video first, then dev-knowledge, so a repo/prompt explainer on YouTube still files under Tech > AI.
+  const finish = (result: ClassificationResult) =>
+    applyDevKnowledge(hints?.video ? applyYoutube(result, hints.video) : result, text, hints)
+
   // ── Attempt 1: normal prompt ──────────────────────────────────────────────
   try {
-    const raw = await aiChat(text, SYSTEM_PROMPT, 'json', { temperature: 0 }, undefined, aiOpts)
+    const system = hints?.video ? SYSTEM_PROMPT + YOUTUBE_ADDENDUM : SYSTEM_PROMPT
+    const raw = await aiChat(text, system, 'json', { temperature: 0 }, undefined, aiOpts)
     const result = parseClassification(raw)
     result.model = usedModel
 
+    // A video's categories come from the model's topic choice; an unmappable one stays empty
+    // (applyYoutube then falls back to Links > YouTube) instead of defaulting via the link type.
     const normalized = normalizeCategories(result.categories)
-    result.categories = normalized.length > 0 ? normalized : mapToCategories(result.type, result.structured)
+    result.categories = normalized.length > 0 || hints?.video ? normalized : mapToCategories(result.type, result.structured)
 
-    return applyDevKnowledge(result, text, hints)
+    return finish(result)
   } catch {
     // fall through to retry
   }
@@ -476,15 +536,15 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
     result.model = usedModel
 
     const normalized = normalizeCategories(result.categories)
-    result.categories = normalized.length > 0 ? normalized : mapToCategories(result.type, result.structured)
+    result.categories = normalized.length > 0 || hints?.video ? normalized : mapToCategories(result.type, result.structured)
 
-    return applyDevKnowledge(result, text, hints)
+    return finish(result)
   } catch {
     // fall through to fallback
   }
 
   // ── Fallback: never block the user ────────────────────────────────────────
-  return applyDevKnowledge({ ...fallback(text), model: usedModel }, text, hints)
+  return finish({ ...fallback(text), model: usedModel })
 }
 
 // ── Batch classify — one Ollama call for multiple notes ──────────────────────
