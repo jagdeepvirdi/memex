@@ -219,3 +219,30 @@ describe('extractRecipe — video description', () => {
     expect(String(vi.mocked(aiChat).mock.calls[1][0]).match(/d/g)!.length).toBeLessThan(4100)
   })
 })
+
+describe('extractRecipe — progress', () => {
+  const seen = () => {
+    const out: Array<[string, number, number]> = []
+    return { out, onProgress: (p: { stage: string; done: number; total: number }) => out.push([p.stage, p.done, p.total]) }
+  }
+
+  it('reports reading, checking and extracting, ending at 3 of 3', async () => {
+    answers(YES, JSON.stringify(RECIPE))
+    const { out, onProgress } = seen()
+    await extractRecipe({ title: 'Vid', content: 'x' }, { cloudSafe: true, onProgress })
+    expect(out).toEqual([['reading', 0, 3], ['checking', 1, 3], ['extracting', 2, 3], ['extracting', 3, 3]])
+  })
+
+  it('finishes at 3 of 3 when the check says it is not a recipe, never reaching extraction', async () => {
+    answers(NO, '{}')
+    const { out, onProgress } = seen()
+    await extractRecipe({ title: 'WSL', content: 'x' }, { cloudSafe: true, onProgress })
+    expect(out).toEqual([['reading', 0, 3], ['checking', 1, 3], ['checking', 3, 3]])
+  })
+
+  it('never breaks the work if the progress callback throws', async () => {
+    answers(YES, JSON.stringify(RECIPE))
+    const out = await extractRecipe({ title: 'Vid', content: 'x' }, { cloudSafe: true, onProgress: () => { throw new Error('ui exploded') } })
+    expect(out.found).toBe(true)
+  })
+})

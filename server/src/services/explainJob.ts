@@ -12,12 +12,11 @@ import { describeActionError } from './actionErrors.js'
 import { reportJobProgress, completeJob, failJob } from './ingestJobs.js'
 import logger from '../lib/logger.js'
 import type { AiCallOptions } from './ai.js'
+import { EXPLAIN_JOB_KIND, AI_JOB_STALE_MINUTES, AI_JOB_TIMEOUT_MS } from './actionJobs.js'
 
-export const EXPLAIN_JOB_KIND = 'explain'
-/** A job still "processing" after this long is treated as dead (the server restarted mid-job). */
-export const EXPLAIN_JOB_STALE_MINUTES = 20
-/** Hard stop for one explanation. */
-export const EXPLAIN_JOB_TIMEOUT_MS = 15 * 60_000
+export { EXPLAIN_JOB_KIND }
+export const EXPLAIN_JOB_STALE_MINUTES = AI_JOB_STALE_MINUTES
+export const EXPLAIN_JOB_TIMEOUT_MS = AI_JOB_TIMEOUT_MS
 
 export interface ExplainJobInput {
   jobId: string

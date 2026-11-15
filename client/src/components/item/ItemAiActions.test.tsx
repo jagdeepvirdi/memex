@@ -131,8 +131,19 @@ describe('ItemAiActions', () => {
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('No transcript is available for this video.'))
   })
 
+  // ── Extract recipe is a background job too: start → poll → (found | nothing found | failed) ──
+  const EXTRACT_FOUND = (recipeId = 'rec-1') => ({
+    status: 'completed', progress: 100, total: 3, completed: 3, details: { itemId: 'vid-1', found: true, recipeId, confidence: 80 },
+  })
+  /** The extract job answers as `job`; every other job id (explain) answers DONE. */
+  function extractJob(job: unknown) {
+    vi.mocked(extractRecipeFromItem).mockResolvedValue({ jobId: 'job-x' })
+    vi.mocked(fetchIngestJob).mockImplementation((async (id: string) => (id === 'job-x' ? job : DONE)) as never)
+  }
+
   it('extracts a recipe and lists the new linked item', async () => {
-    vi.mocked(extractRecipeFromItem).mockResolvedValue({ recipe: RECIPE, confidence: 80 })
+    extractJob(EXTRACT_FOUND())
+    vi.mocked(fetchItem).mockImplementation((async (id: string) => (id === 'rec-1' ? RECIPE : video())) as never)
     render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: /extract recipe/i }))
 
@@ -141,34 +152,81 @@ describe('ItemAiActions', () => {
     expect(list).toHaveTextContent('needs review')
     expect(screen.getByRole('link', { name: /Aglio e Olio/ })).toHaveAttribute('href', '/item/rec-1')
     expect(extractRecipeFromItem).toHaveBeenCalledWith('vid-1', { provider: undefined, force: false })
+    expect(fetchIngestJob).toHaveBeenCalledWith('job-x')
+    expect(fetchItem).toHaveBeenCalledWith('rec-1')
+    expect(toast.success).toHaveBeenCalledWith('Recipe saved as a new item — review it in the queue')
     expect(screen.getByRole('button', { name: /extract another recipe/i })).toBeInTheDocument()
   })
 
   it('lists recipes already extracted, and extracting again sends force', async () => {
     vi.mocked(fetchDerivedItems).mockResolvedValue([RECIPE])
-    vi.mocked(extractRecipeFromItem).mockResolvedValue({ recipe: { ...RECIPE, id: 'rec-2' }, confidence: 70 })
+    extractJob(EXTRACT_FOUND('rec-2'))
+    vi.mocked(fetchItem).mockImplementation((async (id: string) => (id === 'rec-2' ? { ...RECIPE, id: 'rec-2' } : video())) as never)
     render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: /extract another recipe/i }))
     await waitFor(() => expect(extractRecipeFromItem).toHaveBeenCalledWith('vid-1', { provider: undefined, force: true }))
     await waitFor(() => expect(screen.getAllByRole('link', { name: /Aglio e Olio/ })).toHaveLength(2))
   })
 
-  it('shows an inline "nothing saved" note when no recipe is found, without an error toast', async () => {
-    vi.mocked(extractRecipeFromItem).mockRejectedValue(
-      new ApiError('No recipe was found in this content.', 422, { found: false, error: 'No recipe was found in this content.' }),
-    )
+  it('does not list the same recipe twice if it is already shown', async () => {
+    vi.mocked(fetchDerivedItems).mockResolvedValue([RECIPE])
+    extractJob(EXTRACT_FOUND('rec-1'))
+    vi.mocked(fetchItem).mockImplementation((async (id: string) => (id === 'rec-1' ? RECIPE : video())) as never)
+    render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: /extract another recipe/i }))
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+    expect(screen.getAllByRole('link', { name: /Aglio e Olio/ })).toHaveLength(1)
+  })
+
+  it('shows an inline "nothing saved" note when no recipe is found — a completed job, not an error', async () => {
+    extractJob({ status: 'completed', progress: 100, total: 3, completed: 3, details: { itemId: 'vid-1', found: false, reason: 'This does not look like a recipe or cooking video.' } })
+    render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: /extract recipe/i }))
+    expect(await screen.findByRole('status')).toHaveTextContent('This does not look like a recipe or cooking video. Nothing was saved.')
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('derived-recipes')).not.toBeInTheDocument()
+    expect(fetchItem).not.toHaveBeenCalledWith('rec-1')
+  })
+
+  it('has a sensible note even if a completed job carries no reason', async () => {
+    extractJob({ status: 'completed', progress: 100, total: 3, completed: 3, details: { itemId: 'vid-1', found: false } })
     render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: /extract recipe/i }))
     expect(await screen.findByRole('status')).toHaveTextContent('No recipe was found in this content. Nothing was saved.')
-    expect(toast.error).not.toHaveBeenCalled()
-    expect(screen.queryByTestId('derived-recipes')).not.toBeInTheDocument()
   })
 
-  it('toasts other extraction failures', async () => {
-    vi.mocked(extractRecipeFromItem).mockRejectedValue(new ApiError('Cannot use claude: Strict Local Mode is on', 409))
+  it('clears an old "nothing saved" note when extracting again', async () => {
+    extractJob({ status: 'completed', progress: 100, total: 3, completed: 3, details: { itemId: 'vid-1', found: false, reason: 'First try found nothing.' } })
+    render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: /extract recipe/i }))
+    await screen.findByText(/First try found nothing/)
+    extractJob({ status: 'processing', progress: 33, total: 3, completed: 1, details: { itemId: 'vid-1', stage: 'checking' } })
+    fireEvent.click(screen.getByRole('button', { name: /extract recipe/i }))
+    await waitFor(() => expect(screen.queryByText(/First try found nothing/)).not.toBeInTheDocument())
+  })
+
+  it('toasts the job message when extraction fails', async () => {
+    extractJob({ status: 'failed', progress: 0, total: 3, completed: 0, error: 'Cannot use claude: Strict Local Mode is on' })
     render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: /extract recipe/i }))
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Cannot use claude: Strict Local Mode is on'))
+    expect(screen.queryByTestId('derived-recipes')).not.toBeInTheDocument()
+  })
+
+  it('toasts the server message when extraction cannot be started (already extracted / another task running)', async () => {
+    vi.mocked(extractRecipeFromItem).mockRejectedValue(new ApiError('Another AI task is still running. Wait for it to finish.', 409))
+    render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: /extract recipe/i }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Another AI task is still running. Wait for it to finish.'))
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+  })
+
+  it('tells the user if the recipe was saved but could not be loaded', async () => {
+    extractJob(EXTRACT_FOUND())
+    vi.mocked(fetchItem).mockRejectedValue(new Error('network'))
+    render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: /extract recipe/i }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/could not be loaded/)))
   })
 })
 

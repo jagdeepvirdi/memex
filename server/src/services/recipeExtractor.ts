@@ -11,7 +11,18 @@ import { aiChat, type AiCallOptions } from './ai.js'
 import { loadSourceText, chunkText, type SourceItem } from './itemSource.js'
 import type { RecipeData } from '../../../shared/types.js'
 
+export type RecipeStage = 'reading' | 'checking' | 'extracting'
+
+/** Where an extraction has got to: `done` of `total` steps (read, check it is a recipe, extract). */
+export interface RecipeProgress {
+  stage: RecipeStage
+  done: number
+  total: number
+}
+
 export interface ExtractOptions {
+  /** Called as each step starts and when the last one finishes. Must never throw (errors in it are ignored). */
+  onProgress?: (p: RecipeProgress) => void
   provider?: AiCallOptions['provider']
   cloudSafe: boolean
   signal?: AbortSignal
@@ -113,7 +124,13 @@ export function parseGate(raw: string): boolean {
   }
 }
 
+const STEPS = 3
+
 export async function extractRecipe(item: SourceItem, opts: ExtractOptions): Promise<RecipeExtraction> {
+  const report = (stage: RecipeStage, done: number) => {
+    try { opts.onProgress?.({ stage, done, total: STEPS }) } catch { /* progress must never break the work */ }
+  }
+  report('reading', 0)
   const source = await loadSourceText(item)
   let model = 'unknown'
   const call = (): AiCallOptions => ({
@@ -125,6 +142,7 @@ export async function extractRecipe(item: SourceItem, opts: ExtractOptions): Pro
   })
 
   // Gate: a cheap yes/no on the title and start of the text before spending a full extraction.
+  report('checking', 1)
   const gateRaw = await aiChat(
     `Title: ${item.title}\n\nText:\n${source.text.slice(0, GATE_CHARS)}`,
     GATE_SYSTEM,
@@ -134,6 +152,7 @@ export async function extractRecipe(item: SourceItem, opts: ExtractOptions): Pro
     call(),
   )
   if (!parseGate(gateRaw)) {
+    report('checking', STEPS)
     return { found: false, reason: 'This does not look like a recipe or cooking video.', model }
   }
 
@@ -144,6 +163,7 @@ export async function extractRecipe(item: SourceItem, opts: ExtractOptions): Pro
     ? chunks[0]
     : (chunks.find(c => /ingredient|tablespoon|teaspoon|\bcup\b|\bgrams?\b/i.test(c)) ?? chunks[0])
 
+  report('extracting', 2)
   const description = source.description && source.basis !== 'description'
     ? `\n\nVideo description (ingredient lists and quantities are often here):\n${source.description.slice(0, DESCRIPTION_CHARS)}`
     : ''
@@ -158,6 +178,7 @@ export async function extractRecipe(item: SourceItem, opts: ExtractOptions): Pro
   )
 
   const parsed = parseRecipe(raw, item.title)
+  report('extracting', STEPS)
   return { ...parsed, model }
 }
 

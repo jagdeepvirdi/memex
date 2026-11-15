@@ -14,56 +14,69 @@ vi.mock('../../lib/api', async orig => ({
   extractRecipeFromItem: vi.fn(),
 }))
 
-import { useExplainJob, describeExplainStage } from './useExplainJob'
+import { useActionJob, describeJobStage, type ActionJobKind } from './useActionJob'
 import ItemAiActions from './ItemAiActions'
-import { ApiError, explainItem, fetchIngestJob, fetchItem } from '../../lib/api'
+import { ApiError, explainItem, extractRecipeFromItem, fetchIngestJob, fetchItem } from '../../lib/api'
 import type { Item } from '../../../../shared/types'
 
 const ITEM = { id: 'vid-1', title: 'Long video', type: 'link', content: 'x', structured: { videoId: 'dQw4w9WgXcQ' }, categories: [], tags: [], source: 'youtube', sourceUrl: 'https://youtu.be/dQw4w9WgXcQ', reviewed: false, createdAt: new Date(), updatedAt: new Date() } as Item
 const processing = (over: Record<string, unknown> = {}) => ({ status: 'processing', progress: 29, total: 7, completed: 2, details: { itemId: 'vid-1', stage: 'summarising', part: 3, parts: 6 }, ...over })
 const completed = { status: 'completed', progress: 100, total: 7, completed: 7, details: { itemId: 'vid-1' } }
-const KEY = 'memex-explain-job:vid-1'
+const keyFor = (kind: ActionJobKind) => `memex-job:${kind}:vid-1`
+
+const launch = vi.fn()
+const onCompleted = vi.fn()
+const setup = (kind: ActionJobKind = 'explain', itemId = 'vid-1') =>
+  renderHook(({ id, k }) => useActionJob({ itemId: id, kind: k, launch, onCompleted }), { initialProps: { id: itemId, k: kind } })
 
 /** Lets the immediate poll and any pending promises settle without advancing the 1.5 s timer. */
-const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve() })
+const settle = () => act(async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve() })
 const tick = (ms = 1500) => act(async () => { await vi.advanceTimersByTimeAsync(ms) })
 
 beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers()
   sessionStorage.clear()
+  launch.mockReset().mockResolvedValue({ jobId: 'job-1' })
+  onCompleted.mockReset().mockResolvedValue(undefined)
   vi.mocked(explainItem).mockResolvedValue({ jobId: 'job-1' })
   vi.mocked(fetchItem).mockResolvedValue({ ...ITEM, structured: { explanation: { summary: 's' } } } as Item)
 })
 afterEach(() => vi.useRealTimers())
 
-describe('describeExplainStage', () => {
+describe('describeJobStage', () => {
   it.each([
-    [{ stage: 'reading' }, 'Reading the transcript…'],
-    [{ stage: 'summarising', part: 3, parts: 6 }, 'Summarising part 3 of 6…'],
-    [{ stage: 'summarising' }, 'Summarising…'],
-    [{ stage: 'writing' }, 'Writing the explanation…'],
-    [undefined, 'Working…'],
-  ])('%j → %s', (details, label) => {
-    expect(describeExplainStage({ details } as never)).toBe(label)
+    ['explain', { stage: 'reading' }, 'Reading the transcript…'],
+    ['explain', { stage: 'summarising', part: 3, parts: 6 }, 'Summarising part 3 of 6…'],
+    ['explain', { stage: 'summarising' }, 'Summarising…'],
+    ['explain', { stage: 'writing' }, 'Writing the explanation…'],
+    ['explain', undefined, 'Working…'],
+    ['explain', { stage: 'checking' }, 'Working…'], // a stage from the other kind is not misread
+    ['extract-recipe', { stage: 'reading' }, 'Reading the transcript…'],
+    ['extract-recipe', { stage: 'checking' }, 'Checking it is a recipe…'],
+    ['extract-recipe', { stage: 'extracting' }, 'Extracting the recipe…'],
+    ['extract-recipe', undefined, 'Working…'],
+    ['extract-recipe', { stage: 'writing' }, 'Working…'],
+  ] as const)('%s %j → %s', (kind, details, label) => {
+    expect(describeJobStage(kind, { details } as never)).toBe(label)
   })
 })
 
-describe('useExplainJob', () => {
-  it('starts idle', () => {
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+describe('useActionJob', () => {
+  it('starts idle and polls nothing', () => {
+    const { result } = setup()
     expect(result.current.run).toEqual({ running: false, percent: 0, label: '' })
     expect(fetchIngestJob).not.toHaveBeenCalled()
   })
 
-  it('starts the job, remembers its id for this item, and shows progress as it is polled', async () => {
+  it('launches with the given options, remembers the job id for this action and item, and shows progress as it is polled', async () => {
     vi.mocked(fetchIngestJob).mockResolvedValue(processing() as never)
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    const { result } = setup()
     await act(async () => { await result.current.start({ provider: 'ollama', force: false }) })
     await settle()
 
-    expect(explainItem).toHaveBeenCalledWith('vid-1', { provider: 'ollama', force: false })
-    expect(sessionStorage.getItem(KEY)).toBe('job-1')
+    expect(launch).toHaveBeenCalledWith({ provider: 'ollama', force: false })
+    expect(sessionStorage.getItem(keyFor('explain'))).toBe('job-1')
     expect(result.current.run).toEqual({ running: true, percent: 29, label: 'Summarising part 3 of 6…' })
 
     vi.mocked(fetchIngestJob).mockResolvedValue(processing({ progress: 57, details: { stage: 'summarising', part: 5, parts: 6 } }) as never)
@@ -73,24 +86,22 @@ describe('useExplainJob', () => {
 
   it('never shows an empty bar: at least 3 percent while running', async () => {
     vi.mocked(fetchIngestJob).mockResolvedValue(processing({ progress: 0, details: { stage: 'reading' } }) as never)
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    const { result } = setup()
     await act(async () => { await result.current.start({}) })
     await settle()
     expect(result.current.run.percent).toBe(3)
   })
 
-  it('when the job completes: stops polling, re-reads the item, hands it up, forgets the job and says so', async () => {
-    const onDone = vi.fn()
+  it('when the job completes: stops polling, hands the finished job to onCompleted, forgets the job id', async () => {
     vi.mocked(fetchIngestJob).mockResolvedValueOnce(processing() as never).mockResolvedValue(completed as never)
-    const { result } = renderHook(() => useExplainJob('vid-1', onDone))
+    const { result } = setup()
     await act(async () => { await result.current.start({}) })
     await settle()
     await tick()
 
-    expect(fetchItem).toHaveBeenCalledWith('vid-1')
-    expect(onDone).toHaveBeenCalledWith(expect.objectContaining({ id: 'vid-1' }))
-    expect(toast.success).toHaveBeenCalledWith('Explanation saved')
-    expect(sessionStorage.getItem(KEY)).toBeNull()
+    expect(onCompleted).toHaveBeenCalledTimes(1)
+    expect(onCompleted).toHaveBeenCalledWith(completed)
+    expect(sessionStorage.getItem(keyFor('explain'))).toBeNull()
     expect(result.current.run.running).toBe(false)
 
     const polls = vi.mocked(fetchIngestJob).mock.calls.length
@@ -98,37 +109,52 @@ describe('useExplainJob', () => {
     expect(vi.mocked(fetchIngestJob).mock.calls.length).toBe(polls) // stopped
   })
 
-  it('when the job fails: shows the job message, forgets it and stops', async () => {
+  it('uses the latest onCompleted, not the one from when the job started', async () => {
+    vi.mocked(fetchIngestJob).mockResolvedValueOnce(processing() as never).mockResolvedValue(completed as never)
+    const first = vi.fn(); const second = vi.fn()
+    const { result, rerender } = renderHook(({ cb }) => useActionJob({ itemId: 'vid-1', kind: 'explain', launch, onCompleted: cb }), { initialProps: { cb: first } })
+    await act(async () => { await result.current.start({}) })
+    await settle()
+    rerender({ cb: second })
+    await tick()
+    expect(first).not.toHaveBeenCalled()
+    expect(second).toHaveBeenCalledTimes(1)
+  })
+
+  it('when the job fails: shows the job message, forgets it, stops, and never calls onCompleted', async () => {
     vi.mocked(fetchIngestJob).mockResolvedValue({ status: 'failed', progress: 0, total: 1, completed: 0, error: 'No transcript is available for this video.' } as never)
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    const { result } = setup()
     await act(async () => { await result.current.start({}) })
     await settle()
     expect(toast.error).toHaveBeenCalledWith('No transcript is available for this video.')
-    expect(sessionStorage.getItem(KEY)).toBeNull()
+    expect(sessionStorage.getItem(keyFor('explain'))).toBeNull()
     expect(result.current.run.running).toBe(false)
-    expect(fetchItem).not.toHaveBeenCalled()
+    expect(onCompleted).not.toHaveBeenCalled()
   })
 
-  it('a failed job without a message still tells the user', async () => {
+  it.each([
+    ['explain', 'Failed to explain'],
+    ['extract-recipe', 'Failed to extract recipe'],
+  ] as const)('a failed %s job without a message still tells the user', async (kind, message) => {
     vi.mocked(fetchIngestJob).mockResolvedValue({ status: 'failed', progress: 0, total: 1, completed: 0 } as never)
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    const { result } = setup(kind)
     await act(async () => { await result.current.start({}) })
     await settle()
-    expect(toast.error).toHaveBeenCalledWith('Failed to explain')
+    expect(toast.error).toHaveBeenCalledWith(message)
   })
 
-  it('rejects with the server message when the job cannot be started (e.g. one is already running)', async () => {
-    vi.mocked(explainItem).mockRejectedValue(new ApiError('Another explanation is still running. Wait for it to finish.', 409))
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+  it('rejects with the server message when the job cannot be started, leaving nothing behind', async () => {
+    launch.mockRejectedValue(new ApiError('Another AI task is still running. Wait for it to finish.', 409))
+    const { result } = setup()
     await expect(result.current.start({})).rejects.toThrow('still running')
     expect(result.current.run.running).toBe(false)
-    expect(sessionStorage.getItem(KEY)).toBeNull()
+    expect(sessionStorage.getItem(keyFor('explain'))).toBeNull()
     expect(fetchIngestJob).not.toHaveBeenCalled()
   })
 
   it('tolerates a few failed polls, then gives up with a clear message', async () => {
     vi.mocked(fetchIngestJob).mockResolvedValueOnce(processing() as never).mockRejectedValue(new Error('Failed to fetch'))
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    const { result } = setup()
     await act(async () => { await result.current.start({}) })
     await settle()
     await tick(); await tick(); await tick()
@@ -145,93 +171,120 @@ describe('useExplainJob', () => {
       .mockResolvedValueOnce(processing() as never)
       .mockRejectedValueOnce(new Error('blip')).mockRejectedValueOnce(new Error('blip')).mockRejectedValueOnce(new Error('blip'))
       .mockResolvedValue(completed as never)
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    const { result } = setup()
     await act(async () => { await result.current.start({}) })
     await settle()
     for (let i = 0; i < 8; i++) await tick()
     expect(toast.error).not.toHaveBeenCalled()
-    expect(toast.success).toHaveBeenCalledWith('Explanation saved')
+    expect(onCompleted).toHaveBeenCalledTimes(1)
   })
 
   it('quietly drops a job that no longer exists (server restarted)', async () => {
     vi.mocked(fetchIngestJob).mockRejectedValue(new Error('Job not found'))
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    const { result } = setup()
     await act(async () => { await result.current.start({}) })
     await settle()
     expect(toast.error).not.toHaveBeenCalled()
     expect(result.current.run.running).toBe(false)
-    expect(sessionStorage.getItem(KEY)).toBeNull()
+    expect(sessionStorage.getItem(keyFor('explain'))).toBeNull()
   })
 
-  it('tells the user if the explanation finished but the item could not be reloaded', async () => {
+  it.each([
+    ['explain', /explanation finished, but the item could not be reloaded/],
+    ['extract-recipe', /job finished, but the result could not be loaded/],
+  ] as const)('tells the user if a finished %s job\'s result cannot be shown', async (kind, message) => {
     vi.mocked(fetchIngestJob).mockResolvedValue(completed as never)
-    vi.mocked(fetchItem).mockRejectedValue(new Error('network'))
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    onCompleted.mockRejectedValue(new Error('network'))
+    const { result } = setup(kind)
     await act(async () => { await result.current.start({}) })
     await settle()
-    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/finished, but the item could not be reloaded/))
+    expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(message))
+    expect(sessionStorage.getItem(keyFor(kind))).toBeNull()
+    expect(result.current.run.running).toBe(false)
   })
 
   it('resumes a job it started earlier when the page is opened again', async () => {
-    sessionStorage.setItem(KEY, 'job-77')
+    sessionStorage.setItem(keyFor('explain'), 'job-77')
     vi.mocked(fetchIngestJob).mockResolvedValue(processing({ progress: 71, details: { stage: 'writing' } }) as never)
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    const { result } = setup()
     await settle()
     expect(fetchIngestJob).toHaveBeenCalledWith('job-77')
-    expect(explainItem).not.toHaveBeenCalled()
+    expect(launch).not.toHaveBeenCalled()
     expect(result.current.run).toEqual({ running: true, percent: 71, label: 'Writing the explanation…' })
   })
 
   it('shows a result that finished while the user was away', async () => {
-    sessionStorage.setItem(KEY, 'job-77')
+    sessionStorage.setItem(keyFor('explain'), 'job-77')
     vi.mocked(fetchIngestJob).mockResolvedValue(completed as never)
-    const onDone = vi.fn()
-    renderHook(() => useExplainJob('vid-1', onDone))
+    setup()
     await settle()
-    expect(onDone).toHaveBeenCalledTimes(1)
-    expect(sessionStorage.getItem(KEY)).toBeNull()
+    expect(onCompleted).toHaveBeenCalledTimes(1)
+    expect(sessionStorage.getItem(keyFor('explain'))).toBeNull()
   })
 
   it('stops polling when the page is left, but keeps the job id so it can be resumed', async () => {
     vi.mocked(fetchIngestJob).mockResolvedValue(processing() as never)
-    const { result, unmount } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    const { result, unmount } = setup()
     await act(async () => { await result.current.start({}) })
     await settle()
     unmount()
     const polls = vi.mocked(fetchIngestJob).mock.calls.length
     await tick(10_000)
     expect(vi.mocked(fetchIngestJob).mock.calls.length).toBe(polls)
-    expect(sessionStorage.getItem(KEY)).toBe('job-1')
+    expect(sessionStorage.getItem(keyFor('explain'))).toBe('job-1')
   })
 
   it('does not carry a job from one item to the next', async () => {
-    sessionStorage.setItem('memex-explain-job:other', 'job-other')
+    sessionStorage.setItem('memex-job:explain:other', 'job-other')
     vi.mocked(fetchIngestJob).mockResolvedValue(processing() as never)
-    const { result } = renderHook(() => useExplainJob('vid-1', vi.fn()))
+    const { result } = setup()
     await settle()
     expect(fetchIngestJob).not.toHaveBeenCalled()
     expect(result.current.run.running).toBe(false)
   })
+
+  it('keeps Explain and Extract recipe jobs for the same item apart', async () => {
+    sessionStorage.setItem(keyFor('extract-recipe'), 'job-extract')
+    vi.mocked(fetchIngestJob).mockResolvedValue(processing() as never)
+    const { result } = setup('explain')
+    await settle()
+    expect(fetchIngestJob).not.toHaveBeenCalled() // the extract job is not the explain hook's business
+    expect(result.current.run.running).toBe(false)
+
+    const extract = setup('extract-recipe')
+    await settle()
+    expect(fetchIngestJob).toHaveBeenCalledWith('job-extract')
+    expect(extract.result.current.run.running).toBe(true)
+  })
 })
 
-describe('ItemAiActions — explain progress UI', () => {
+describe('ItemAiActions — progress UI for both actions', () => {
   // waitFor/findBy need the clock to move on its own; the 1.5 s poll is still advanced by tick().
   beforeEach(() => { vi.useRealTimers(); vi.useFakeTimers({ shouldAdvanceTime: true }) })
 
-  it('shows a progress bar and the current step while explaining, and disables the buttons', async () => {
+  it('Explain: shows a progress bar and the current step, and disables the buttons', async () => {
     vi.mocked(fetchIngestJob).mockResolvedValue(processing() as never)
     render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: /explain this/i }))
     await waitFor(() => expect(screen.getByRole('progressbar', { name: 'Explaining' })).toHaveAttribute('aria-valuenow', '29'))
-    const bar = screen.getByRole('progressbar', { name: 'Explaining' })
-    expect(bar).toHaveAttribute('aria-valuenow', '29')
-    expect(screen.getByTestId('explain-progress')).toHaveTextContent('Summarising part 3 of 6…')
-    expect(screen.getByTestId('explain-progress')).toHaveTextContent('You can leave this page')
+    expect(screen.getByTestId('job-progress')).toHaveTextContent('Summarising part 3 of 6…')
+    expect(screen.getByTestId('job-progress')).toHaveTextContent('You can leave this page')
     expect(screen.getByRole('button', { name: /explaining/i })).toBeDisabled()
     expect(screen.getByRole('button', { name: /extract recipe/i })).toBeDisabled()
   })
 
-  it('removes the progress bar when it finishes', async () => {
+  it('Extract recipe: shows its own progress bar and step, and disables both buttons', async () => {
+    vi.mocked(extractRecipeFromItem).mockResolvedValue({ jobId: 'job-x' })
+    vi.mocked(fetchIngestJob).mockResolvedValue({ status: 'processing', progress: 33, total: 3, completed: 1, details: { itemId: 'vid-1', stage: 'checking' } } as never)
+    render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: /extract recipe/i }))
+    await waitFor(() => expect(screen.getByRole('progressbar', { name: 'Extracting recipe' })).toHaveAttribute('aria-valuenow', '33'))
+    expect(screen.getByTestId('job-progress')).toHaveTextContent('Checking it is a recipe…')
+    expect(screen.getByRole('button', { name: /extracting/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /explain this/i })).toBeDisabled()
+  })
+
+  it('removes the progress bar when the job finishes', async () => {
     vi.mocked(fetchIngestJob).mockResolvedValueOnce(processing() as never).mockResolvedValue(completed as never)
     render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: /explain this/i }))
@@ -240,19 +293,35 @@ describe('ItemAiActions — explain progress UI', () => {
     await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument())
   })
 
-  it('picks up a running job on load and shows its progress straight away', async () => {
-    sessionStorage.setItem(KEY, 'job-5')
+  it('Explain: picks up a running job on load', async () => {
+    sessionStorage.setItem(keyFor('explain'), 'job-5')
     vi.mocked(fetchIngestJob).mockResolvedValue(processing({ progress: 43, details: { stage: 'summarising', part: 4, parts: 6 } }) as never)
     render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
     await waitFor(() => expect(screen.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '43'))
-    expect(screen.getByTestId('explain-progress')).toHaveTextContent('Summarising part 4 of 6…')
+    expect(screen.getByTestId('job-progress')).toHaveTextContent('Summarising part 4 of 6…')
+  })
+
+  it('Extract recipe: picks up a running job on load', async () => {
+    sessionStorage.setItem(keyFor('extract-recipe'), 'job-6')
+    vi.mocked(fetchIngestJob).mockResolvedValue({ status: 'processing', progress: 67, total: 3, completed: 2, details: { itemId: 'vid-1', stage: 'extracting' } } as never)
+    render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
+    await waitFor(() => expect(screen.getByRole('progressbar', { name: 'Extracting recipe' })).toHaveAttribute('aria-valuenow', '67'))
+    expect(screen.getByTestId('job-progress')).toHaveTextContent('Extracting the recipe…')
+  })
+
+  it('Extract recipe: shows a recipe that was found while the user was away', async () => {
+    sessionStorage.setItem(keyFor('extract-recipe'), 'job-6')
+    vi.mocked(fetchIngestJob).mockResolvedValue({ status: 'completed', progress: 100, total: 3, completed: 3, details: { itemId: 'vid-1', found: true, recipeId: 'rec-9', confidence: 90 } } as never)
+    vi.mocked(fetchItem).mockResolvedValue({ ...ITEM, id: 'rec-9', title: 'Found while away', type: 'recipe', derivedFrom: 'vid-1' } as Item)
+    render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
+    expect(await screen.findByRole('link', { name: /Found while away/ })).toHaveAttribute('href', '/item/rec-9')
   })
 
   it('shows the server message when starting is refused, and no progress bar', async () => {
-    vi.mocked(explainItem).mockRejectedValue(new ApiError('Another explanation is still running. Wait for it to finish.', 409))
+    vi.mocked(explainItem).mockRejectedValue(new ApiError('Another AI task is still running. Wait for it to finish.', 409))
     render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: /explain this/i }))
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Another explanation is still running. Wait for it to finish.'))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Another AI task is still running. Wait for it to finish.'))
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
   })
 })

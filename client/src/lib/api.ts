@@ -18,7 +18,7 @@ import type {
   ExplainRequest,
   ExplainStartResponse,
   ExtractRecipeRequest,
-  ExtractRecipeResponse,
+  ExtractRecipeStartResponse,
   ConnectedEntity,
 } from '../../../shared/types'
 import { toast } from 'sonner'
@@ -377,8 +377,9 @@ export function explainItem(itemId: string, opts: ExplainRequest = {}): Promise<
   return apiFetch<ExplainStartResponse>(`/items/${itemId}/explain`, { method: 'POST', body: JSON.stringify(opts) })
 }
 
-export function extractRecipeFromItem(itemId: string, opts: ExtractRecipeRequest = {}): Promise<ExtractRecipeResponse> {
-  return apiFetch<ExtractRecipeResponse>(`/items/${itemId}/extract-recipe`, { method: 'POST', body: JSON.stringify(opts) })
+/** Starts Extract recipe as a background job: returns its id at once. Follow it with fetchIngestJob. */
+export function extractRecipeFromItem(itemId: string, opts: ExtractRecipeRequest = {}): Promise<ExtractRecipeStartResponse> {
+  return apiFetch<ExtractRecipeStartResponse>(`/items/${itemId}/extract-recipe`, { method: 'POST', body: JSON.stringify(opts) })
 }
 
 /** Entities this item is linked to (creator, repo, channel, director…), with the other items sharing each. */
@@ -430,10 +431,15 @@ export interface IngestJobStatus {
     failed?: Array<{ itemId: string; title: string; error: string }>
     /** Explain jobs: which item, and where the work has got to. */
     itemId?: string
-    stage?: 'reading' | 'summarising' | 'writing'
+    stage?: 'reading' | 'summarising' | 'writing' | 'checking' | 'extracting'
     part?: number
     parts?: number
     model?: string
+    /** Extract recipe jobs, once completed: whether a recipe was found, and the new item or the reason it was not. */
+    found?: boolean
+    reason?: string
+    recipeId?: string
+    confidence?: number
   }
 }
 

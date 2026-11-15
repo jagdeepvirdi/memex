@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import { Loader2, Sparkles, ChefHat, RefreshCw, Video } from 'lucide-react'
 import {
-  ApiError,
+  explainItem,
   extractRecipeFromItem,
   fetchAiProviders,
   fetchDerivedItems,
@@ -11,7 +11,7 @@ import {
 } from '../../lib/api'
 import type { AiProviderId, AiProviderInfo } from '../../lib/api'
 import type { ExplanationData, Item } from '../../../../shared/types'
-import { useExplainJob } from './useExplainJob'
+import { useActionJob } from './useActionJob'
 
 // ── Which items get these actions ─────────────────────────────────────────────
 
@@ -87,10 +87,35 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
   const actions = aiActionsFor(item)
   const [providers, setProviders] = useState<AiProviderInfo[] | null>(null)
   const [provider, setProvider] = useState<'' | AiProviderId>('')
-  const [extracting, setExtracting] = useState(false)
-  const { run: explainRun, start: startExplain } = useExplainJob(item.id, onItemUpdated)
   const [recipes, setRecipes] = useState<Item[]>([])
   const [noRecipe, setNoRecipe] = useState<string | null>(null)
+
+  const { run: explainRun, start: startExplain } = useActionJob({
+    itemId: item.id,
+    kind: 'explain',
+    launch: opts => explainItem(item.id, opts),
+    onCompleted: async () => {
+      onItemUpdated(await fetchItem(item.id))
+      toast.success('Explanation saved')
+    },
+  })
+
+  const { run: recipeRun, start: startExtract } = useActionJob({
+    itemId: item.id,
+    kind: 'extract-recipe',
+    launch: opts => extractRecipeFromItem(item.id, opts),
+    // "No recipe found" is a normal outcome: the job completes, nothing is saved, and we say why.
+    onCompleted: async job => {
+      const d = job.details
+      if (d?.found && d.recipeId) {
+        const recipe = await fetchItem(d.recipeId)
+        setRecipes(prev => [recipe, ...prev.filter(r => r.id !== recipe.id)])
+        toast.success('Recipe saved as a new item — review it in the queue')
+      } else {
+        setNoRecipe(d?.reason ?? 'No recipe was found in this content.')
+      }
+    },
+  })
 
   const active = actions.explain || actions.extractRecipe
 
@@ -118,25 +143,18 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
   }
 
   const handleExtract = async () => {
-    setExtracting(true)
     setNoRecipe(null)
     try {
-      const res = await extractRecipeFromItem(item.id, { provider: choice, force: recipes.length > 0 })
-      setRecipes(prev => [res.recipe, ...prev])
-      toast.success('Recipe saved as a new item — review it in the queue')
+      await startExtract({ provider: choice, force: recipes.length > 0 })
     } catch (err) {
-      if (err instanceof ApiError && err.status === 422 && err.body?.found === false) {
-        setNoRecipe(err.message)
-      } else {
-        toast.error(err instanceof Error ? err.message : 'Failed to extract recipe')
-      }
-    } finally {
-      setExtracting(false)
+      toast.error(err instanceof Error ? err.message : 'Failed to extract recipe')
     }
   }
 
   const explaining = explainRun.running
+  const extracting = recipeRun.running
   const busy = explaining || extracting
+  const activeRun = explaining ? explainRun : extracting ? recipeRun : null
   const primary = 'bg-accent/10 hover:bg-accent/20 text-accent border-accent/20'
   const secondary = 'bg-white/5 hover:bg-white/10 text-ink-muted border-white/10'
 
@@ -185,20 +203,20 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
         </label>
       </div>
 
-      {explaining && (
-        <div data-testid="explain-progress" className="space-y-1.5">
+      {activeRun && (
+        <div data-testid="job-progress" className="space-y-1.5">
           <div
             role="progressbar"
-            aria-label="Explaining"
+            aria-label={explaining ? 'Explaining' : 'Extracting recipe'}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-valuenow={explainRun.percent}
+            aria-valuenow={activeRun.percent}
             className="h-1.5 bg-white/5 rounded-full overflow-hidden"
           >
-            <div className="h-full bg-accent transition-all duration-500" style={{ width: `${explainRun.percent}%` }} />
+            <div className="h-full bg-accent transition-all duration-500" style={{ width: `${activeRun.percent}%` }} />
           </div>
           <p className="text-[11px] text-ink-muted">
-            {explainRun.label} <span className="text-ink-muted/70">You can leave this page — it keeps going and the result is saved.</span>
+            {activeRun.label} <span className="text-ink-muted/70">You can leave this page — it keeps going and the result is saved.</span>
           </p>
         </div>
       )}

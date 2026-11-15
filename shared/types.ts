@@ -113,10 +113,9 @@ export interface ExtractRecipeRequest {
   force?: boolean
 }
 
-export interface ExtractRecipeResponse {
-  /** The new `type='recipe'` item (derivedFrom = the source item). */
-  recipe: Item
-  confidence: number
+/** Extracting runs as a background job: poll GET /api/ingest/jobs/:id; its details say `found` (with `recipeId`) or not. */
+export interface ExtractRecipeStartResponse {
+  jobId: string
 }
 
 export interface MediaData {

@@ -21,15 +21,13 @@ vi.mock('../services/explainJob', async orig => ({
   ...(await orig<typeof import('../services/explainJob')>()),
   runExplainJob: vi.fn(),
 }))
-vi.mock('../services/recipeExtractor', async orig => ({
-  ...(await orig<typeof import('../services/recipeExtractor')>()),
-  extractRecipe: vi.fn(),
+vi.mock('../services/extractRecipeJob', async orig => ({
+  ...(await orig<typeof import('../services/extractRecipeJob')>()),
+  runExtractRecipeJob: vi.fn(),
 }))
 
 import { runExplainJob } from '../services/explainJob'
-import { extractRecipe } from '../services/recipeExtractor'
-import { NoSourceTextError } from '../services/itemSource'
-import { AiProviderError } from '../services/ai'
+import { runExtractRecipeJob } from '../services/extractRecipeJob'
 
 let AUTH = ''
 beforeAll(() => {
@@ -51,23 +49,10 @@ const EXPLANATION = {
   summary: 's', keyPoints: ['k'], steps: [], takeaways: ['t'], model: 'ollama:llama3.2',
   generatedAt: '2026-11-15T00:00:00.000Z', basis: 'transcript', truncated: false,
 }
-const FOUND = {
-  found: true as const, title: 'Aglio e Olio', confidence: 80, model: 'ollama:llama3.2',
-  recipe: { ingredients: ['pasta', 'garlic'], steps: ['boil', 'fry'] },
-}
-
-/** pool.connect() client whose queries answer in order. */
-function mockClient(answers: Array<{ rows: unknown[] }> = []) {
-  let i = 0
-  const client = { query: vi.fn().mockImplementation(() => Promise.resolve(answers[i++] ?? { rows: [] })), release: vi.fn() }
-  vi.mocked(pool.connect).mockResolvedValue(client as never)
-  return client
-}
-
 beforeEach(() => {
   vi.mocked(pool.query).mockReset()
   vi.mocked(pool.connect).mockReset()
-  vi.mocked(extractRecipe).mockReset()
+  vi.mocked(runExtractRecipeJob).mockReset()
 })
 
 describe('POST /api/items/:id/explain (background job)', () => {
@@ -212,108 +197,145 @@ describe('GET /api/items/:id/derived', () => {
   })
 })
 
-describe('POST /api/items/:id/extract-recipe', () => {
-  const RECIPE_ITEM = { ...FULL_ITEM, id: 'rec-1', type: 'recipe', title: 'Aglio e Olio', derived_from: 'vid-1' }
+describe('POST /api/items/:id/extract-recipe (background job)', () => {
+  /** pool.query routed by SQL: the item lookup, the "recipe already extracted" check, the running-job check, job writes. */
+  function extractDb(over: { item?: Record<string, unknown> | null; existingRecipe?: string | null; running?: boolean } = {}) {
+    const item = over.item === undefined ? ROW : over.item
+    vi.mocked(pool.query).mockImplementation((async (sql: string) => {
+      if (/FROM ingest_jobs/.test(sql)) return { rows: over.running ? [{ '?column?': 1 }] : [] }
+      if (/FROM items WHERE derived_from/.test(sql)) return { rows: over.existingRecipe ? [{ id: over.existingRecipe }] : [] }
+      if (/FROM items i WHERE i\.id = \$1/.test(sql)) return { rows: item ? [item] : [] }
+      return { rows: [] }
+    }) as never)
+  }
+  const post = (id = 'vid-1', body: unknown = {}) => request(app).post(`/api/items/${id}/extract-recipe`).set('Authorization', AUTH).send(body as object)
+  const jobWrites = () => vi.mocked(pool.query).mock.calls.filter(c => /ingest_jobs/.test(String(c[0])) && !/FROM ingest_jobs/.test(String(c[0])))
 
   it('requires auth', async () => {
     expect((await request(app).post('/api/items/vid-1/extract-recipe')).status).toBe(401)
   })
 
-  it('404s for a missing item', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as never)
-    expect((await request(app).post('/api/items/nope/extract-recipe').set('Authorization', AUTH)).status).toBe(404)
+  it('404s for a missing item, without touching jobs', async () => {
+    extractDb({ item: null })
+    expect((await post('nope')).status).toBe(404)
+    expect(jobWrites()).toHaveLength(0)
+    expect(runExtractRecipeJob).not.toHaveBeenCalled()
   })
 
-  it('409s with the existing recipe id when one was already extracted', async () => {
-    vi.mocked(pool.query)
-      .mockResolvedValueOnce({ rows: [ROW] } as never)
-      .mockResolvedValueOnce({ rows: [{ id: 'rec-0' }] } as never)
-    const res = await request(app).post('/api/items/vid-1/extract-recipe').set('Authorization', AUTH)
+  it('400s on an invalid body', async () => {
+    extractDb()
+    expect((await post('vid-1', { provider: 'gpt' })).status).toBe(400)
+    expect(runExtractRecipeJob).not.toHaveBeenCalled()
+  })
+
+  it('refuses encrypted items', async () => {
+    extractDb({ item: { ...ROW, encrypted: true } })
+    expect((await post()).status).toBe(400)
+    expect(runExtractRecipeJob).not.toHaveBeenCalled()
+  })
+
+  it('409s with the existing recipe id when one was already extracted, and starts nothing', async () => {
+    extractDb({ existingRecipe: 'rec-0' })
+    const res = await post()
     expect(res.status).toBe(409)
     expect(res.body.existingId).toBe('rec-0')
-    expect(extractRecipe).not.toHaveBeenCalled()
+    expect(jobWrites()).toHaveLength(0)
+    expect(runExtractRecipeJob).not.toHaveBeenCalled()
   })
 
-  it('force skips the duplicate check', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [ROW] } as never)
-    vi.mocked(extractRecipe).mockResolvedValue({ found: false, reason: 'none', model: 'm' })
-    const res = await request(app).post('/api/items/vid-1/extract-recipe').set('Authorization', AUTH).send({ force: true })
-    expect(res.status).toBe(422)
-    expect(vi.mocked(pool.query)).toHaveBeenCalledTimes(1) // only the item load
+  it('force skips the already-extracted check', async () => {
+    extractDb({ existingRecipe: 'rec-0' })
+    const res = await post('vid-1', { force: true })
+    expect(res.status).toBe(202)
+    expect(vi.mocked(pool.query).mock.calls.some(c => /FROM items WHERE derived_from/.test(String(c[0])))).toBe(false)
+    expect(runExtractRecipeJob).toHaveBeenCalledTimes(1)
   })
 
-  it('422s with found:false when there is no recipe, and creates nothing', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [ROW] } as never).mockResolvedValueOnce({ rows: [] } as never)
-    vi.mocked(extractRecipe).mockResolvedValue({ found: false, reason: 'No recipe was found in this content.', model: 'm' })
-    const res = await request(app).post('/api/items/vid-1/extract-recipe').set('Authorization', AUTH)
-    expect(res.status).toBe(422)
-    expect(res.body).toMatchObject({ found: false, error: 'No recipe was found in this content.' })
-    expect(pool.connect).not.toHaveBeenCalled()
+  it('409s while another AI job is running, and starts nothing', async () => {
+    extractDb({ running: true })
+    const res = await post()
+    expect(res.status).toBe(409)
+    expect(res.body).toMatchObject({ running: true })
+    expect(res.body.error).toMatch(/still running/)
+    expect(jobWrites()).toHaveLength(0)
+    expect(runExtractRecipeJob).not.toHaveBeenCalled()
   })
 
-  it('creates a NEW unreviewed recipe item linked via derived_from and leaves the video untouched', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [ROW] } as never).mockResolvedValueOnce({ rows: [] } as never)
-    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as never) // embedding update
-    vi.mocked(extractRecipe).mockResolvedValue(FOUND)
-    const client = mockClient([
-      { rows: [] }, // BEGIN
-      { rows: [{ id: 'rec-1' }] }, // INSERT
-      { rows: [] }, // setItemCategories → resolve… (handled by empty default)
-    ])
-    // fetchItem is the last read inside createItem; give every later query the full row
-    client.query.mockImplementation((sql: string) => {
-      if (/^\s*SELECT/i.test(sql) && /FROM items i/.test(sql)) return Promise.resolve({ rows: [RECIPE_ITEM] })
-      if (/INSERT INTO items/.test(sql)) return Promise.resolve({ rows: [{ id: 'rec-1' }] })
-      return Promise.resolve({ rows: [{ id: 'cat-1' }] })
+  it('answers 202 with a jobId at once, creates the job row, and starts the runner with the item and options', async () => {
+    extractDb()
+    let release: () => void = () => {}
+    vi.mocked(runExtractRecipeJob).mockReturnValue(new Promise<void>(r => { release = r }) as never) // still running when the response goes out
+    const res = await post('vid-1', { provider: 'gemini' })
+
+    expect(res.status).toBe(202)
+    expect(res.body.jobId).toEqual(expect.any(String))
+    const insert = jobWrites().find(c => /INSERT INTO ingest_jobs/.test(String(c[0])))!
+    expect(insert[1]).toEqual([res.body.jobId, 1, 'extract-recipe'])
+    expect(runExtractRecipeJob).toHaveBeenCalledWith({
+      jobId: res.body.jobId, itemId: 'vid-1', title: 'Cook with Joe', content: VIDEO, sourceUrl: VIDEO,
+      source: 'youtube', provider: 'gemini', cloudSafe: true,
     })
-
-    const res = await request(app).post('/api/items/vid-1/extract-recipe').set('Authorization', AUTH).send({ provider: 'gemini' })
-
-    expect(res.status).toBe(201)
-    expect(res.body.confidence).toBe(80)
-    expect(extractRecipe).toHaveBeenCalledWith(
-      { title: 'Cook with Joe', content: VIDEO, sourceUrl: VIDEO },
-      { provider: 'gemini', cloudSafe: true },
-    )
-
-    const insert = client.query.mock.calls.find(c => /INSERT INTO items/.test(c[0] as string))!
-    expect(insert[0]).toContain('derived_from')
-    const p = insert[1] as unknown[]
-    expect(p[0]).toBe('Aglio e Olio') // title
-    expect(p[1]).toBe('recipe') // type
-    expect(p[4]).toBe('youtube') // source
-    expect(p[5]).toBe(VIDEO) // source_url
-    expect(p[6]).toBe(false) // reviewed=false → review queue
-    expect(p[7]).toBe(80) // confidence
-    expect(p[10]).toBe('vid-1') // derived_from
-
-    const sqls = client.query.mock.calls.map(c => c[0] as string)
-    expect(sqls[0]).toBe('BEGIN')
-    expect(sqls).toContain('COMMIT')
-    expect(sqls.some(s => /UPDATE items SET extraction_model/.test(s))).toBe(true)
-    expect(sqls.some(s => /UPDATE items[\s\S]*\bWHERE id = \$\d/.test(s) && /vid-1/.test(String(s)))).toBe(false)
-    expect(client.release).toHaveBeenCalled()
+    release()
   })
 
-  it('rolls back and 500s if saving fails', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [ROW] } as never).mockResolvedValueOnce({ rows: [] } as never)
-    vi.mocked(extractRecipe).mockResolvedValue(FOUND)
-    const client = mockClient()
-    client.query.mockImplementation((sql: string) =>
-      /INSERT INTO items/.test(sql) ? Promise.reject(new Error('insert failed')) : Promise.resolve({ rows: [] }))
-    const res = await request(app).post('/api/items/vid-1/extract-recipe').set('Authorization', AUTH)
-    expect(res.status).toBe(500)
-    expect(client.query.mock.calls.map(c => c[0])).toContain('ROLLBACK')
-    expect(client.release).toHaveBeenCalled()
+  it('records which item the job is for', async () => {
+    extractDb()
+    const res = await post()
+    const details = jobWrites().find(c => /SET details/.test(String(c[0])))!
+    expect(details[1]).toEqual([res.body.jobId, JSON.stringify({ itemId: 'vid-1', stage: 'reading' })])
   })
 
-  it('maps provider and source errors like explain does', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [ROW] } as never).mockResolvedValueOnce({ rows: [] } as never)
-    vi.mocked(extractRecipe).mockRejectedValue(new NoSourceTextError('No transcript'))
-    expect((await request(app).post('/api/items/vid-1/extract-recipe').set('Authorization', AUTH)).status).toBe(422)
+  it('pins private items to local (cloudSafe=false)', async () => {
+    extractDb({ item: { ...ROW, tags: ['private'] } })
+    await post()
+    expect(vi.mocked(runExtractRecipeJob).mock.calls[0][0]).toMatchObject({ cloudSafe: false })
+  })
 
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [ROW] } as never).mockResolvedValueOnce({ rows: [] } as never)
-    vi.mocked(extractRecipe).mockRejectedValue(new AiProviderError('claude', 'blocked', 'no key'))
-    expect((await request(app).post('/api/items/vid-1/extract-recipe').set('Authorization', AUTH)).status).toBe(409)
+  it('does not create the recipe itself any more — that is the runner\'s job', async () => {
+    extractDb()
+    await post()
+    expect(pool.connect).not.toHaveBeenCalled()
+    expect(vi.mocked(pool.query).mock.calls.some(c => /INSERT INTO items/.test(String(c[0])))).toBe(false)
+  })
+
+  it('500s if the job cannot be created', async () => {
+    vi.mocked(pool.query).mockImplementation((async (sql: string) => {
+      if (/FROM ingest_jobs/.test(sql)) return { rows: [] }
+      if (/FROM items WHERE derived_from/.test(sql)) return { rows: [] }
+      if (/INSERT INTO ingest_jobs/.test(sql)) throw new Error('db down')
+      return { rows: [ROW] }
+    }) as never)
+    expect((await post()).status).toBe(500)
+    expect(runExtractRecipeJob).not.toHaveBeenCalled()
+  })
+})
+
+describe('one AI job at a time, across Explain and Extract recipe', () => {
+  /** Only the named job kind is "running". */
+  function runningKind(kind: string | null) {
+    vi.mocked(pool.query).mockImplementation((async (sql: string, params: unknown[] = []) => {
+      if (/FROM ingest_jobs/.test(sql)) return { rows: params[0] === kind ? [{ '?column?': 1 }] : [] }
+      if (/FROM items WHERE derived_from/.test(sql)) return { rows: [] }
+      if (/FROM items i WHERE i\.id = \$1/.test(sql)) return { rows: [ROW] }
+      return { rows: [] }
+    }) as never)
+  }
+  const explain = () => request(app).post('/api/items/vid-1/explain').set('Authorization', AUTH).send({})
+  const extract = () => request(app).post('/api/items/vid-1/extract-recipe').set('Authorization', AUTH).send({})
+
+  it('a running extraction blocks Explain', async () => {
+    runningKind('extract-recipe')
+    expect((await explain()).status).toBe(409)
+  })
+
+  it('a running explanation blocks Extract recipe', async () => {
+    runningKind('explain')
+    expect((await extract()).status).toBe(409)
+  })
+
+  it('both start when nothing is running', async () => {
+    runningKind(null)
+    expect((await explain()).status).toBe(202)
+    expect((await extract()).status).toBe(202)
   })
 })

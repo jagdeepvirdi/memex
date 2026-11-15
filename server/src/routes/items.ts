@@ -4,11 +4,9 @@ import pLimit from 'p-limit'
 import rateLimit from 'express-rate-limit'
 import AdmZip from 'adm-zip'
 import { randomBytes } from 'crypto'
-import { v4 as uuidv4 } from 'uuid'
 import { pool } from '../db/client.js'
 import {
   fetchItem,
-  createItem,
   setItemCategories,
   setItemTags,
   ITEM_SELECT_SQL,
@@ -31,11 +29,10 @@ import { extractAndLinkEntities } from '../services/entityService.js'
 import { generateDigest } from '../services/digestService.js'
 import { scrapeUrl } from '../services/scraper.js'
 import { aiChat } from '../services/ai.js'
-import { runExplainJob, EXPLAIN_JOB_KIND, EXPLAIN_JOB_STALE_MINUTES } from '../services/explainJob.js'
-import { createJob, saveJobDetails, hasRunningJob } from '../services/ingestJobs.js'
+import { runExplainJob } from '../services/explainJob.js'
+import { runExtractRecipeJob } from '../services/extractRecipeJob.js'
+import { anotherAiJobRunning, createAiJob, EXPLAIN_JOB_KIND, EXTRACT_RECIPE_JOB_KIND, AI_JOB_BUSY_MESSAGE } from '../services/actionJobs.js'
 import { describeActionError, actionErrorBody } from '../services/actionErrors.js'
-import { extractRecipe, renderRecipeContent } from '../services/recipeExtractor.js'
-import { findYoutubeUrl } from '../services/youtubeUrl.js'
 import type { ItemType, ItemSource, ItemIntent, ConnectedEntity } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
@@ -985,15 +982,13 @@ router.post('/:id/explain', aiActionLimiter, async (req, res) => {
       return
     }
 
-    // One at a time: a local model runs them one after another anyway, and two at once just makes both slower.
-    if (await hasRunningJob(EXPLAIN_JOB_KIND, EXPLAIN_JOB_STALE_MINUTES)) {
-      res.status(409).json({ error: 'Another explanation is still running. Wait for it to finish.', running: true })
+    // One AI job at a time: a local model runs them one after another anyway, and two at once just makes both slower.
+    if (await anotherAiJobRunning()) {
+      res.status(409).json({ error: AI_JOB_BUSY_MESSAGE, running: true })
       return
     }
 
-    const jobId = uuidv4()
-    await createJob(jobId, 1, EXPLAIN_JOB_KIND)
-    await saveJobDetails(jobId, { itemId: row.id, stage: 'reading' }).catch(() => {})
+    const jobId = await createAiJob(EXPLAIN_JOB_KIND, row.id)
 
     // Fire and forget: the runner records its own success or failure on the job.
     void runExplainJob({
@@ -1014,7 +1009,9 @@ router.post('/:id/explain', aiActionLimiter, async (req, res) => {
   }
 })
 
-// ── POST /api/items/:id/extract-recipe — creates a NEW linked recipe item ─────
+// ── POST /api/items/:id/extract-recipe — starts a background job that creates a NEW linked recipe item ────
+// Returns 202 { jobId } at once. Poll GET /api/ingest/jobs/:id; when it completes, details say `found` (with
+// `recipeId` and `confidence`) or not (with `reason`). The source item is never modified.
 
 router.post('/:id/extract-recipe', aiActionLimiter, async (req, res) => {
   const body = aiActionSchema.safeParse(req.body ?? {})
@@ -1038,50 +1035,26 @@ router.post('/:id/extract-recipe', aiActionLimiter, async (req, res) => {
       }
     }
 
-    const result = await extractRecipe(
-      { title: row.title, content: row.content, sourceUrl: row.source_url },
-      { provider: body.data.provider, cloudSafe: cloudSafe(row) },
-    )
-    if (!result.found) {
-      res.status(422).json({ error: result.reason, found: false })
+    if (await anotherAiJobRunning()) {
+      res.status(409).json({ error: AI_JOB_BUSY_MESSAGE, running: true })
       return
     }
 
-    const structured = { ...result.recipe } as unknown as Record<string, unknown>
-    const video = findYoutubeUrl(row.source_url ?? '') ?? findYoutubeUrl(row.content)
-    const sourceUrl = row.source_url ?? video?.url ?? undefined
+    const jobId = await createAiJob(EXTRACT_RECIPE_JOB_KIND, row.id)
 
-    const client = await pool.connect()
-    try {
-      await client.query('BEGIN')
-      const recipe = await createItem(client, {
-        title: result.title,
-        type: 'recipe',
-        content: renderRecipeContent(result.title, result.recipe),
-        structured,
-        source: video ? 'youtube' : row.source,
-        sourceUrl,
-        categories: mapToCategories('recipe', structured),
-        tags: ['recipe'],
-        reviewed: false, // AI-made: goes to the review queue
-        confidence: result.confidence,
-        intent: 'actionable',
-        derivedFrom: row.id,
-      })
-      await client.query('UPDATE items SET extraction_model = $1 WHERE id = $2', [result.model, recipe.id])
-      await client.query('COMMIT')
+    // Fire and forget: the runner records its own success, "nothing found" or failure on the job.
+    void runExtractRecipeJob({
+      jobId,
+      itemId: row.id,
+      title: row.title,
+      content: row.content,
+      sourceUrl: row.source_url,
+      source: row.source,
+      provider: body.data.provider,
+      cloudSafe: cloudSafe(row),
+    })
 
-      embedItem(recipe.title, recipe.content)
-        .then(vector => pool.query('UPDATE items SET embedding = $1 WHERE id = $2', [JSON.stringify(vector), recipe.id]))
-        .catch(err => logger.error(err, `Embedding failed for ${recipe.id}`))
-
-      res.status(201).json({ recipe, confidence: result.confidence })
-    } catch (err) {
-      await client.query('ROLLBACK')
-      throw err
-    } finally {
-      client.release()
-    }
+    res.status(202).json({ jobId })
   } catch (err) {
     if (sendActionError(res, err)) return
     logger.error(err, 'POST /api/items/:id/extract-recipe error')
