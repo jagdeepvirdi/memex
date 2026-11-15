@@ -5,6 +5,7 @@ import { pool } from '../db/client.js'
 import { setItemCategories, setItemTags, rowToItem, CLOUD_SAFE_COLS } from '../db/helpers.js'
 import { classify, type ClassificationResult } from './classifier.js'
 import { cloudSafe, type CloudSafeItem } from './cloudSafe.js'
+import { extractAndLinkEntities } from './entityService.js'
 import type { Item, ItemType, ItemSource, ItemIntent, ItemPriority } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
@@ -157,6 +158,7 @@ export async function applyClassificationResult(
     )
     if (result.tags.length > 0) await setItemTags(client, itemId, result.tags)
     if (result.categories.length > 0) await setItemCategories(client, itemId, result.categories)
+    await extractAndLinkEntities(client, itemId, result.type, structuredWithSummary)
   }
 }
 

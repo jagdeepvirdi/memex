@@ -16,6 +16,7 @@ import { findSimilarItems, findItemsBySourceUrl, mergeSimilar } from '../service
 import { embedQuery, embedItem } from '../services/embedder.js';
 import { pool } from '../db/client.js';
 import { setItemTags, createItem } from '../db/helpers.js';
+import { extractAndLinkEntities } from '../services/entityService.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
 import logger from '../lib/logger.js'
 import { createJob, saveJobDetails, failJob, hasRunningJob } from '../services/ingestJobs.js'
@@ -528,6 +529,8 @@ router.post('/quicksave', ingestLimiter, async (req, res) => {
         reviewed: false,
       });
       await client.query('COMMIT');
+      // Best effort, after the commit: link repo / creator / channel entities.
+      await extractAndLinkEntities(client, savedItem.id, savedItem.type, savedItem.structured);
     } catch (err) {
       await client.query('ROLLBACK');
       throw err;

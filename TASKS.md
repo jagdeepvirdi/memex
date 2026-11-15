@@ -662,7 +662,7 @@ markitdown --help
 `source='instagram'`.
 
 ### Phase 2 — v1: entity linking, digest, bulk import
-- [ ] `server/src/services/entityService.ts` — branch on `type==='link' && structured.kind` (key on `structured.kind`, not `type`):
+- [x] `server/src/services/entityService.ts` — branch on `type==='link' && structured.kind` (key on `structured.kind`, not `type`): *(done 2026-11-15: keyed on `structured.kind`/`videoId`; roles `repo`/`owner`/`creator`/`channel`; identifiers are not embedded so `resolveEntities` cannot fuzzy-merge them; re-linking replaces old links; wired into POST /api/items, quicksave, apply-extraction, `applyClassificationResult`, bulk paste and PUT. **Backfill still to run:** `npx tsx src/scripts/seedEntityGraph.ts` from `server/`. Nothing in the UI reads `item_entities` yet.)*
       creator→`person`, owner→`organization`, repo→`other`; call from `POST /api/items`; `seedEntityGraph.ts` backfill
 - [x] `server/src/services/digestService.ts` — add `i.intent`, `i.priority` to `ITEM_COLS`; additive `byPriority` field *(done 2026-11-15: this week's counts per priority + top 5 essential/useful; `Digest.tsx` shows chips, essential cards, "to triage" shortcut)*
       (keep `recentItems` so `Digest.test.tsx` passes); update `Digest.tsx` + tests
@@ -834,7 +834,7 @@ markitdown --help
   - both Zod-validated, rate-limited, return 409 if already extracted (with a force flag)
 - [x] `client/src/pages/Item.tsx` — *Explain* and *Extract recipe* buttons (shown by item kind), provider chooser, progress state, link between video item and derived recipe both ways *(done 2026-11-15; `components/item/ItemAiActions.tsx`)*
 - [x] `client/src/components/cards/*` — recipe card shows "Extracted from a saved link" marker; the Item page links back to the source
-- [ ] `server/src/services/entityService.ts` — optional: channel as `organization` entity (YouTube channel) — only if the Phase 2 entity work above has shipped
+- [x] `server/src/services/entityService.ts` — optional: channel as `organization` entity (YouTube channel) — only if the Phase 2 entity work above has shipped *(done 2026-11-15 with the entity linking above: role `channel`)*
 - [x] Tests: explain/extract services, itemSource, route tests (linked item created, duplicate guard, error mapping, rollback), ItemAiActions + Item page + RecipeCard *(done 2026-11-15: server 472 → 534, client 529)*
 - **Acceptance:** on a cooking video, *Extract recipe* creates a separate, editable recipe item linked to the video; on a lecture/tutorial, *Explain* stores a structured explanation; neither runs unless the user clicks.
 

@@ -192,6 +192,9 @@ router.post('/', async (req, res) => {
 
     await client.query('COMMIT')
 
+    // Best effort, after the commit (autocommit): a failed link must never undo the save.
+    await extractAndLinkEntities(client, itemId, type ?? 'note', structured)
+
     const item = await fetchItem(client, itemId)
 
     if (item) {
@@ -686,6 +689,7 @@ router.post('/:id/apply-extraction/:extractionId', async (req, res) => {
     )
     if (ext.tags?.length > 0) await setItemTags(client, req.params.id, ext.tags)
     if (ext.categories?.length > 0) await setItemCategories(client, req.params.id, ext.categories)
+    await extractAndLinkEntities(client, req.params.id, ext.type, ext.structured)
 
     // Update applied flags
     await client.query('UPDATE item_extractions SET applied = FALSE WHERE item_id = $1', [req.params.id])
