@@ -37,7 +37,7 @@ beforeEach(() => {
   for (const v of Object.values(KEY_ENV)) delete process.env[v]
   vi.mocked(pool.query).mockImplementation((async (sql: string, params: unknown[] = []) => {
     if (/FROM settings WHERE key = 'bookmarklet_key'/.test(sql)) {
-      return { rows: bookmarkletKey ? [{ value: JSON.stringify(bookmarkletKey) }] : [] }
+      return { rows: bookmarkletKey ? [{ value: bookmarkletKey }] : [] } // pg returns JSONB strings already parsed
     }
     if (/api_keys/.test(sql) && tableMissing) throw Object.assign(new Error('relation "api_keys" does not exist'), { code: '42P01' })
     if (/^\s*SELECT .* FROM api_keys/.test(sql)) return { rows: table.map(r => ({ ...r })) }

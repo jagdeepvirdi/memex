@@ -765,6 +765,11 @@ function BookmarkletSection() {
                 Warns if a similar item already exists
               </p>
               <p className="flex items-start gap-1.5">
+                <span className="text-green-400 shrink-0 mt-0.5">✓</span>
+                The key inside the bookmark can only save pages — it cannot read or change anything else. If you ever share
+                or sync the bookmark somewhere you don't trust, regenerate the key.
+              </p>
+              <p className="flex items-start gap-1.5">
                 <span className="text-amber-400 shrink-0 mt-0.5">⚠</span>
                 Requires Memex to be running on <code className="bg-white/10 px-1 rounded">localhost:3002</code>
               </p>

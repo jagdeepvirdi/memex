@@ -29,6 +29,7 @@ import { checkOllamaHealth } from './services/ollama.js'
 import { startEmbeddingWorker } from './services/embeddingWorker.js'
 import logger from './lib/logger.js'
 import { refreshedSessionToken, REFRESH_HEADER } from './lib/session.js'
+import { isBookmarkletRoute, matchesBookmarkletKey } from './lib/bookmarkletScope.js'
 
 // Extend Express Request type
 declare global {
@@ -84,12 +85,16 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction) =
     return next()
   }
 
-  // 2. Try bookmarklet key (persistent, never expires)
+  // 2. Try the bookmarklet key (persistent, never expires). It is a deliberately weak credential —
+  // it sits in a browser bookmark — so it may only make the one request the bookmarklet makes.
   try {
     const { rows } = await pool.query(
       "SELECT value FROM settings WHERE key = 'bookmarklet_key'",
     )
-    if (rows.length > 0 && rows[0].value === JSON.stringify(token)) {
+    if (rows.length > 0 && matchesBookmarkletKey(token, rows[0].value)) {
+      if (!isBookmarkletRoute(req.method, req.path)) {
+        return res.status(403).json({ error: 'This key can only be used to save pages from the bookmarklet.' })
+      }
       req.user = 'bookmarklet'
       return next()
     }
