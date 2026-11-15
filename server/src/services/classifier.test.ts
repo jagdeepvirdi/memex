@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { classify, mapToCategories } from './classifier'
 
 vi.mock('./ai', () => ({ aiChat: vi.fn() }))
+vi.mock('./githubApi', () => ({ lookupGithubRepo: vi.fn().mockResolvedValue(null) }))
 
 import { aiChat } from './ai'
 

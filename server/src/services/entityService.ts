@@ -2,7 +2,7 @@ import { PoolClient } from 'pg'
 import { embedQuery } from './embedder.js'
 import type { Entity, EntityType, ItemType, StructuredData, MediaData, BookData, PlaceData, StockData } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
-import { parseGithubRepoUrl } from './githubRepo.js'
+import { repoSlugFromStructured } from './githubRepo.js'
 
 /**
  * Finds an entity by exact name/type or creates it.
@@ -69,7 +69,6 @@ export async function linkItemToEntity(
 // ── Developer-knowledge entities (repos, creators, owners, YouTube channels) ──────────────────
 
 const DEV_KINDS = new Set(['repo', 'prompt', 'skill', 'explainer', 'tool'])
-const REPO_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/
 const OWNER_NAME = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/
 const HANDLE = /^[A-Za-z0-9._]{1,30}$/
 
@@ -103,14 +102,10 @@ export function devEntityRefs(s: Record<string, unknown>): DevEntityRefs {
   const isDev = typeof s.kind === 'string' && DEV_KINDS.has(s.kind)
 
   if (isDev) {
-    let repo = str(s.repoName).replace(/\.git$/i, '')
-    if (!REPO_NAME.test(repo)) {
-      const parsed = parseGithubRepoUrl(str(s.repoUrl))
-      repo = parsed ? `${parsed.owner}/${parsed.repo}` : ''
-    }
+    const repo = repoSlugFromStructured(s)
     if (repo) {
-      refs.repo = repo.toLowerCase()
-      refs.owner = repo.split('/')[0].toLowerCase()
+      refs.repo = repo
+      refs.owner = repo.split('/')[0]
     } else if (OWNER_NAME.test(str(s.owner))) {
       refs.owner = str(s.owner).toLowerCase()
     }

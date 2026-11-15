@@ -12,6 +12,7 @@ import { encryptVaultItem } from '../lib/crypto'
 import PriorityPicker from '../components/PriorityPicker'
 import ItemAiActions, { DerivedFromLink } from '../components/item/ItemAiActions'
 import ConnectedEntities from '../components/item/ConnectedEntities'
+import GithubMeta from '../components/item/GithubMeta'
 import type { Item, ItemExtraction, ItemPriority, LinkSummary, RepoData } from '../../../shared/types'
 
 const DEV_KIND_LABEL: Record<string, string> = {
@@ -473,6 +474,7 @@ export default function ItemPage() {
                   )
                 )}
                 {s.whatItDoes && <p className="text-sm text-ink-muted leading-relaxed">{s.whatItDoes}</p>}
+                <GithubMeta item={item} onItemUpdated={setItem} />
                 {s.creatorHandle && <span className="text-xs text-ink-muted">Shared by @{s.creatorHandle.replace(/^@/, '')}</span>}
                 {s.promptText && (
                   <pre className="text-xs text-ink bg-bg border border-white/5 rounded-lg p-3 whitespace-pre-wrap font-mono">{s.promptText}</pre>

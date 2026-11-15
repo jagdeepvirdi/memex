@@ -8,9 +8,11 @@ import {
 } from './classifier'
 
 vi.mock('./ai', () => ({ aiChat: vi.fn() }))
+vi.mock('./githubApi', () => ({ lookupGithubRepo: vi.fn().mockResolvedValue(null) }))
 vi.mock('./settings', () => ({ getAiConfig: vi.fn().mockResolvedValue({ model: 'test-model' }) }))
 
 import { aiChat } from './ai'
+import { lookupGithubRepo } from './githubApi'
 
 const mockAI = (obj: Record<string, unknown>) => vi.mocked(aiChat).mockResolvedValueOnce(JSON.stringify(obj))
 
@@ -143,5 +145,70 @@ describe('classify() dev-knowledge handling', () => {
     mockAI({ type: 'link', title: 'Article', categories: ['Links', 'Articles'], tags: [], summary: 's', structured: {} })
     const r = await classify('https://example.com/post')
     expect(r.categories).toEqual(['Links', 'Articles'])
+  })
+})
+
+// ── GitHub metadata ──────────────────────────────────────────────────────────
+
+describe('classify — GitHub repo metadata', () => {
+  const META = {
+    fullName: 'anthropics/claude-code', stars: 12345, forks: 900, language: 'TypeScript', description: 'An agentic coding tool',
+    topics: ['ai'], license: 'MIT', pushedAt: '2026-11-01T00:00:00Z', archived: false, isFork: false, fetchedAt: '2026-11-15T00:00:00Z',
+  }
+  const repoReply = { type: 'link', title: 'claude-code', categories: ['Tech'], tags: [], summary: 'A coding agent.', confidence: 80, structured: { kind: 'repo', repoName: 'Anthropics/Claude-Code' } }
+
+  beforeEach(() => {
+    vi.mocked(aiChat).mockReset()
+    vi.mocked(lookupGithubRepo).mockReset().mockResolvedValue(null)
+  })
+
+  it('adds structured.github for a repo item, asking about the lower-cased owner/repo', async () => {
+    vi.mocked(lookupGithubRepo).mockResolvedValue(META as never)
+    mockAI(repoReply)
+    const r = await classify('https://github.com/Anthropics/Claude-Code', { sourceUrl: 'https://github.com/Anthropics/Claude-Code' })
+    expect(lookupGithubRepo).toHaveBeenCalledWith('anthropics/claude-code')
+    expect((r.structured as { github?: unknown }).github).toEqual(META)
+    expect(r.structured).toMatchObject({ kind: 'repo', repoName: 'Anthropics/Claude-Code' }) // everything else is kept
+  })
+
+  it('leaves the result exactly as it was when the lookup returns nothing (strict local, rate limit, 404…)', async () => {
+    mockAI(repoReply)
+    const r = await classify('https://github.com/anthropics/claude-code', { sourceUrl: 'https://github.com/anthropics/claude-code' })
+    expect(lookupGithubRepo).toHaveBeenCalledTimes(1)
+    expect(r.structured).not.toHaveProperty('github')
+    expect(r.categories).toEqual(['Tech', 'AI', 'Repos'])
+  })
+
+  it('looks up a prompt/tool item that names a repo, but never an item with no repo', async () => {
+    vi.mocked(lookupGithubRepo).mockResolvedValue(META as never)
+    mockAI({ ...repoReply, structured: { kind: 'tool', repoUrl: 'https://github.com/anthropics/claude-code' } })
+    await classify('a tool post')
+    expect(lookupGithubRepo).toHaveBeenCalledWith('anthropics/claude-code')
+
+    vi.mocked(lookupGithubRepo).mockClear()
+    mockAI({ ...repoReply, structured: { kind: 'prompt', promptText: 'You are a reviewer' } })
+    await classify('a prompt post')
+    expect(lookupGithubRepo).not.toHaveBeenCalled()
+
+    mockAI({ type: 'note', title: 'Groceries', categories: [], tags: [], summary: '', confidence: 90, structured: {} })
+    await classify('milk, eggs')
+    expect(lookupGithubRepo).not.toHaveBeenCalled()
+  })
+
+  it('does not look up a repo name the model made up (not a real owner/repo)', async () => {
+    mockAI({ ...repoReply, structured: { kind: 'repo', repoName: 'some cool project', repoUrl: 'https://example.com/x' } })
+    await classify('a repo post')
+    expect(lookupGithubRepo).not.toHaveBeenCalled()
+  })
+
+  it('also applies on the retry path and the fallback path', async () => {
+    vi.mocked(lookupGithubRepo).mockResolvedValue(META as never)
+    vi.mocked(aiChat).mockResolvedValueOnce('not json').mockResolvedValueOnce(JSON.stringify(repoReply))
+    const retried = await classify('https://github.com/anthropics/claude-code', { sourceUrl: 'https://github.com/anthropics/claude-code' })
+    expect((retried.structured as { github?: unknown }).github).toEqual(META)
+
+    vi.mocked(aiChat).mockResolvedValueOnce('nope').mockResolvedValueOnce('still nope')
+    const fell = await classify('https://github.com/anthropics/claude-code', { sourceUrl: 'https://github.com/anthropics/claude-code' })
+    expect((fell.structured as { github?: unknown }).github).toEqual(META) // a bare repo link still gets its facts
   })
 })

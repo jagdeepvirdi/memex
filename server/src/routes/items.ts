@@ -33,6 +33,8 @@ import { runExplainJob } from '../services/explainJob.js'
 import { runExtractRecipeJob } from '../services/extractRecipeJob.js'
 import { anotherAiJobRunning, createAiJob, EXPLAIN_JOB_KIND, EXTRACT_RECIPE_JOB_KIND, AI_JOB_BUSY_MESSAGE } from '../services/actionJobs.js'
 import { describeActionError, actionErrorBody } from '../services/actionErrors.js'
+import { fetchGithubRepo, GithubLookupError } from '../services/githubApi.js'
+import { repoSlugFromStructured, parseGithubRepoUrl } from '../services/githubRepo.js'
 import type { ItemType, ItemSource, ItemIntent, ConnectedEntity } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
@@ -1059,6 +1061,65 @@ router.post('/:id/extract-recipe', aiActionLimiter, async (req, res) => {
     if (sendActionError(res, err)) return
     logger.error(err, 'POST /api/items/:id/extract-recipe error')
     res.status(500).json({ error: 'Failed to extract recipe' })
+  }
+})
+
+// ── POST /api/items/:id/github — refresh stars / language / last push from the GitHub API ──────────
+// Synchronous (one small request). Always asks GitHub afresh; never in Strict Local Mode. Saved on
+// item.structured.github. Errors carry a message the UI can show as is.
+
+const githubLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: Number(process.env.GITHUB_REFRESH_RATE_LIMIT_MAX ?? 20),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many refreshes. Slow down.' },
+})
+
+const GITHUB_STATUS: Record<GithubLookupError['kind'], number> = {
+  invalid: 422, blocked: 409, not_found: 404, rate_limited: 429, unavailable: 502,
+}
+
+router.post('/:id/github', githubLimiter, async (req, res) => {
+  try {
+    const { rows } = await pool.query<{ id: string; encrypted: boolean; source_url: string | null; structured: Record<string, unknown> | null }>(
+      'SELECT id, encrypted, source_url, structured FROM items WHERE id = $1 AND deleted_at IS NULL',
+      [String(req.params.id)],
+    )
+    const row = rows[0]
+    if (!row) { res.status(404).json({ error: 'Item not found' }); return }
+    if (row.encrypted) { res.status(400).json({ error: 'Encrypted items cannot be processed' }); return }
+
+    const fromUrl = row.source_url ? parseGithubRepoUrl(row.source_url) : null
+    const slug = repoSlugFromStructured(row.structured ?? {}) ?? (fromUrl ? `${fromUrl.owner}/${fromUrl.repo}`.toLowerCase() : undefined)
+    if (!slug) { res.status(422).json({ error: 'This item is not a GitHub repository.' }); return }
+
+    let github
+    try {
+      github = await fetchGithubRepo(slug, { fresh: true })
+    } catch (err) {
+      if (err instanceof GithubLookupError) {
+        res.status(GITHUB_STATUS[err.kind]).json({ error: err.message, kind: err.kind, ...(err.resetAt ? { resetAt: err.resetAt } : {}) })
+        return
+      }
+      throw err
+    }
+
+    await pool.query(
+      `UPDATE items
+         SET structured = jsonb_set(COALESCE(structured, '{}'::jsonb), '{github}', $1::jsonb), updated_at = NOW()
+       WHERE id = $2 AND deleted_at IS NULL`,
+      [JSON.stringify(github), row.id],
+    )
+    const client = await pool.connect()
+    try {
+      res.json({ item: await fetchItem(client, row.id), github })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    logger.error(err, 'POST /api/items/:id/github error')
+    res.status(500).json({ error: 'Failed to refresh GitHub info' })
   }
 })
 

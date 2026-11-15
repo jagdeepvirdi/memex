@@ -1,7 +1,8 @@
 import type { Item, RepoData, DevKnowledgeKind } from '@shared/types'
 import { CardBase, CardTitle, CardFooter, TypeBadge, Muted } from './CardBase'
 import { PriorityBadge } from '../PriorityPicker'
-import { Calendar } from 'lucide-react'
+import { Calendar, Star } from 'lucide-react'
+import { formatCount } from '../../lib/format'
 
 interface Props {
   item: Item
@@ -85,6 +86,15 @@ export default function LinkCard({ item, onClick }: Props) {
       {/* owner/repo */}
       {devKind === 'repo' && structured.repoName && (
         <span className="font-mono text-xs text-ink-muted truncate">{structured.repoName}</span>
+      )}
+
+      {/* stars / language, when GitHub was asked */}
+      {structured.github && typeof structured.github.stars === 'number' && (
+        <span data-testid="card-github" className="flex items-center gap-2 text-xs text-ink-muted">
+          <span className="flex items-center gap-1"><Star size={11} className="text-amber-400" /> {formatCount(structured.github.stars)}</span>
+          {structured.github.language && <span>{structured.github.language}</span>}
+          {structured.github.archived && <span className="text-amber-400">Archived</span>}
+        </span>
       )}
 
       {/* Summary / content preview */}

@@ -63,3 +63,31 @@ describe('LinkCard — developer knowledge', () => {
     expect(screen.getByText('Web')).toBeInTheDocument()
   })
 })
+
+describe('LinkCard — GitHub facts', () => {
+  const repoItem = (github?: Record<string, unknown>) => ({
+    id: 'r1', title: 'claude-code', type: 'link', content: '', source: 'url', sourceUrl: 'https://github.com/anthropics/claude-code',
+    structured: { kind: 'repo', repoName: 'anthropics/claude-code', ...(github ? { github } : {}) }, categories: [], tags: [],
+    reviewed: true, createdAt: new Date(), updatedAt: new Date(),
+  }) as never
+
+  it('shows stars and language when GitHub was asked', () => {
+    render(<LinkCard item={repoItem({ stars: 12345, language: 'TypeScript', archived: false })} />)
+    const line = screen.getByTestId('card-github')
+    expect(line).toHaveTextContent('12.3k')
+    expect(line).toHaveTextContent('TypeScript')
+    expect(line).not.toHaveTextContent('Archived')
+  })
+
+  it('flags an archived repo', () => {
+    render(<LinkCard item={repoItem({ stars: 5, archived: true })} />)
+    expect(screen.getByTestId('card-github')).toHaveTextContent('Archived')
+  })
+
+  it('shows nothing extra without metadata, or with junk metadata', () => {
+    const { rerender } = render(<LinkCard item={repoItem()} />)
+    expect(screen.queryByTestId('card-github')).not.toBeInTheDocument()
+    rerender(<LinkCard item={repoItem({ stars: 'lots' })} />)
+    expect(screen.queryByTestId('card-github')).not.toBeInTheDocument()
+  })
+})

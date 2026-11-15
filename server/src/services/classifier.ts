@@ -1,7 +1,8 @@
 import { z } from 'zod'
 import { aiChat } from './ai.js'
 import { getAiConfig } from './settings.js'
-import { detectGithubRepoSubject, type GithubRepoRef } from './githubRepo.js'
+import { detectGithubRepoSubject, repoSlugFromStructured, type GithubRepoRef } from './githubRepo.js'
+import { lookupGithubRepo } from './githubApi.js'
 
 export { parseGithubRepoUrl, detectGithubRepoSubject, type GithubRepoRef } from './githubRepo.js'
 import type { ItemType, RecipeData, MediaData, BookData, StockData, PlaceData, RepoData, DevKnowledgeKind } from '../../../shared/types.js'
@@ -429,6 +430,29 @@ This item is a YouTube video. You are given its title, channel and (usually) a t
 - If the transcript is unavailable, classify from title and channel only, keep the summary to what they support, and use confidence 40 or lower.
 - Never invent details that are not in the text.`
 
+// A small local model asked for ten fields at once gets videoKind wrong or leaves it out (measured on 25 saved videos:
+// 10/25 right). One focused question about the title and channel alone got 23/25, and beat every variant that also
+// showed it the transcript. The two misses are documentaries, which it calls "talk" rather than "other".
+const VIDEO_KIND_SYSTEM = `Classify this YouTube video into exactly ONE kind: recipe (the host shows or explains how to cook or bake a food or drink dish), tutorial (teaches how to do, build, code or learn something — courses, lessons, DIY and crafts included), review (evaluates or compares products, tools, films or books), talk (lecture, interview, podcast, commentary, documentary or presentation), other (anything else). Judge by what the video DOES, not by its topic: a video that shows making a dish is a recipe; a coding or any other course is a tutorial however long; a documentary or interview is a talk or other. Return JSON: {"kind": "recipe" | "tutorial" | "review" | "talk" | "other"}`
+
+/** The "Title:" / "Channel:" lines that open the classifier text for a video. */
+export function videoHeader(text: string): string {
+  const lines = text.split(/\r?\n/).slice(0, 2).filter(l => /^(Title|Channel):\s*\S/.test(l))
+  return lines.join('\n')
+}
+
+/** One focused call for the video's kind. Undefined on any problem, so the model's own answer is kept. */
+async function detectVideoKind(text: string, aiOpts: Parameters<typeof aiChat>[5]): Promise<VideoKind | undefined> {
+  const header = videoHeader(text)
+  if (!header.startsWith('Title:')) return undefined
+  try {
+    const raw = await aiChat(header, VIDEO_KIND_SYSTEM, 'json', { temperature: 0, num_predict: 60 }, undefined, aiOpts)
+    return parseVideoKind((JSON.parse(raw) as { kind?: unknown }).kind)
+  } catch {
+    return undefined
+  }
+}
+
 function parseVideoKind(value: unknown): VideoKind | undefined {
   return typeof value === 'string' && (VIDEO_KINDS as readonly string[]).includes(value) ? (value as VideoKind) : undefined
 }
@@ -475,6 +499,15 @@ function applyDevKnowledge(result: ClassificationResult, text: string, hints?: C
   return result
 }
 
+/** Adds `structured.github` for items that point at a GitHub repo. Returns the result unchanged on any problem. */
+async function withGithubMeta(result: ClassificationResult): Promise<ClassificationResult> {
+  const structured = result.structured as Record<string, unknown>
+  const slug = repoSlugFromStructured(structured)
+  if (!slug || typeof structured.kind !== 'string') return result
+  const github = await lookupGithubRepo(slug)
+  return github ? { ...result, structured: { ...structured, github } } : result
+}
+
 // ── Main classify function ────────────────────────────────────────────────────
 
 function fallback(text: string): ClassificationResult {
@@ -502,8 +535,17 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
   }
 
   // Video first, then dev-knowledge, so a repo/prompt explainer on YouTube still files under Tech > AI.
-  const finish = (result: ClassificationResult) =>
-    applyDevKnowledge(hints?.video ? applyYoutube(result, hints.video) : result, text, hints)
+  // Then, for repo items, stars/language/last push from the GitHub API — here, once, so every capture and
+  // re-classify path gets it and it is fetched BEFORE any database transaction opens. Failure-soft.
+  const finish = async (result: ClassificationResult) => {
+    let r = result
+    if (hints?.video) {
+      const kind = await detectVideoKind(text, aiOpts)
+      if (kind) r = { ...r, structured: { ...r.structured, videoKind: kind } }
+      r = applyYoutube(r, hints.video)
+    }
+    return withGithubMeta(applyDevKnowledge(r, text, hints))
+  }
 
   // ── Attempt 1: normal prompt ──────────────────────────────────────────────
   try {

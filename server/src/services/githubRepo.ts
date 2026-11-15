@@ -7,6 +7,13 @@ const GITHUB_RESERVED = new Set([
   'security', 'customer-stories', 'readme', 'team', 'issues', 'pulls',
 ])
 
+const REPO_SLUG = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}\/[A-Za-z0-9._-]{1,100}$/
+
+/** True for a plain `owner/repo` name (the only shape ever put into a GitHub API URL). */
+export function isValidRepoSlug(value: string): boolean {
+  return REPO_SLUG.test(value) && !value.endsWith('.') && !value.split('/').some(part => part === '.' || part === '..')
+}
+
 export interface GithubRepoRef {
   owner: string
   repo: string
@@ -23,6 +30,20 @@ export function parseGithubRepoUrl(raw: string): GithubRepoRef | null {
   const [, owner, repo] = m
   if (GITHUB_RESERVED.has(owner.toLowerCase()) || repo === '.' || repo === '..') return null
   return { owner, repo, url: `https://github.com/${owner}/${repo}` }
+}
+
+/**
+ * The lower-cased `owner/repo` an item's structured data points at: `repoName`, else the repo parsed from `repoUrl`.
+ * Model output is untrusted, so anything that is not a real repo name yields undefined.
+ */
+export function repoSlugFromStructured(s: Record<string, unknown>): string | undefined {
+  const str = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
+  let repo = str(s.repoName).replace(/\.git$/i, '')
+  if (!isValidRepoSlug(repo)) {
+    const parsed = parseGithubRepoUrl(str(s.repoUrl))
+    repo = parsed ? `${parsed.owner}/${parsed.repo}` : ''
+  }
+  return repo ? repo.toLowerCase() : undefined
 }
 
 /**

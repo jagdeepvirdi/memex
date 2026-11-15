@@ -67,6 +67,28 @@ export interface RecipeData {
 /** Developer knowledge saved from a link or caption (type stays 'link'). */
 export type DevKnowledgeKind = 'repo' | 'prompt' | 'skill' | 'explainer' | 'tool'
 
+/** Public facts about a GitHub repository, fetched from the GitHub API (see services/githubApi.ts). */
+export interface GithubRepoMeta {
+  /** Canonical `owner/repo`, lower-cased. */
+  fullName: string
+  stars: number
+  forks: number
+  language?: string
+  /** GitHub's own one-line description (not the AI summary). */
+  description?: string
+  topics: string[]
+  /** SPDX id, e.g. "MIT". */
+  license?: string
+  /** ISO time of the last push — the "is this maintained?" signal. */
+  pushedAt?: string
+  archived: boolean
+  isFork: boolean
+  htmlUrl?: string
+  homepage?: string
+  /** ISO time this was fetched; the UI shows how fresh it is. */
+  fetchedAt: string
+}
+
 export interface RepoData {
   kind: DevKnowledgeKind
   repoName?: string        // "owner/repo"
@@ -75,6 +97,7 @@ export interface RepoData {
   creatorHandle?: string   // who posted it (e.g. an Instagram handle), without the leading @
   platform?: 'github' | 'instagram' | 'youtube' | 'web'
   whatItDoes?: string      // plain-English "what it is / what it's for"
+  github?: GithubRepoMeta  // stars, language, last push… (when a lookup succeeded)
   promptText?: string      // for kind 'prompt' | 'skill'
   summary?: string
 }

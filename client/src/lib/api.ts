@@ -20,6 +20,7 @@ import type {
   ExtractRecipeRequest,
   ExtractRecipeStartResponse,
   ConnectedEntity,
+  GithubRepoMeta,
 } from '../../../shared/types'
 import { toast } from 'sonner'
 import { useAuthStore } from '../store/authStore'
@@ -380,6 +381,14 @@ export function explainItem(itemId: string, opts: ExplainRequest = {}): Promise<
 /** Starts Extract recipe as a background job: returns its id at once. Follow it with fetchIngestJob. */
 export function extractRecipeFromItem(itemId: string, opts: ExtractRecipeRequest = {}): Promise<ExtractRecipeStartResponse> {
   return apiFetch<ExtractRecipeStartResponse>(`/items/${itemId}/extract-recipe`, { method: 'POST', body: JSON.stringify(opts) })
+}
+
+/**
+ * Fetches fresh stars / language / last push for a GitHub repo item from the GitHub API and saves them on the item.
+ * Rejects with GitHub's reason in the message (not found, rate limit, Strict Local Mode…).
+ */
+export function refreshGithubInfo(itemId: string): Promise<{ item: Item; github: GithubRepoMeta }> {
+  return apiFetch<{ item: Item; github: GithubRepoMeta }>(`/items/${itemId}/github`, { method: 'POST' })
 }
 
 /** Entities this item is linked to (creator, repo, channel, director…), with the other items sharing each. */
