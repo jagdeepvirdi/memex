@@ -90,7 +90,7 @@ export interface ExplanationData {
   model: string
   generatedAt: string
   /** What the explanation was built from. */
-  basis: 'transcript' | 'content'
+  basis: 'transcript' | 'content' | 'description'
   /** True when the source text was cut (long video / page). */
   truncated: boolean
 }
