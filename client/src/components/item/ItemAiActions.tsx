@@ -4,7 +4,6 @@ import { toast } from 'sonner'
 import { Loader2, Sparkles, ChefHat, RefreshCw, Video } from 'lucide-react'
 import {
   ApiError,
-  explainItem,
   extractRecipeFromItem,
   fetchAiProviders,
   fetchDerivedItems,
@@ -12,6 +11,7 @@ import {
 } from '../../lib/api'
 import type { AiProviderId, AiProviderInfo } from '../../lib/api'
 import type { ExplanationData, Item } from '../../../../shared/types'
+import { useExplainJob } from './useExplainJob'
 
 // ── Which items get these actions ─────────────────────────────────────────────
 
@@ -87,8 +87,8 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
   const actions = aiActionsFor(item)
   const [providers, setProviders] = useState<AiProviderInfo[] | null>(null)
   const [provider, setProvider] = useState<'' | AiProviderId>('')
-  const [explaining, setExplaining] = useState(false)
   const [extracting, setExtracting] = useState(false)
+  const { run: explainRun, start: startExplain } = useExplainJob(item.id, onItemUpdated)
   const [recipes, setRecipes] = useState<Item[]>([])
   const [noRecipe, setNoRecipe] = useState<string | null>(null)
 
@@ -110,15 +110,10 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
   const choice = provider || undefined
 
   const handleExplain = async () => {
-    setExplaining(true)
     try {
-      const res = await explainItem(item.id, { provider: choice, force: !!explanation })
-      onItemUpdated(res.item)
-      toast.success('Explanation saved')
+      await startExplain({ provider: choice, force: !!explanation })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to explain')
-    } finally {
-      setExplaining(false)
     }
   }
 
@@ -140,6 +135,7 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
     }
   }
 
+  const explaining = explainRun.running
   const busy = explaining || extracting
   const primary = 'bg-accent/10 hover:bg-accent/20 text-accent border-accent/20'
   const secondary = 'bg-white/5 hover:bg-white/10 text-ink-muted border-white/10'
@@ -188,6 +184,24 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
           </select>
         </label>
       </div>
+
+      {explaining && (
+        <div data-testid="explain-progress" className="space-y-1.5">
+          <div
+            role="progressbar"
+            aria-label="Explaining"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={explainRun.percent}
+            className="h-1.5 bg-white/5 rounded-full overflow-hidden"
+          >
+            <div className="h-full bg-accent transition-all duration-500" style={{ width: `${explainRun.percent}%` }} />
+          </div>
+          <p className="text-[11px] text-ink-muted">
+            {explainRun.label} <span className="text-ink-muted/70">You can leave this page — it keeps going and the result is saved.</span>
+          </p>
+        </div>
+      )}
 
       {noRecipe && (
         <p role="status" className="text-xs text-ink-muted bg-white/3 border border-white/5 rounded-lg px-3 py-2">

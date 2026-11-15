@@ -16,7 +16,7 @@ import type {
   NLFilterResponse,
   DigestResponse,
   ExplainRequest,
-  ExplainResponse,
+  ExplainStartResponse,
   ExtractRecipeRequest,
   ExtractRecipeResponse,
   ConnectedEntity,
@@ -372,8 +372,9 @@ export async function summarizeItemLinks(itemId: string): Promise<Item> {
 
 // ── On-demand AI actions (run only when the user clicks) ──────────────────────
 
-export function explainItem(itemId: string, opts: ExplainRequest = {}): Promise<ExplainResponse> {
-  return apiFetch<ExplainResponse>(`/items/${itemId}/explain`, { method: 'POST', body: JSON.stringify(opts) })
+/** Starts Explain as a background job: returns its id at once. Follow it with fetchIngestJob, then re-read the item. */
+export function explainItem(itemId: string, opts: ExplainRequest = {}): Promise<ExplainStartResponse> {
+  return apiFetch<ExplainStartResponse>(`/items/${itemId}/explain`, { method: 'POST', body: JSON.stringify(opts) })
 }
 
 export function extractRecipeFromItem(itemId: string, opts: ExtractRecipeRequest = {}): Promise<ExtractRecipeResponse> {
@@ -424,7 +425,16 @@ export interface IngestJobStatus {
   completed: number
   elapsed?: number | string
   error?: string
-  details?: { classified?: number; failed?: Array<{ itemId: string; title: string; error: string }> }
+  details?: {
+    classified?: number
+    failed?: Array<{ itemId: string; title: string; error: string }>
+    /** Explain jobs: which item, and where the work has got to. */
+    itemId?: string
+    stage?: 'reading' | 'summarising' | 'writing'
+    part?: number
+    parts?: number
+    model?: string
+  }
 }
 
 /** Dry run: splits the paste and reports what would be saved or skipped. Writes nothing. */

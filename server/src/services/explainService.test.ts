@@ -123,3 +123,49 @@ describe('explainItem — video description', () => {
     expect(String(vi.mocked(aiChat).mock.calls[0][0])).not.toContain('Video description')
   })
 })
+
+describe('explainItem — progress and budget', () => {
+  const long = Array.from({ length: 1500 }, (_, i) => `Sentence ${i}.`).join(' ')
+
+  it('reports one step for a short source: reading, then writing', async () => {
+    answer(GOOD)
+    const seen: Array<[string, number, number]> = []
+    await explainItem(item, { cloudSafe: true, onProgress: p => seen.push([p.stage, p.done, p.total]) })
+    expect(seen).toEqual([['reading', 0, 1], ['writing', 0, 1], ['writing', 1, 1]])
+  })
+
+  it('reports each part while summarising a long source, then the write-up', async () => {
+    vi.mocked(loadSourceText).mockResolvedValue({ text: long, basis: 'transcript', truncated: true })
+    answer(GOOD)
+    const seen: Array<{ stage: string; done: number; total: number; part?: number; parts?: number }> = []
+    await explainItem(item, { cloudSafe: true, onProgress: p => seen.push(p) })
+
+    const summarising = seen.filter(p => p.stage === 'summarising')
+    const parts = summarising[0].parts!
+    expect(parts).toBeGreaterThan(2)
+    expect(summarising.map(p => p.part)).toEqual(Array.from({ length: parts }, (_, i) => i + 1))
+    expect(summarising.map(p => p.done)).toEqual(Array.from({ length: parts }, (_, i) => i))
+    expect(seen.every(p => p.total === parts + 1 || (p.stage === 'reading' && p.total === 1))).toBe(true)
+    expect(seen.at(-1)).toMatchObject({ stage: 'writing', done: parts + 1, total: parts + 1 })
+    // progress only ever moves forward within the run
+    const dones = seen.filter(p => p.stage !== 'reading').map(p => p.done)
+    expect(dones).toEqual([...dones].sort((a, b) => a - b))
+  })
+
+  it('never breaks the work if the progress callback throws', async () => {
+    answer(GOOD)
+    const out = await explainItem(item, { cloudSafe: true, onProgress: () => { throw new Error('ui exploded') } })
+    expect(out.summary).toBe('It explains X.')
+  })
+
+  it('keeps each part summary short (this is what the wait is made of) and asks the final pass for full sentences', async () => {
+    vi.mocked(loadSourceText).mockResolvedValue({ text: long, basis: 'transcript', truncated: true })
+    answer(GOOD)
+    await explainItem(item, { cloudSafe: true })
+    const calls = vi.mocked(aiChat).mock.calls
+    const mapCall = calls[0]
+    expect(mapCall[3]).toMatchObject({ num_predict: 350 })
+    expect(String(mapCall[1])).toMatch(/at most 6 short bullets/)
+    expect(String(calls.at(-1)![1])).toMatch(/complete sentence/)
+  })
+})

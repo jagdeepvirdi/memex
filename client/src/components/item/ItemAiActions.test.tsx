@@ -14,10 +14,11 @@ vi.mock('../../lib/api', async orig => ({
   fetchAiProviders: vi.fn(),
   fetchDerivedItems: vi.fn(),
   fetchItem: vi.fn(),
+  fetchIngestJob: vi.fn(),
 }))
 
 import ItemAiActions, { DerivedFromLink, aiActionsFor } from './ItemAiActions'
-import { ApiError, explainItem, extractRecipeFromItem, fetchAiProviders, fetchDerivedItems, fetchItem } from '../../lib/api'
+import { ApiError, explainItem, extractRecipeFromItem, fetchAiProviders, fetchDerivedItems, fetchItem, fetchIngestJob } from '../../lib/api'
 import type { Item } from '../../../../shared/types'
 
 const video = (over: Partial<Item> = {}): Item => ({
@@ -33,8 +34,14 @@ const EXPLANATION = {
 }
 const RECIPE: Item = { ...video(), id: 'rec-1', title: 'Aglio e Olio', type: 'recipe', structured: {}, derivedFrom: 'vid-1' }
 
+const DONE = { status: 'completed', progress: 100, total: 1, completed: 1 }
+
 beforeEach(() => {
   vi.clearAllMocks()
+  sessionStorage.clear()
+  // Explain is a background job: starting returns an id, and the job is polled. Default: it finishes at once.
+  vi.mocked(explainItem).mockResolvedValue({ jobId: 'job-1' })
+  vi.mocked(fetchIngestJob).mockResolvedValue(DONE)
   vi.mocked(fetchAiProviders).mockResolvedValue([
     { id: 'ollama', configured: true, cloud: false, models: [] },
     { id: 'claude', configured: false, cloud: true, models: [] },
@@ -83,7 +90,7 @@ describe('ItemAiActions', () => {
 
   it('explains with the chosen provider and hands the updated item up', async () => {
     const updated = video({ structured: { explanation: EXPLANATION } })
-    vi.mocked(explainItem).mockResolvedValue({ item: updated, explanation: EXPLANATION })
+    vi.mocked(fetchItem).mockResolvedValue(updated)
     const onItemUpdated = vi.fn()
     render(<ItemAiActions item={video()} onItemUpdated={onItemUpdated} />)
 
@@ -93,11 +100,13 @@ describe('ItemAiActions', () => {
 
     await waitFor(() => expect(onItemUpdated).toHaveBeenCalledWith(updated))
     expect(explainItem).toHaveBeenCalledWith('vid-1', { provider: 'gemini', force: false })
-    expect(toast.success).toHaveBeenCalled()
+    expect(fetchIngestJob).toHaveBeenCalledWith('job-1')
+    expect(fetchItem).toHaveBeenCalledWith('vid-1')
+    expect(toast.success).toHaveBeenCalledWith('Explanation saved')
   })
 
   it('uses the default provider when none is picked', async () => {
-    vi.mocked(explainItem).mockResolvedValue({ item: video(), explanation: EXPLANATION })
+    vi.mocked(fetchItem).mockResolvedValue(video())
     render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
     fireEvent.click(await screen.findByRole('button', { name: /explain this/i }))
     await waitFor(() => expect(explainItem).toHaveBeenCalled())
@@ -105,7 +114,7 @@ describe('ItemAiActions', () => {
   })
 
   it('shows a saved explanation and re-runs with force', async () => {
-    vi.mocked(explainItem).mockResolvedValue({ item: video(), explanation: EXPLANATION })
+    vi.mocked(fetchItem).mockResolvedValue(video())
     render(<ItemAiActions item={video({ structured: { explanation: EXPLANATION } })} onItemUpdated={vi.fn()} />)
     const card = await screen.findByTestId('explanation')
     expect(card).toHaveTextContent('It teaches pasta.')

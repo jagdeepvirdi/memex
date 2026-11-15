@@ -6,24 +6,40 @@ import { aiChat, type AiCallOptions } from './ai.js'
 import { loadSourceText, chunkText, type SourceItem } from './itemSource.js'
 import type { ExplanationData } from '../../../shared/types.js'
 
+export type ExplainStage = 'reading' | 'summarising' | 'writing'
+
+/** Where a long explanation has got to. `done` of `total` steps; `part`/`parts` only while summarising. */
+export interface ExplainProgress {
+  stage: ExplainStage
+  done: number
+  total: number
+  part?: number
+  parts?: number
+}
+
 export interface ExplainOptions {
+  /** Called as each step starts and finishes. Must never throw (errors in it are ignored). */
+  onProgress?: (p: ExplainProgress) => void
   provider?: AiCallOptions['provider']
   /** Result of cloudSafe(item); false pins every call to Ollama. */
   cloudSafe: boolean
   signal?: AbortSignal
 }
 
+// Notes are an intermediate step the final pass re-reads, so they are kept short: on a local model, output
+// tokens are what the wait is made of.
 const MAP_SYSTEM =
   'You condense one part of a longer transcript or article into factual notes, written in English. ' +
-  'Return only a short bullet list of the concrete points, steps and facts in THIS part. ' +
+  'Return at most 6 short bullets (under 20 words each) with the concrete points, steps and facts in THIS part. ' +
   'Do not add anything that is not in the text.'
+const MAP_MAX_TOKENS = 350
 
 const REDUCE_SYSTEM =
   'You explain a video or article clearly for someone deciding whether and how to use it. ' +
   'Always write in English, even if the source text is in another language. ' +
   'Use ONLY the supplied text. Never invent facts. Return JSON: ' +
   '{"summary": "2-4 sentence plain-English explanation", ' +
-  '"keyPoints": ["the main ideas, max 8"], ' +
+  '"keyPoints": ["the main ideas, max 8, each one a complete sentence that says something specific (not a bare topic name)"], ' +
   '"steps": ["ordered how-to steps, or [] if the source is not instructional"], ' +
   '"takeaways": ["what to remember or do next, max 5"]}'
 
@@ -68,6 +84,10 @@ export class ExplainParseError extends Error {
 }
 
 export async function explainItem(item: SourceItem, opts: ExplainOptions): Promise<ExplanationData> {
+  const report = (p: ExplainProgress) => {
+    try { opts.onProgress?.(p) } catch { /* progress must never break the work */ }
+  }
+  report({ stage: 'reading', done: 0, total: 1 })
   const source = await loadSourceText(item)
   let used = ''
   const call: AiCallOptions = {
@@ -85,18 +105,22 @@ export async function explainItem(item: SourceItem, opts: ExplainOptions): Promi
     source.description && source.basis !== 'description' && `Video description:\n${source.description.slice(0, DESCRIPTION_CHARS)}`,
   ].filter(Boolean).join('\n')
   const chunks = chunkText(source.text)
+  const parts = chunks.length
+  // One step per part, plus the final write-up. A short source is just that one step.
+  const total = parts > 1 ? parts + 1 : 1
 
   let material: string
-  if (chunks.length === 1) {
+  if (parts === 1) {
     material = chunks[0]
   } else {
     const notes: string[] = []
-    for (let i = 0; i < chunks.length; i++) {
+    for (let i = 0; i < parts; i++) {
+      report({ stage: 'summarising', done: i, total, part: i + 1, parts })
       const out = await aiChat(
-        `${header}\n\nPart ${i + 1} of ${chunks.length}:\n${chunks[i]}`,
+        `${header}\n\nPart ${i + 1} of ${parts}:\n${chunks[i]}`,
         MAP_SYSTEM,
         undefined,
-        { temperature: 0, num_predict: 600 },
+        { temperature: 0, num_predict: MAP_MAX_TOKENS },
         opts.signal,
         call,
       )
@@ -104,6 +128,7 @@ export async function explainItem(item: SourceItem, opts: ExplainOptions): Promi
     }
     material = notes.join('\n\n')
   }
+  report({ stage: 'writing', done: total - 1, total })
 
   const raw = await aiChat(
     `${header}\n\n${chunks.length > 1 ? 'Notes from each part of the source' : 'Source text'}:\n${material}`,
@@ -116,6 +141,7 @@ export async function explainItem(item: SourceItem, opts: ExplainOptions): Promi
 
   const parsed = parseExplanation(raw)
   if (!parsed) throw new ExplainParseError()
+  report({ stage: 'writing', done: total, total })
 
   return {
     ...parsed,

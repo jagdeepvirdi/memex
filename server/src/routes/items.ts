@@ -30,10 +30,11 @@ import { embedItem } from '../services/embedder.js'
 import { extractAndLinkEntities } from '../services/entityService.js'
 import { generateDigest } from '../services/digestService.js'
 import { scrapeUrl } from '../services/scraper.js'
-import { aiChat, AiProviderError } from '../services/ai.js'
-import { explainItem, ExplainParseError } from '../services/explainService.js'
+import { aiChat } from '../services/ai.js'
+import { runExplainJob, EXPLAIN_JOB_KIND, EXPLAIN_JOB_STALE_MINUTES } from '../services/explainJob.js'
+import { createJob, saveJobDetails, hasRunningJob } from '../services/ingestJobs.js'
+import { describeActionError, actionErrorBody } from '../services/actionErrors.js'
 import { extractRecipe, renderRecipeContent } from '../services/recipeExtractor.js'
-import { NoSourceTextError } from '../services/itemSource.js'
 import { findYoutubeUrl } from '../services/youtubeUrl.js'
 import type { ItemType, ItemSource, ItemIntent, ConnectedEntity } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
@@ -959,21 +960,15 @@ async function loadActionItem(id: string): Promise<ActionItemRow | null> {
 
 /** Maps service/provider failures to a status; returns false if the error isn't one we know. */
 function sendActionError(res: import('express').Response, err: unknown): boolean {
-  if (err instanceof NoSourceTextError) { res.status(422).json({ error: err.message }); return true }
-  if (err instanceof ExplainParseError) { res.status(502).json({ error: err.message }); return true }
-  if (err instanceof AiProviderError) {
-    const status = err.kind === 'blocked' ? 409 : err.kind === 'rate_limit' ? 429 : err.kind === 'timeout' ? 504 : 502
-    res.status(status).json({ error: err.message, provider: err.provider, kind: err.kind })
-    return true
-  }
-  if (err instanceof Error && /Strict Local Mode/i.test(err.message)) {
-    res.status(409).json({ error: err.message })
-    return true
-  }
-  return false
+  const info = describeActionError(err)
+  if (!info) return false
+  res.status(info.status).json(actionErrorBody(info))
+  return true
 }
 
-// ── POST /api/items/:id/explain — structured explanation saved on the item ────
+// ── POST /api/items/:id/explain — starts a background job; the explanation is saved on the item ────
+// Returns 202 { jobId } at once. Poll GET /api/ingest/jobs/:id (progress, then completed/failed); the explanation
+// ends up in item.structured.explanation whether or not anyone is watching.
 
 router.post('/:id/explain', aiActionLimiter, async (req, res) => {
   const body = aiActionSchema.safeParse(req.body ?? {})
@@ -990,26 +985,28 @@ router.post('/:id/explain', aiActionLimiter, async (req, res) => {
       return
     }
 
-    const explanation = await explainItem(
-      { title: row.title, content: row.content, sourceUrl: row.source_url },
-      { provider: body.data.provider, cloudSafe: cloudSafe(row) },
-    )
-
-    await pool.query(
-      `UPDATE items
-         SET structured = jsonb_set(COALESCE(structured, '{}'::jsonb), '{explanation}', $1::jsonb),
-             extraction_model = $2, updated_at = NOW()
-       WHERE id = $3`,
-      [JSON.stringify(explanation), explanation.model, row.id],
-    )
-
-    const client = await pool.connect()
-    try {
-      const item = await fetchItem(client, row.id)
-      res.json({ item, explanation })
-    } finally {
-      client.release()
+    // One at a time: a local model runs them one after another anyway, and two at once just makes both slower.
+    if (await hasRunningJob(EXPLAIN_JOB_KIND, EXPLAIN_JOB_STALE_MINUTES)) {
+      res.status(409).json({ error: 'Another explanation is still running. Wait for it to finish.', running: true })
+      return
     }
+
+    const jobId = uuidv4()
+    await createJob(jobId, 1, EXPLAIN_JOB_KIND)
+    await saveJobDetails(jobId, { itemId: row.id, stage: 'reading' }).catch(() => {})
+
+    // Fire and forget: the runner records its own success or failure on the job.
+    void runExplainJob({
+      jobId,
+      itemId: row.id,
+      title: row.title,
+      content: row.content,
+      sourceUrl: row.source_url,
+      provider: body.data.provider,
+      cloudSafe: cloudSafe(row),
+    })
+
+    res.status(202).json({ jobId })
   } catch (err) {
     if (sendActionError(res, err)) return
     logger.error(err, 'POST /api/items/:id/explain error')

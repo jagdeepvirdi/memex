@@ -17,12 +17,16 @@ vi.mock('../services/explainService', async orig => ({
   ...(await orig<typeof import('../services/explainService')>()),
   explainItem: vi.fn(),
 }))
+vi.mock('../services/explainJob', async orig => ({
+  ...(await orig<typeof import('../services/explainJob')>()),
+  runExplainJob: vi.fn(),
+}))
 vi.mock('../services/recipeExtractor', async orig => ({
   ...(await orig<typeof import('../services/recipeExtractor')>()),
   extractRecipe: vi.fn(),
 }))
 
-import { explainItem, ExplainParseError } from '../services/explainService'
+import { runExplainJob } from '../services/explainJob'
 import { extractRecipe } from '../services/recipeExtractor'
 import { NoSourceTextError } from '../services/itemSource'
 import { AiProviderError } from '../services/ai'
@@ -63,95 +67,123 @@ function mockClient(answers: Array<{ rows: unknown[] }> = []) {
 beforeEach(() => {
   vi.mocked(pool.query).mockReset()
   vi.mocked(pool.connect).mockReset()
-  vi.mocked(explainItem).mockReset()
   vi.mocked(extractRecipe).mockReset()
 })
 
-describe('POST /api/items/:id/explain', () => {
+describe('POST /api/items/:id/explain (background job)', () => {
+  /** pool.query routed by SQL: the item lookup, the "is one already running" check, and the job writes. */
+  function explainDb(over: { item?: Record<string, unknown> | null; running?: boolean } = {}) {
+    const item = over.item === undefined ? ROW : over.item
+    vi.mocked(pool.query).mockImplementation((async (sql: string) => {
+      if (/FROM ingest_jobs/.test(sql)) return { rows: over.running ? [{ '?column?': 1 }] : [] }
+      if (/FROM items i WHERE i\.id = \$1/.test(sql)) return { rows: item ? [item] : [] }
+      return { rows: [] }
+    }) as never)
+  }
+  const post = (id = 'vid-1', body: unknown = {}) => request(app).post(`/api/items/${id}/explain`).set('Authorization', AUTH).send(body as object)
+  const jobWrites = () => vi.mocked(pool.query).mock.calls.filter(c => /ingest_jobs/.test(String(c[0])) && !/FROM ingest_jobs/.test(String(c[0])))
+
+  beforeEach(() => vi.mocked(runExplainJob).mockReset())
+
   it('requires auth', async () => {
     expect((await request(app).post('/api/items/vid-1/explain')).status).toBe(401)
   })
 
-  it('404s for a missing item', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as never)
-    const res = await request(app).post('/api/items/nope/explain').set('Authorization', AUTH)
-    expect(res.status).toBe(404)
+  it('404s for a missing item, without touching jobs', async () => {
+    explainDb({ item: null })
+    expect((await post('nope')).status).toBe(404)
+    expect(jobWrites()).toHaveLength(0)
+    expect(runExplainJob).not.toHaveBeenCalled()
   })
 
   it('400s on an invalid body', async () => {
-    const res = await request(app).post('/api/items/vid-1/explain').set('Authorization', AUTH).send({ provider: 'gpt' })
-    expect(res.status).toBe(400)
+    explainDb()
+    expect((await post('vid-1', { provider: 'gpt' })).status).toBe(400)
+    expect(runExplainJob).not.toHaveBeenCalled()
   })
 
   it('refuses encrypted items', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ ...ROW, encrypted: true }] } as never)
-    const res = await request(app).post('/api/items/vid-1/explain').set('Authorization', AUTH)
+    explainDb({ item: { ...ROW, encrypted: true } })
+    const res = await post()
     expect(res.status).toBe(400)
-    expect(explainItem).not.toHaveBeenCalled()
+    expect(runExplainJob).not.toHaveBeenCalled()
   })
 
   it('409s when an explanation exists, unless force is set', async () => {
-    vi.mocked(pool.query).mockResolvedValue({ rows: [{ ...ROW, structured: { explanation: EXPLANATION } }] } as never)
-    const res = await request(app).post('/api/items/vid-1/explain').set('Authorization', AUTH)
+    explainDb({ item: { ...ROW, structured: { explanation: EXPLANATION } } })
+    const res = await post()
     expect(res.status).toBe(409)
-    expect(explainItem).not.toHaveBeenCalled()
+    expect(res.body.existing).toBe(true)
+    expect(runExplainJob).not.toHaveBeenCalled()
 
-    vi.mocked(explainItem).mockResolvedValue(EXPLANATION as never)
-    mockClient([{ rows: [FULL_ITEM] }])
-    const forced = await request(app).post('/api/items/vid-1/explain').set('Authorization', AUTH).send({ force: true })
-    expect(forced.status).toBe(200)
+    const forced = await post('vid-1', { force: true })
+    expect(forced.status).toBe(202)
+    expect(runExplainJob).toHaveBeenCalledTimes(1)
   })
 
-  it('explains, stores under structured.explanation with extraction_model, and returns item + explanation', async () => {
-    vi.mocked(pool.query)
-      .mockResolvedValueOnce({ rows: [ROW] } as never) // load
-      .mockResolvedValueOnce({ rows: [] } as never) // update
-    vi.mocked(explainItem).mockResolvedValue(EXPLANATION as never)
-    mockClient([{ rows: [FULL_ITEM] }])
+  it('409s while another explanation is running, and starts nothing', async () => {
+    explainDb({ running: true })
+    const res = await post()
+    expect(res.status).toBe(409)
+    expect(res.body).toMatchObject({ running: true })
+    expect(res.body.error).toMatch(/still running/)
+    expect(jobWrites()).toHaveLength(0)
+    expect(runExplainJob).not.toHaveBeenCalled()
+  })
 
-    const res = await request(app).post('/api/items/vid-1/explain').set('Authorization', AUTH).send({ provider: 'claude' })
+  it('treats a job older than 20 minutes as dead when checking for a running one', async () => {
+    explainDb()
+    await post()
+    const check = vi.mocked(pool.query).mock.calls.find(c => /FROM ingest_jobs/.test(String(c[0])))!
+    expect(check[1]).toEqual(['explain', '20'])
+  })
 
-    expect(res.status).toBe(200)
-    expect(res.body.explanation.summary).toBe('s')
-    expect(res.body.item.id).toBe('vid-1')
-    expect(explainItem).toHaveBeenCalledWith(
-      { title: 'Cook with Joe', content: VIDEO, sourceUrl: VIDEO },
-      { provider: 'claude', cloudSafe: true },
-    )
-    const [sql, params] = vi.mocked(pool.query).mock.calls[1]
-    expect(sql).toContain("jsonb_set(COALESCE(structured, '{}'::jsonb), '{explanation}'")
-    expect(params).toEqual([JSON.stringify(EXPLANATION), 'ollama:llama3.2', 'vid-1'])
+  it('answers 202 with a jobId at once, creates the job row, and starts the runner with the item and options', async () => {
+    explainDb()
+    let release: () => void = () => {}
+    vi.mocked(runExplainJob).mockReturnValue(new Promise<void>(r => { release = r }) as never) // still running when the response goes out
+    const res = await post('vid-1', { provider: 'claude' })
+
+    expect(res.status).toBe(202)
+    expect(res.body.jobId).toEqual(expect.any(String))
+
+    const insert = jobWrites().find(c => /INSERT INTO ingest_jobs/.test(String(c[0])))!
+    expect(insert[1]).toEqual([res.body.jobId, 1, 'explain'])
+
+    expect(runExplainJob).toHaveBeenCalledWith({
+      jobId: res.body.jobId, itemId: 'vid-1', title: 'Cook with Joe', content: VIDEO, sourceUrl: VIDEO,
+      provider: 'claude', cloudSafe: true,
+    })
+    release() // the runner was still going when the 202 went out
+  })
+
+  it('records which item the job is for, so the UI can find it again', async () => {
+    explainDb()
+    const res = await post()
+    const details = jobWrites().find(c => /SET details/.test(String(c[0])))!
+    expect(details[1]).toEqual([res.body.jobId, JSON.stringify({ itemId: 'vid-1', stage: 'reading' })])
   })
 
   it('pins private items to local (cloudSafe=false)', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ ...ROW, tags: ['private'] }] } as never).mockResolvedValueOnce({ rows: [] } as never)
-    vi.mocked(explainItem).mockResolvedValue(EXPLANATION as never)
-    mockClient([{ rows: [FULL_ITEM] }])
-    await request(app).post('/api/items/vid-1/explain').set('Authorization', AUTH)
-    expect(vi.mocked(explainItem).mock.calls[0][1]).toMatchObject({ cloudSafe: false })
+    explainDb({ item: { ...ROW, tags: ['private'] } })
+    await post()
+    expect(vi.mocked(runExplainJob).mock.calls[0][0]).toMatchObject({ cloudSafe: false })
   })
 
-  it.each([
-    ['no transcript', new NoSourceTextError('No transcript'), 422],
-    ['unparseable AI answer', new ExplainParseError(), 502],
-    ['blocked provider', new AiProviderError('claude', 'blocked', 'Cannot use claude: Strict Local Mode is on'), 409],
-    ['rate limit', new AiProviderError('gemini', 'rate_limit', 'slow'), 429],
-    ['timeout', new AiProviderError('claude', 'timeout', 'slow'), 504],
-    ['provider down', new AiProviderError('ollama', 'unavailable', 'down'), 502],
-    ['strict local scrape block', new Error('Strict Local Mode is enabled. External URL scraping is blocked.'), 409],
-  ])('maps %s to %i', async (_name, err, status) => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [ROW] } as never)
-    vi.mocked(explainItem).mockRejectedValue(err)
-    const res = await request(app).post('/api/items/vid-1/explain').set('Authorization', AUTH)
-    expect(res.status).toBe(status)
-    expect(res.body.error).toBeTruthy()
+  it('does not save the explanation itself any more — that is the runner\'s job', async () => {
+    explainDb()
+    await post()
+    expect(vi.mocked(pool.query).mock.calls.some(c => /jsonb_set/.test(String(c[0])))).toBe(false)
   })
 
-  it('500s on an unexpected error', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [ROW] } as never)
-    vi.mocked(explainItem).mockRejectedValue(new Error('db exploded'))
-    const res = await request(app).post('/api/items/vid-1/explain').set('Authorization', AUTH)
-    expect(res.status).toBe(500)
+  it('500s if the job cannot be created', async () => {
+    vi.mocked(pool.query).mockImplementation((async (sql: string) => {
+      if (/FROM ingest_jobs/.test(sql)) return { rows: [] }
+      if (/INSERT INTO ingest_jobs/.test(sql)) throw new Error('db down')
+      return { rows: [ROW] }
+    }) as never)
+    expect((await post()).status).toBe(500)
+    expect(runExplainJob).not.toHaveBeenCalled()
   })
 })
 

@@ -16,6 +16,18 @@ export async function updateJobProgress(id: string, completed: number, total: nu
   await pool.query('UPDATE ingest_jobs SET completed=$1, progress=$2 WHERE id=$3', [completed, progress, id])
 }
 
+/**
+ * Progress for jobs whose size is only known once they start (e.g. an explanation, where the number of parts
+ * depends on the source). Updates the total, the percentage and the details in one write.
+ */
+export async function reportJobProgress(id: string, completed: number, total: number, details?: unknown): Promise<void> {
+  const progress = total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 100
+  await pool.query(
+    'UPDATE ingest_jobs SET completed=$1, total=$2, progress=$3, details=COALESCE($4::jsonb, details) WHERE id=$5',
+    [completed, total, progress, details === undefined ? null : JSON.stringify(details), id],
+  )
+}
+
 /** Marks a job finished. Call once, after every task has settled — never from inside a task. */
 export async function completeJob(id: string, details?: unknown): Promise<void> {
   await pool.query(

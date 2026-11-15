@@ -102,9 +102,9 @@ export interface ExplainRequest {
   force?: boolean
 }
 
-export interface ExplainResponse {
-  item: Item
-  explanation: ExplanationData
+/** Explaining runs as a background job: poll GET /api/ingest/jobs/:id, then re-read the item. */
+export interface ExplainStartResponse {
+  jobId: string
 }
 
 export interface ExtractRecipeRequest {
