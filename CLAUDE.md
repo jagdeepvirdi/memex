@@ -22,7 +22,7 @@ Memex is a personal knowledge management web app that ingests, auto-classifies, 
 - **Secret Storage**: AES-256-GCM client-side encryption (Web Crypto API) — no AI involved
 - **URL Parsing**: `https://r.jina.ai/{url}` — free tier, no API key needed for basic use
 - **YouTube**: `youtube-transcript` npm package — free, no API key
-- **Instagram**: oEmbed endpoint + caption scraping
+- **Instagram**: oEmbed endpoint only (login-walled, returns little) — the real source is a caption the user pastes; no scraping
 - **File Ingestion**: MarkItDown (Python, optional) — converts PDF/Word/PPT/Excel/images to Markdown
 
 ## Docker Compose Setup
@@ -322,13 +322,13 @@ Key-value table with JSONB values. Default rows:
 2. Server extracts `Keep/*.json` files (handles both `Keep/*.json` and `Takeout/Keep/*.json` paths)
 3. Notes saved instantly to DB with `structured={}`, then queued for Ollama classification
 4. Background enrichment queue processes at up to 3 concurrent; Sidebar shows live progress + ETA
-5. Deduplicate by content hash
+5. Deduplicate within the uploaded ZIP by MD5 of title + text (in memory, per import only — `items.content_hash` is never written, so a re-import is not deduped against the DB). URL items are deduped separately: same `source_url` in any spelling (`findItemsBySourceUrl`) plus embedding near-duplicates (`duplicateService.ts`)
 6. User reviews classified items; can override categories on Item page
 
 ## URL / YouTube / Instagram / File Ingestion
 - **Generic URL**: `https://r.jina.ai/{url}` → clean Markdown → Ollama classify
 - **YouTube**: `youtube-transcript` → transcript + title → Ollama classify
-- **Instagram**: oEmbed + caption scraping → Ollama classify
+- **Instagram**: oEmbed (thin placeholder) or a pasted caption (`source='instagram'`) → Ollama classify; classified by topic, not by where it was posted
 - **Files (MarkItDown)**: PDF, DOCX, PPTX, XLSX, CSV, images, EPUB → Markdown → Ollama classify
   - Requires `pip install 'markitdown[all]'` (one-time, Python 3.10+)
   - Server returns HTTP 503 with install instructions if not present
