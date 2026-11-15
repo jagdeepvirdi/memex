@@ -1,6 +1,6 @@
 import { pool } from '../db/client.js'
 import type { ItemType } from '../../../shared/types.js'
-import { normalizeSourceUrl, sameSourceUrl } from './urlNormalize.js'
+import { normalizeSourceUrl, sameSourceUrl, isBareLinkTo } from './urlNormalize.js'
 
 // Cosine similarity threshold for flagging near-duplicates.
 // 0.92 catches the same article/recipe saved twice while ignoring
@@ -14,10 +14,16 @@ export interface SimilarItem {
   similarity: number
 }
 
+/** Content longer than this is never "just a link", so the legacy lookup skips it in SQL. */
+const LEGACY_CONTENT_MAX_CHARS = 600
+
 /**
- * Live items whose saved `source_url` is the same page as `url` (see `normalizeSourceUrl`).
- * ILIKE narrows candidates by a host/path/video-id token; the exact comparison happens in JS
- * because the stored spellings vary (youtu.be vs watch?v=, www., tracking params).
+ * Live items that are the same page as `url` (see `normalizeSourceUrl`):
+ *  1. items whose saved `source_url` matches; and
+ *  2. older items with NO `source_url` whose content is essentially just that link (Keep imports, pasted links,
+ *     bookmarks — most of an early library). A long note that only mentions the link is not a match.
+ * ILIKE narrows candidates by a host/path/video-id token; the exact comparison happens in JS because the
+ * stored spellings vary (youtu.be vs watch?v=, www., tracking params). `source_url` matches come first.
  */
 export async function findItemsBySourceUrl(url: string, limit = 3): Promise<SimilarItem[]> {
   const key = normalizeSourceUrl(url)
@@ -25,18 +31,21 @@ export async function findItemsBySourceUrl(url: string, limit = 3): Promise<Simi
 
   try {
     const pattern = `%${key.searchKey.replace(/[\\%_]/g, '\\$&')}%`
-    const { rows } = await pool.query<{ id: string; title: string; type: ItemType; source_url: string }>(
-      `SELECT id, title, type, source_url
+    const { rows } = await pool.query<{ id: string; title: string; type: ItemType; source_url: string | null; content?: string }>(
+      `SELECT id, title, type, source_url, content
        FROM items
        WHERE deleted_at IS NULL
-         AND source_url IS NOT NULL
-         AND source_url ILIKE $1
-       ORDER BY created_at DESC
+         AND (
+           (source_url IS NOT NULL AND source_url ILIKE $1)
+           OR (source_url IS NULL AND encrypted = false AND type <> 'password'
+               AND length(content) <= ${LEGACY_CONTENT_MAX_CHARS} AND content ILIKE $1)
+         )
+       ORDER BY (source_url IS NULL), created_at DESC
        LIMIT 50`,
       [pattern],
     )
     return rows
-      .filter((r) => sameSourceUrl(r.source_url, url))
+      .filter((r) => (r.source_url ? sameSourceUrl(r.source_url, url) : isBareLinkTo(r.content ?? '', url)))
       .slice(0, limit)
       .map(({ id, title, type }) => ({ id, title, type, similarity: 1 }))
   } catch {
