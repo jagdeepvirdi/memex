@@ -19,6 +19,7 @@ import type {
   ExplainResponse,
   ExtractRecipeRequest,
   ExtractRecipeResponse,
+  ConnectedEntity,
 } from '../../../shared/types'
 import { toast } from 'sonner'
 import { useAuthStore } from '../store/authStore'
@@ -337,6 +338,11 @@ export function explainItem(itemId: string, opts: ExplainRequest = {}): Promise<
 
 export function extractRecipeFromItem(itemId: string, opts: ExtractRecipeRequest = {}): Promise<ExtractRecipeResponse> {
   return apiFetch<ExtractRecipeResponse>(`/items/${itemId}/extract-recipe`, { method: 'POST', body: JSON.stringify(opts) })
+}
+
+/** Entities this item is linked to (creator, repo, channel, director…), with the other items sharing each. */
+export function fetchItemEntities(itemId: string): Promise<ConnectedEntity[]> {
+  return apiFetch<ConnectedEntity[]>(`/items/${itemId}/entities`)
 }
 
 /** Items extracted from this one (e.g. recipes pulled out of a video). */

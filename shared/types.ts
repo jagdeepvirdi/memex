@@ -407,6 +407,19 @@ export interface Entity {
   updated_at: string
 }
 
+/** An entity an item is linked to, with the other items that share it (GET /api/items/:id/entities). */
+export interface ConnectedEntity {
+  id: string
+  name: string
+  type: EntityType
+  /** Every role this item has for the entity (e.g. ['director', 'cast']). */
+  roles: string[]
+  /** How many OTHER live, non-encrypted items link to this entity. */
+  total: number
+  /** Newest first, at most 5. */
+  others: Array<{ id: string; title: string; type: ItemType }>
+}
+
 export interface ItemEntity {
   item_id: string
   entity_id: string

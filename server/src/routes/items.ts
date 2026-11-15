@@ -35,7 +35,7 @@ import { explainItem, ExplainParseError } from '../services/explainService.js'
 import { extractRecipe, renderRecipeContent } from '../services/recipeExtractor.js'
 import { NoSourceTextError } from '../services/itemSource.js'
 import { findYoutubeUrl } from '../services/youtubeUrl.js'
-import type { ItemType, ItemSource, ItemIntent } from '../../../shared/types.js'
+import type { ItemType, ItemSource, ItemIntent, ConnectedEntity } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
 const router = Router()
@@ -623,6 +623,66 @@ router.get('/:id/related', async (req, res) => {
     res.json(rows.map(rowToItem))
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch related items' })
+  }
+})
+
+// ── GET /api/items/:id/entities — linked entities and the other items that share them ──
+
+const CONNECTED_OTHERS_LIMIT = 5
+
+router.get('/:id/entities', async (req, res) => {
+  try {
+    const { rows: links } = await pool.query<{ id: string; name: string; type: ConnectedEntity['type']; role: string | null }>(
+      `SELECT e.id, e.name, e.type, ie.role
+       FROM item_entities ie
+       JOIN entities e ON e.id = ie.entity_id
+       JOIN items i ON i.id = ie.item_id AND i.deleted_at IS NULL AND i.encrypted = false
+       WHERE ie.item_id = $1
+       ORDER BY e.name`,
+      [req.params.id],
+    )
+    if (links.length === 0) {
+      res.json([])
+      return
+    }
+
+    const byId = new Map<string, ConnectedEntity>()
+    for (const l of links) {
+      const existing = byId.get(l.id)
+      if (existing) {
+        if (l.role && !existing.roles.includes(l.role)) existing.roles.push(l.role)
+      } else {
+        byId.set(l.id, { id: l.id, name: l.name, type: l.type, roles: l.role ? [l.role] : [], total: 0, others: [] })
+      }
+    }
+
+    // Other items per entity: distinct (an item can link one entity under several roles), live and
+    // not encrypted, newest first. `total` counts them all; `others` is capped.
+    const { rows: shared } = await pool.query<{ entity_id: string; id: string; title: string; type: ItemType; total: string }>(
+      `SELECT entity_id, id, title, type, total FROM (
+         SELECT x.entity_id, i.id, i.title, i.type,
+                COUNT(*) OVER (PARTITION BY x.entity_id) AS total,
+                ROW_NUMBER() OVER (PARTITION BY x.entity_id ORDER BY i.created_at DESC) AS rn
+         FROM (SELECT DISTINCT entity_id, item_id FROM item_entities
+               WHERE entity_id = ANY($1::uuid[]) AND item_id <> $2) x
+         JOIN items i ON i.id = x.item_id AND i.deleted_at IS NULL AND i.encrypted = false
+       ) ranked
+       WHERE rn <= $3
+       ORDER BY entity_id, rn`,
+      [[...byId.keys()], req.params.id, CONNECTED_OTHERS_LIMIT],
+    )
+    for (const s of shared) {
+      const ent = byId.get(s.entity_id)
+      if (!ent) continue
+      ent.total = parseInt(s.total, 10)
+      ent.others.push({ id: s.id, title: s.title, type: s.type })
+    }
+
+    // Entities that connect to other items first, then by name.
+    res.json([...byId.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)))
+  } catch (err) {
+    logger.error(err, 'GET /api/items/:id/entities error')
+    res.status(500).json({ error: 'Failed to fetch connected entities' })
   }
 })
 

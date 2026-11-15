@@ -64,6 +64,7 @@ vi.mock('../lib/api', () => ({
   extractRecipeFromItem: vi.fn(),
   fetchAiProviders: vi.fn().mockResolvedValue([]),
   fetchDerivedItems: vi.fn().mockResolvedValue([]),
+  fetchItemEntities: vi.fn().mockResolvedValue([]),
   fetchItem: vi.fn().mockResolvedValue({ id: 'parent-1', title: 'Parent video' }),
   ApiError: class ApiError extends Error {},
 }))
@@ -409,5 +410,35 @@ describe('ItemPage — explain / extract recipe', () => {
     render(<ItemPage />)
     await screen.findByText('Understanding Sourdough')
     expect(screen.queryByTestId('derived-from')).not.toBeInTheDocument()
+  })
+})
+
+// ── Connected entities ────────────────────────────────────────────────────────
+
+describe('ItemPage — connected entities', () => {
+  it('shows the Connected section when the item has links', async () => {
+    const api = await import('../lib/api')
+    vi.mocked(api.fetchItemEntities).mockResolvedValueOnce([
+      { id: 'e1', name: '@someone', type: 'person', roles: ['creator'], total: 2, others: [{ id: 'x', title: 'Another', type: 'link' }] },
+    ] as never)
+    mockApiFetch.mockResolvedValueOnce(makeItem()).mockResolvedValueOnce([])
+    render(<ItemPage />)
+    expect(await screen.findByTestId('connected')).toHaveTextContent('@someone')
+  })
+
+  it('shows nothing for an item with no links', async () => {
+    mockApiFetch.mockResolvedValueOnce(makeItem()).mockResolvedValueOnce([])
+    render(<ItemPage />)
+    await screen.findByText('Understanding Sourdough')
+    expect(screen.queryByTestId('connected')).not.toBeInTheDocument()
+  })
+
+  it('does not look up links for an encrypted item', async () => {
+    const api = await import('../lib/api')
+    vi.mocked(api.fetchItemEntities).mockClear()
+    mockApiFetch.mockResolvedValueOnce(makeItem({ encrypted: true })).mockResolvedValueOnce([])
+    render(<ItemPage />)
+    await screen.findByText('Understanding Sourdough')
+    expect(api.fetchItemEntities).not.toHaveBeenCalled()
   })
 })

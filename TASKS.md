@@ -662,7 +662,7 @@ markitdown --help
 `source='instagram'`.
 
 ### Phase 2 — v1: entity linking, digest, bulk import
-- [x] `server/src/services/entityService.ts` — branch on `type==='link' && structured.kind` (key on `structured.kind`, not `type`): *(done 2026-11-15: keyed on `structured.kind`/`videoId`; roles `repo`/`owner`/`creator`/`channel`; identifiers are not embedded so `resolveEntities` cannot fuzzy-merge them; re-linking replaces old links; wired into POST /api/items, quicksave, apply-extraction, `applyClassificationResult`, bulk paste and PUT. **Backfill still to run:** `npx tsx src/scripts/seedEntityGraph.ts` from `server/`. Nothing in the UI reads `item_entities` yet.)*
+- [x] `server/src/services/entityService.ts` — branch on `type==='link' && structured.kind` (key on `structured.kind`, not `type`): *(done 2026-11-15: keyed on `structured.kind`/`videoId`; roles `repo`/`owner`/`creator`/`channel`; identifiers are not embedded so `resolveEntities` cannot fuzzy-merge them; re-linking replaces old links; wired into POST /api/items, quicksave, apply-extraction, `applyClassificationResult`, bulk paste and PUT. **Backfill still to run:** `npx tsx src/scripts/seedEntityGraph.ts` from `server/`. Item page "Connected" section reads the links (`GET /api/items/:id/entities`, done 2026-11-15).)*
       creator→`person`, owner→`organization`, repo→`other`; call from `POST /api/items`; `seedEntityGraph.ts` backfill
 - [x] `server/src/services/digestService.ts` — add `i.intent`, `i.priority` to `ITEM_COLS`; additive `byPriority` field *(done 2026-11-15: this week's counts per priority + top 5 essential/useful; `Digest.tsx` shows chips, essential cards, "to triage" shortcut)*
       (keep `recentItems` so `Digest.test.tsx` passes); update `Digest.tsx` + tests

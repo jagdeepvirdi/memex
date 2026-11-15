@@ -11,6 +11,7 @@ import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
 import PriorityPicker from '../components/PriorityPicker'
 import ItemAiActions, { DerivedFromLink } from '../components/item/ItemAiActions'
+import ConnectedEntities from '../components/item/ConnectedEntities'
 import type { Item, ItemExtraction, ItemPriority, LinkSummary, RepoData } from '../../../shared/types'
 
 const DEV_KIND_LABEL: Record<string, string> = {
@@ -589,6 +590,9 @@ export default function ItemPage() {
               </div>
             </div>
           )}
+
+          {/* Linked people / orgs / repos and the other items that share them */}
+          {!isEditing && !item.encrypted && <ConnectedEntities itemId={item.id} />}
 
           {/* Share */}
           {!isEditing && !item.encrypted && (
