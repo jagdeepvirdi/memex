@@ -687,7 +687,14 @@ markitdown --help
       multi-entity split `createItem` call in `classifyAndUpdateBatch` omits it) — all done 2026-11-15 in `enrichBatch.ts`)*
 - [ ] Clean stray categories (`Tech>Link`, `Courses>Tech`, `Travel>Links`, 218 bare-`Links` items)
       *(2026-11-15: read-only audit written, `server/src/scripts/auditStrayCategories.sql`, not yet run — needs Postgres up; no Ollama. Cleanup itself still to do.)*
-      *(2026-11-15: audit run. Small strays = 6 items, all reviewed; dry-run `server/src/scripts/dryRunStrayCategoryMoves.sql` run, apply script `applyStrayCategoryMoves.sql` written, previewed, then APPLIED 2026-11-15 (6 items fixed; verified from a separate connection). Still open: the 218 bare-`Links` items. The 218 bare-`Links` items (180 reviewed / 38 unreviewed) need a topic mapping.)*
+      *(2026-11-15: audit run. Small strays = 6 items, all reviewed; dry-run `server/src/scripts/dryRunStrayCategoryMoves.sql` run, apply script `applyStrayCategoryMoves.sql` written, previewed, then APPLIED 2026-11-15 (6 items fixed; verified from a separate connection). Still open: the bare-`Links` items.
+      *(2026-11-15: 21 of the 199 bare-`Links` items moved into hotels/restaurants/cameras/laptops/phones/cookies/stocks
+      via `applyBareLinksMoves.sql` (applied; 178 remain bare). The other ~175 were NOT moved on purpose: the Gemini
+      baseline misfiles them. `Tech > AI > Explainers` (30) holds generic programming courses, `Tech > AI > Tools` (20)
+      holds Photoshop/VSCode/etc., `Finance > Notes` (11) holds shopping and real estate (the `notes`→`Finance>Notes`
+      collision), `Tech > Specs`/`Media > Books > Technical` hold furniture/courses, and `Links > Articles/Docs/YouTube/
+      Instagram` are source buckets, not topics. Fix the classifier mapping first, verify with the baseline `compare`,
+      then re-map the rest.)* The 218 bare-`Links` items (180 reviewed / 38 unreviewed) need a topic mapping.)*
 - [x] Update stale CLAUDE.md claims (content-hash dedupe, Instagram caption scraping) — done 2026-11-15
 - [ ] If `'repo'` entity type is ever wanted: own migration file with only `ALTER TYPE entity_type ADD VALUE IF NOT EXISTS 'repo'`
       (no-txn), run before code that inserts it; update TS `EntityType` + `SemanticGraph.tsx` colours
