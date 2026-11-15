@@ -119,3 +119,85 @@ describe('DigestPage — refresh', () => {
     await waitFor(() => expect(mockFetchDigest).toHaveBeenCalledTimes(2))
   })
 })
+
+// ── Priority triage ───────────────────────────────────────────────────────────
+
+describe('DigestPage — priority', () => {
+  const priorityDigest = (over: Record<string, unknown> = {}) => makeDigest({
+    weekCount: 6,
+    recentItems: [makeItem('r1', 'Recent one')],
+    byPriority: {
+      counts: { essential: 7, useful: 2, skip: 1, untriaged: 3 },
+      essential: [makeItem('e1', 'Must read repo'), makeItem('e2', 'Key prompt')],
+      useful: [makeItem('u1', 'Handy tool')],
+    },
+    ...over,
+  })
+
+  it('shows the weekly priority counts', async () => {
+    mockFetchDigest.mockResolvedValue(priorityDigest())
+    render(<DigestPage />)
+    const block = await screen.findByTestId('digest-priority')
+    expect(block).toHaveTextContent('Essential 7')
+    expect(block).toHaveTextContent('Useful 2')
+    expect(block).toHaveTextContent('Skip 1')
+  })
+
+  it('lists essential items as cards and useful items as links', async () => {
+    mockFetchDigest.mockResolvedValue(priorityDigest())
+    render(<DigestPage />)
+    expect(await screen.findByText('Essential this week')).toBeInTheDocument()
+    expect(screen.getByTestId('item-e1')).toHaveTextContent('Must read repo')
+    expect(screen.getByTestId('item-e2')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Handy tool' }))
+    expect(mockNavigate).toHaveBeenCalledWith('/item/u1')
+  })
+
+  it('offers a triage shortcut when items are untriaged', async () => {
+    mockFetchDigest.mockResolvedValue(priorityDigest())
+    render(<DigestPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /3 to triage/ }))
+    expect(mockNavigate).toHaveBeenCalledWith('/items/table?priority=none')
+  })
+
+  it('links to the full essential list when there are more than shown', async () => {
+    mockFetchDigest.mockResolvedValue(priorityDigest())
+    render(<DigestPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /See all 7 essential/ }))
+    expect(mockNavigate).toHaveBeenCalledWith('/items/table?priority=essential')
+  })
+
+  it('does not offer "see all" when every essential item is already shown', async () => {
+    mockFetchDigest.mockResolvedValue(priorityDigest({
+      byPriority: { counts: { essential: 2, useful: 0, skip: 0, untriaged: 0 }, essential: [makeItem('e1', 'A'), makeItem('e2', 'B')], useful: [] },
+    }))
+    render(<DigestPage />)
+    await screen.findByText('Essential this week')
+    expect(screen.queryByRole('button', { name: /See all/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Also useful')).not.toBeInTheDocument()
+  })
+
+  it('says so when everything is triaged, with no triage button', async () => {
+    mockFetchDigest.mockResolvedValue(priorityDigest({
+      byPriority: { counts: { essential: 0, useful: 0, skip: 0, untriaged: 0 }, essential: [], useful: [] },
+    }))
+    render(<DigestPage />)
+    expect(await screen.findByText('Everything this week is triaged')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /to triage/ })).not.toBeInTheDocument()
+    expect(screen.queryByText('Essential this week')).not.toBeInTheDocument()
+  })
+
+  it('hides the section when nothing was saved this week', async () => {
+    mockFetchDigest.mockResolvedValue(priorityDigest({ weekCount: 0, recentItems: [] }))
+    render(<DigestPage />)
+    await screen.findByText('Nothing saved this week')
+    expect(screen.queryByTestId('digest-priority')).not.toBeInTheDocument()
+  })
+
+  it('still renders when the response has no byPriority (older cached response)', async () => {
+    mockFetchDigest.mockResolvedValue(makeDigest({ weekCount: 1, recentItems: [makeItem('r1', 'Recent one')] }))
+    render(<DigestPage />)
+    expect(await screen.findByText('Recent one')).toBeInTheDocument()
+    expect(screen.queryByTestId('digest-priority')).not.toBeInTheDocument()
+  })
+})

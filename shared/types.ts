@@ -325,9 +325,18 @@ export interface DigestConnection {
   insight: string
 }
 
+/** This week's saves grouped by the user's triage priority. */
+export interface DigestPriority {
+  counts: { essential: number; useful: number; skip: number; untriaged: number }
+  /** Newest first, at most 5 each. */
+  essential: Item[]
+  useful: Item[]
+}
+
 export interface DigestResponse {
   period: string
   recentItems: Item[]
+  byPriority: DigestPriority
   weekCount: number
   prevWeekCount: number
   onThisDay: RediscoveryItem | null

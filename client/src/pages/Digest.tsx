@@ -122,6 +122,80 @@ export default function DigestPage() {
                 </div>
               </motion.section>
 
+              {/* Triage: what mattered this week, and what still needs a decision */}
+              {digest.weekCount > 0 && digest.byPriority && (() => {
+                const { counts, essential, useful } = digest.byPriority
+                const chips: Array<{ label: string; n: number; tone: string }> = [
+                  { label: 'Essential', n: counts.essential, tone: 'bg-accent/15 text-accent border-accent/30' },
+                  { label: 'Useful', n: counts.useful, tone: 'bg-sky-400/15 text-sky-300 border-sky-400/30' },
+                  { label: 'Skip', n: counts.skip, tone: 'bg-white/10 text-ink-muted border-white/20' },
+                ]
+                return (
+                  <motion.section
+                    data-testid="digest-priority"
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.08 }}
+                    className="space-y-6"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      {chips.map(c => (
+                        <span key={c.label} className={`text-xs px-3 py-1 rounded-full border ${c.tone}`}>
+                          {c.label} <span className="font-bold">{c.n}</span>
+                        </span>
+                      ))}
+                      {counts.untriaged > 0 ? (
+                        <button
+                          onClick={() => navigate('/items/table?priority=none')}
+                          className="text-xs px-3 py-1 rounded-full border border-amber-400/30 bg-amber-400/10 text-amber-300 hover:bg-amber-400/20 transition-colors"
+                        >
+                          {counts.untriaged} to triage →
+                        </button>
+                      ) : (
+                        <span className="text-xs text-ink-muted">Everything this week is triaged</span>
+                      )}
+                    </div>
+
+                    {essential.length > 0 && (
+                      <div>
+                        <h2 className="font-display text-xl text-ink mb-5">Essential this week</h2>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          {essential.map(item => (
+                            <ItemCard key={item.id} item={item} onClick={() => navigate(`/item/${item.id}`)} />
+                          ))}
+                        </div>
+                        {counts.essential > essential.length && (
+                          <button
+                            onClick={() => navigate('/items/table?priority=essential')}
+                            className="mt-3 text-xs text-accent hover:underline"
+                          >
+                            See all {counts.essential} essential →
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {useful.length > 0 && (
+                      <div>
+                        <h2 className="font-display text-lg text-ink mb-3">Also useful</h2>
+                        <ul className="space-y-1.5">
+                          {useful.map(item => (
+                            <li key={item.id}>
+                              <button
+                                onClick={() => navigate(`/item/${item.id}`)}
+                                className="text-sm text-ink-muted hover:text-ink text-left transition-colors"
+                              >
+                                {item.title}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </motion.section>
+                )
+              })()}
+
               {/* This week's additions */}
               {digest.recentItems.length > 0 && (
                 <motion.section

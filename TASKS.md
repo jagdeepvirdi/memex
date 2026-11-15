@@ -664,7 +664,7 @@ markitdown --help
 ### Phase 2 — v1: entity linking, digest, bulk import
 - [ ] `server/src/services/entityService.ts` — branch on `type==='link' && structured.kind` (key on `structured.kind`, not `type`):
       creator→`person`, owner→`organization`, repo→`other`; call from `POST /api/items`; `seedEntityGraph.ts` backfill
-- [ ] `server/src/services/digestService.ts` — add `i.intent`, `i.priority` to `ITEM_COLS`; additive `byPriority` field
+- [x] `server/src/services/digestService.ts` — add `i.intent`, `i.priority` to `ITEM_COLS`; additive `byPriority` field *(done 2026-11-15: this week's counts per priority + top 5 essential/useful; `Digest.tsx` shows chips, essential cards, "to triage" shortcut)*
       (keep `recentItems` so `Digest.test.tsx` passes); update `Digest.tsx` + tests
 - [x] **Bulk route** `POST /ingest/paste/bulk` (do NOT clone `/keep/bulk` as-is):
   - [x] Generalize `classifyAndUpdateBatch` — source, sourceUrl, intent as parameters; fix the early-return job-completion bug *(done 2026-11-15: `services/enrichBatch.ts`, entries carry source/sourceUrl; intent now written on apply, in extractions and on split items)*

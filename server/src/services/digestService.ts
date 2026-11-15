@@ -2,17 +2,20 @@ import { pool } from '../db/client.js'
 import { rowToItem } from '../db/helpers.js'
 import { aiChat } from './ai.js'
 import { allCloudSafe } from './cloudSafe.js'
-import type { Item, DigestResponse, DigestConnection } from '../../../shared/types.js'
+import type { Item, DigestResponse, DigestConnection, DigestPriority } from '../../../shared/types.js'
 
 const CONNECTION_PROMPT = `You are a personal knowledge assistant.
 Given two notes from someone's knowledge base, reveal ONE surprising or non-obvious connection between them.
 Write a single sentence (max 40 words). Be specific — name the actual theme, pattern, or tension.
 Do not say "both notes discuss" — show the insight. Return ONLY the sentence.`
 
+/** Most items shown per priority group. */
+const PRIORITY_GROUP_LIMIT = 5
+
 const ITEM_COLS = `
   i.id, i.title, i.type, i.content, i.structured,
   i.source, i.source_url, i.encrypted, i.reviewed,
-  i.created_at, i.updated_at, i.confidence, i.remind_at,
+  i.created_at, i.updated_at, i.confidence, i.intent, i.priority, i.derived_from, i.remind_at,
   COALESCE(
     (SELECT array_agg(c.name ORDER BY ic2.depth)
      FROM item_categories ic2
@@ -81,15 +84,27 @@ export async function generateDigest(): Promise<DigestResponse> {
     // ── Week-over-week counts ────────────────────────────────────────────────
     const { rows: countRows } = await client.query<{
       this_week: string; prev_week: string
+      essential?: string; useful?: string; skip?: string; untriaged?: string
     }>(`
       SELECT
         COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')              AS this_week,
         COUNT(*) FILTER (WHERE created_at BETWEEN NOW() - INTERVAL '14 days'
-                                               AND NOW() - INTERVAL '7 days')        AS prev_week
+                                               AND NOW() - INTERVAL '7 days')        AS prev_week,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND priority = 'essential') AS essential,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND priority = 'useful')    AS useful,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND priority = 'skip')      AS skip,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days' AND priority IS NULL)       AS untriaged
       FROM items WHERE deleted_at IS NULL
     `)
     const weekCount = parseInt(countRows[0].this_week, 10)
     const prevWeekCount = parseInt(countRows[0].prev_week, 10)
+    const n = (v?: string) => parseInt(v ?? '0', 10) || 0
+    const counts = {
+      essential: n(countRows[0].essential),
+      useful: n(countRows[0].useful),
+      skip: n(countRows[0].skip),
+      untriaged: n(countRows[0].untriaged),
+    }
 
     // ── On this day ──────────────────────────────────────────────────────────
     const { rows: onThisDayRows } = await client.query(
@@ -116,6 +131,27 @@ export async function generateDigest(): Promise<DigestResponse> {
          AND i.structured != '{}'::jsonb
        ORDER BY RANDOM() LIMIT 10`,
     )
+
+    // ── This week's essential / useful items (top few of each) ───────────────
+    const { rows: priorityRows } = await client.query(
+      `SELECT * FROM (
+         SELECT ${ITEM_COLS},
+                ROW_NUMBER() OVER (PARTITION BY i.priority ORDER BY i.created_at DESC) AS rn
+         FROM items i
+         WHERE i.deleted_at IS NULL AND i.created_at >= NOW() - INTERVAL '7 days'
+           AND i.priority IN ('essential', 'useful')
+       ) ranked
+       WHERE rn <= $1
+       ORDER BY created_at DESC`,
+      [PRIORITY_GROUP_LIMIT],
+    )
+    const prioritized = priorityRows.map(rowToItem)
+    const byPriority: DigestPriority = {
+      counts,
+      essential: prioritized.filter(i => i.priority === 'essential'),
+      useful: prioritized.filter(i => i.priority === 'useful'),
+    }
+
     const connection = await generateConnection(randomRows.map(rowToItem))
 
     // ── Period label ─────────────────────────────────────────────────────────
@@ -125,7 +161,7 @@ export async function generateDigest(): Promise<DigestResponse> {
     const fmt = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
     const period = `${fmt(weekStart)} – ${fmt(now)}, ${now.getFullYear()}`
 
-    return { period, recentItems, weekCount, prevWeekCount, onThisDay, connection }
+    return { period, recentItems, byPriority, weekCount, prevWeekCount, onThisDay, connection }
   } finally {
     client.release()
   }
