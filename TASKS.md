@@ -604,8 +604,13 @@ markitdown --help
 
 ### Phase 0 — Decisions & baseline (no code)
 - [x] Decisions confirmed (see "Decisions (DECIDED 2026-11-11)" above)
-- [ ] Read-only baseline: classify existing Tech + Links items with the current classifier, save the output
+- [x] Read-only baseline: classify existing Tech + Links items with the current classifier, save the output
       to compare after mapping changes (guards against silent re-bucketing)
+      *(DONE 2026-11-15: `sessions/baselines/classify-baseline-gemini-2026-11-15.json` — 294 items, 0 failed, 292 by
+      `gemini:gemini-3.8-flash`, 2 by `claude:claude-sonnet-4-6` (Gemini unparseable). Run the after-pass with the same
+      command: `npx tsx src/scripts/classifyBaseline.ts run <out.json> --provider gemini,claude`, then `compare`.
+      The 11-12 Ollama file (299 items, 58 failed) is superseded; do not compare across models. Needs `gemini_model` =
+      `gemini-3.8-flash` in settings: the built-in default `gemini-2.5-flash` is unavailable to new Google accounts.)*
       *(in progress 2026-11-12: `server/src/scripts/classifyBaseline.ts` written; full run writes
       `sessions/baselines/classify-baseline-2026-11-12.json` (gitignored). Tick when the run completes. Re-run with the same
       `OLLAMA_NUM_PREDICT=768 OLLAMA_TIMEOUT_MS=60000`, then `compare`.)*

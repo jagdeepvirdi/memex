@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { aiChat } from './ai.js'
-import { getAiConfig } from './settings.js'
+import { aiChat, AiProviderError } from './ai.js'
+import { getAiConfig, type ProviderId } from './settings.js'
 import { detectGithubRepoSubject, repoSlugFromStructured, type GithubRepoRef } from './githubRepo.js'
 import { lookupGithubRepo } from './githubApi.js'
 
@@ -486,6 +486,12 @@ export interface ClassifyHints {
   cloudSafe?: boolean
   /** Set for YouTube videos: switches on the video prompt and post-processing. */
   video?: VideoHint
+  /**
+   * Pin the call to one provider. Off by default (normal routing + silent Ollama fallback). When set, a
+   * provider failure is thrown as `AiProviderError` instead of becoming a confidence-0 fallback result,
+   * so callers (the baseline script) can retry elsewhere without ever being silently answered by another model.
+   */
+  provider?: ProviderId
 }
 
 /** Topic beats source: dev-knowledge items file under Tech > AI, never under Links > Instagram/YouTube. */
@@ -530,6 +536,7 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
   let usedModel = activeModel
   const aiOpts = {
     task: 'classify',
+    provider: hints?.provider,
     cloudSafe: hints?.cloudSafe,
     onProvider: (p: { provider: string; model: string }) => { usedModel = `${p.provider}:${p.model}` },
   }
@@ -560,7 +567,8 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
     result.categories = normalized.length > 0 || hints?.video ? normalized : mapToCategories(result.type, result.structured)
 
     return finish(result)
-  } catch {
+  } catch (err) {
+    if (hints?.provider && err instanceof AiProviderError) throw err
     // fall through to retry
   }
 
@@ -581,7 +589,8 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
     result.categories = normalized.length > 0 || hints?.video ? normalized : mapToCategories(result.type, result.structured)
 
     return finish(result)
-  } catch {
+  } catch (err) {
+    if (hints?.provider && err instanceof AiProviderError) throw err
     // fall through to fallback
   }
 
