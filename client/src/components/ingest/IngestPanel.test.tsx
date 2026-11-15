@@ -4,6 +4,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('../cards/ItemCard', () => ({ default: ({ item }: any) => <div data-testid="preview-card">{item.title}</div> }))
 vi.mock('./KeepImportPanel', () => ({ default: () => <div /> }))
+vi.mock('./PasteImportPanel', () => ({ default: () => <div data-testid="paste-panel" /> }))
 vi.mock('./FileIngestPanel', () => ({ default: () => <div /> }))
 vi.mock('./VoiceIngestPanel', () => ({ default: () => <div /> }))
 vi.mock('../Editor', () => ({
@@ -137,5 +138,14 @@ describe('IngestPanel — URL tab', () => {
       intent: 'reference',
       confidence: 83,
     })
+  })
+})
+
+describe('IngestPanel — bulk paste tab', () => {
+  it('offers a Bulk Paste tab that shows the paste import panel', () => {
+    render(<IngestPanel />)
+    expect(screen.queryByTestId('paste-panel')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Bulk Paste/i }))
+    expect(screen.getByTestId('paste-panel')).toBeInTheDocument()
   })
 })

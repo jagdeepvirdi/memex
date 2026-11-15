@@ -335,3 +335,54 @@ export function extractRecipeFromItem(itemId: string, opts: ExtractRecipeRequest
 export function fetchDerivedItems(itemId: string): Promise<Item[]> {
   return apiFetch<Item[]>(`/items/${itemId}/derived`)
 }
+
+// ── Bulk paste import ─────────────────────────────────────────────────────────
+
+export type PasteSkipReason = 'too-long' | 'duplicate-in-paste' | 'already-saved'
+
+export interface PasteEntryResult {
+  index: number
+  title: string
+  source: string
+  sourceUrl?: string
+  /** `saved` = will be / was saved; `skipped` = left out (see `reason`). */
+  status: 'saved' | 'skipped'
+  reason?: PasteSkipReason
+  itemId?: string
+  existingId?: string
+  existingTitle?: string
+}
+
+export interface PasteImportResponse {
+  dryRun: boolean
+  total: number
+  new: number
+  skipped: number
+  saved?: number
+  jobId?: string | null
+  entries: PasteEntryResult[]
+}
+
+export interface IngestJobStatus {
+  status: 'processing' | 'completed' | 'failed' | string
+  progress: number
+  total: number
+  completed: number
+  elapsed?: number | string
+  error?: string
+  details?: { classified?: number; failed?: Array<{ itemId: string; title: string; error: string }> }
+}
+
+/** Dry run: splits the paste and reports what would be saved or skipped. Writes nothing. */
+export function previewPasteImport(text: string): Promise<PasteImportResponse> {
+  return apiFetch<PasteImportResponse>('/ingest/paste/bulk', { method: 'POST', body: JSON.stringify({ text, dryRun: true }) })
+}
+
+/** Saves the new entries instantly and starts background classification (poll `fetchIngestJob`). */
+export function startPasteImport(text: string): Promise<PasteImportResponse> {
+  return apiFetch<PasteImportResponse>('/ingest/paste/bulk', { method: 'POST', body: JSON.stringify({ text, dryRun: false }) })
+}
+
+export function fetchIngestJob(jobId: string): Promise<IngestJobStatus> {
+  return apiFetch<IngestJobStatus>(`/ingest/jobs/${jobId}`)
+}

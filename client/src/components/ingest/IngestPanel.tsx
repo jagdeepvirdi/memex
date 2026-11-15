@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic } from 'lucide-react';
+import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic, ListPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { ingestUrl, createItem } from '../../lib/api';
 import type { SimilarItem } from '../../lib/api';
 import ItemCard from '../cards/ItemCard';
 import KeepImportPanel from './KeepImportPanel';
+import PasteImportPanel from './PasteImportPanel';
 import FileIngestPanel from './FileIngestPanel';
 import VoiceIngestPanel from './VoiceIngestPanel';
 import Editor from '../Editor';
@@ -20,7 +21,7 @@ interface IngestPanelProps {
 }
 
 export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialText }: IngestPanelProps) {
-  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual' | 'file' | 'voice'>(
+  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual' | 'paste' | 'file' | 'voice'>(
     initialUrl ? 'url' : initialText ? 'manual' : 'url'
   );
   const [url, setUrl] = useState(initialUrl || '');
@@ -147,6 +148,15 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           Manual Note
         </button>
         <button
+          onClick={() => setActiveTab('paste')}
+          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+            activeTab === 'paste' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
+          }`}
+        >
+          <ListPlus size={16} />
+          Bulk Paste
+        </button>
+        <button
           onClick={() => setActiveTab('keep')}
           className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
             activeTab === 'keep' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
@@ -241,6 +251,8 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
               <PreviewState preview={preview} setPreview={setPreview} priority={priority} setPriority={setPriority} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} />
             )}
           </>
+        ) : activeTab === 'paste' ? (
+          <PasteImportPanel />
         ) : activeTab === 'keep' ? (
           <KeepImportPanel />
         ) : activeTab === 'voice' ? (

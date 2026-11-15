@@ -2,11 +2,12 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import multer from 'multer';
 import { v4 as uuidv4 } from 'uuid';
-import pLimit from 'p-limit';
 import { scrapeUrl } from '../services/scraper.js';
 import { summarizeAndClassify } from '../services/summarizer.js';
 import { detectPasteSource } from '../services/sourceDetect.js';
-import { parseKeepZipAsync, type KeepNote } from '../services/keepImporter.js';
+import { parseKeepZipAsync } from '../services/keepImporter.js';
+import { classifyAndUpdateBatch } from '../services/enrichBatch.js'
+import { splitPaste, planPaste, savePlanned, MAX_PASTE_ENTRIES, MAX_PASTE_CHARS, type PasteEntryResult } from '../services/pasteImport.js'
 import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
@@ -14,11 +15,10 @@ import { transcribeAudio, checkWhisperInstalled, isAudioMime } from '../services
 import { findSimilarItems, findItemsBySourceUrl, mergeSimilar } from '../services/duplicateService.js';
 import { embedQuery, embedItem } from '../services/embedder.js';
 import { pool } from '../db/client.js';
-import { setItemCategories, setItemTags, createItem } from '../db/helpers.js';
-import { extractAndLinkEntities } from '../services/entityService.js';
+import { setItemTags, createItem } from '../db/helpers.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
 import logger from '../lib/logger.js'
-import { createJob, updateJobProgress, completeJob, failJob, hasRunningJob } from '../services/ingestJobs.js'
+import { createJob, saveJobDetails, failJob, hasRunningJob } from '../services/ingestJobs.js'
 import { z } from 'zod'
 import { getSetting, asBool } from '../services/settings.js'
 import { loadBackfillPlan, previewSample, runBackfill, BACKFILL_KIND, DELAY_MIN_MS, DELAY_MAX_MS } from '../services/youtubeBackfill.js'
@@ -49,112 +49,6 @@ const keepUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 500 * 1024 * 1024 },
 })
-
-// Background: classify saved items one by one and update DB records
-async function classifyAndUpdateBatch(itemIds: string[], notes: KeepNote[], jobId: string) {
-  const limit = pLimit(3);
-  let completed = 0;
-
-  const tasks = itemIds.map((id, i) => limit(async () => {
-    const note = notes[i];
-    const text = [note?.title, note?.content].filter(Boolean).join('\n\n');
-
-    // Skip genuinely empty notes
-    if (!text.trim()) {
-      completed++;
-      await updateJobProgress(jobId, completed, itemIds.length).catch(() => {});
-      return;
-    }
-
-    try {
-      const result = await classify(text);
-
-      const client = await pool.connect();
-      try {
-        await client.query('BEGIN');
-
-        // Check if user has manually reviewed this item — if so, record extraction but don't auto-apply
-        const { rows: itemMeta } = await client.query<{ reviewed: boolean }>(
-          'SELECT reviewed FROM items WHERE id = $1', [id]
-        );
-        const isReviewed = itemMeta[0]?.reviewed ?? false;
-
-        if (result.multiEntity && result.entities && result.entities.length > 0) {
-          logger.info(`[Classify] Multi-entity detected for ${id}: ${result.entities.length} entities`)
-
-          for (const entity of result.entities) {
-            const newItem = await createItem(client, {
-              title: (entity.title as string) || (entity.name as string) || 'Untitled Entity',
-              type: result.type,
-              content: `Extracted from: ${note?.title || 'Untitled note'}\n\nSummary: ${result.summary}`,
-              structured: { ...entity, summary: result.summary },
-              source: 'keep',
-              categories: result.categories,
-              tags: result.tags,
-              reviewed: false,
-              confidence: result.confidence
-            });
-            await extractAndLinkEntities(client, newItem.id, newItem.type, newItem.structured);
-          }
-
-          // Mark original note as split regardless of reviewed status
-          await client.query(
-            `UPDATE items SET title=$1, structured=$2, updated_at=NOW(), confidence=$3 WHERE id=$4`,
-            [`[Split] ${note?.title || 'Untitled'}`,
-             JSON.stringify({ summary: `Split into ${result.entities.length} items.`, originalType: result.type }),
-             result.confidence, id]
-          );
-        } else {
-          if (!result.title || result.title === 'Untitled') {
-            result.title = note?.title || note?.content?.split('\n')[0]?.slice(0, 80) || 'Untitled';
-          }
-          const allTags = Array.from(new Set([...result.tags, ...(note?.labels || [])]));
-          const structuredWithSummary = { ...result.structured, summary: result.summary };
-
-          // Always record extraction in provenance log
-          await client.query(
-            `INSERT INTO item_extractions
-               (item_id, model, type, title, summary, structured, categories, tags, confidence, applied)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-            [id, result.model ?? 'unknown', result.type, result.title, result.summary,
-             JSON.stringify(structuredWithSummary), result.categories, allTags,
-             result.confidence, !isReviewed]
-          );
-
-          if (!isReviewed) {
-            // Apply extraction to live item
-            await client.query(
-              `UPDATE items SET type=$1, title=$2, structured=$3, extraction_model=$4, updated_at=NOW(), confidence=$5 WHERE id=$6`,
-              [result.type, result.title, JSON.stringify(structuredWithSummary),
-               result.model ?? 'unknown', result.confidence, id]
-            );
-            if (allTags.length > 0) await setItemTags(client, id, allTags);
-            if (result.categories.length > 0) await setItemCategories(client, id, result.categories);
-            await extractAndLinkEntities(client, id, result.type, structuredWithSummary);
-          } else {
-            logger.info(`[Classify] Skipped applying to reviewed item ${id} — extraction saved for review`)
-          }
-        }
-        await client.query('COMMIT');
-        logger.info(`[Classify] OK: ${result.title} → ${result.type}${isReviewed ? ' (extraction only — item reviewed)' : ''}`)
-      } catch (err) {
-        await client.query('ROLLBACK');
-        logger.error(err, `[Classify] DB update failed for ${id}`)
-      } finally {
-        client.release();
-      }
-    } catch (err) {
-      logger.error(`[Classify] Failed for ${id}, leaving as pending`)
-    }
-
-    completed++;
-    await updateJobProgress(jobId, completed, itemIds.length).catch(() => {});
-  }));
-
-  await Promise.all(tasks);
-  // Complete once, after every task (including empty-note early returns) has settled.
-  await completeJob(jobId).catch(() => {});
-}
 
 router.post('/url', ingestLimiter, async (req, res) => {
   try {
@@ -225,12 +119,111 @@ router.post('/keep/bulk', async (req, res) => {
   await createJob(jobId, notes.length);
 
   // Fire and forget — runs in background
-  classifyAndUpdateBatch(savedIds, notes, jobId)
+  classifyAndUpdateBatch(
+    savedIds,
+    notes.map((n: { title?: string; content?: string; labels?: string[] }) => ({ title: n.title, content: n.content, labels: n.labels, source: 'keep' as const })),
+    jobId,
+  )
     .catch(err => failJob(jobId, String(err)).catch(() => {}));
 
   logger.info(`[Keep import] Saved ${savedIds.length} notes, background classification started (job ${jobId})`)
   res.json({ saved: savedIds.length, jobId });
 });
+
+// ── POST /api/ingest/paste/bulk ───────────────────────────────────────────────
+// Paste many links / captions / snippets at once. Entries are split, de-duplicated (same URL in the
+// paste or already saved, ignoring tracking params and spelling), saved instantly as unreviewed notes,
+// then classified in the background — poll GET /jobs/:id. `dryRun` returns the plan and writes nothing.
+
+const PASTE_KIND = 'paste-import'
+
+const pasteBulkSchema = z
+  .object({
+    text: z.string().max(MAX_PASTE_CHARS).optional(),
+    entries: z.array(z.object({ text: z.string() })).optional(),
+    dryRun: z.boolean().default(false),
+  })
+  .refine(b => (b.text !== undefined) !== (b.entries !== undefined), { message: 'Send either "text" or "entries"' })
+
+router.post('/paste/bulk', ingestLimiter, async (req, res) => {
+  const parsed = pasteBulkSchema.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid request', details: parsed.error.flatten() })
+  const { dryRun } = parsed.data
+
+  const texts = parsed.data.entries
+    ? parsed.data.entries.map(e => e.text.trim()).filter(Boolean)
+    : splitPaste(parsed.data.text ?? '')
+  if (texts.length === 0) return res.status(400).json({ error: 'Nothing to import — the paste was empty.' })
+  if (texts.length > MAX_PASTE_ENTRIES) {
+    return res.status(400).json({
+      error: `Too many entries (${texts.length}). Import at most ${MAX_PASTE_ENTRIES} at a time.`,
+      max: MAX_PASTE_ENTRIES,
+    })
+  }
+
+  try {
+    if (!dryRun && (await hasRunningJob(PASTE_KIND))) {
+      return res.status(409).json({ error: 'A paste import is already running. Wait for it to finish.' })
+    }
+
+    const planned = await planPaste(texts)
+    const toSave = planned.filter(e => e.status === 'new')
+    const counts = { total: planned.length, new: toSave.length, skipped: planned.length - toSave.length }
+    const toResult = (e: (typeof planned)[number], itemId?: string): PasteEntryResult => ({
+      index: e.index,
+      title: e.title,
+      source: e.source,
+      sourceUrl: e.sourceUrl,
+      status: e.status === 'new' ? 'saved' : 'skipped',
+      reason: e.reason,
+      itemId,
+      existingId: e.existingId,
+      existingTitle: e.existingTitle,
+    })
+
+    if (dryRun) {
+      return res.json({ dryRun: true, ...counts, entries: planned.map(e => toResult(e)) })
+    }
+    if (toSave.length === 0) {
+      return res.json({ dryRun: false, ...counts, saved: 0, jobId: null, entries: planned.map(e => toResult(e)) })
+    }
+
+    const client = await pool.connect()
+    let ids: string[]
+    try {
+      await client.query('BEGIN')
+      ids = await savePlanned(client, toSave)
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+
+    const idByIndex = new Map(toSave.map((e, i) => [e.index, ids[i]]))
+    const entries = planned.map(e => toResult(e, idByIndex.get(e.index)))
+
+    const jobId = uuidv4()
+    await createJob(jobId, ids.length, PASTE_KIND)
+    await saveJobDetails(jobId, { entries }).catch(() => {})
+
+    // Fire and forget — classification continues after the response.
+    classifyAndUpdateBatch(
+      ids,
+      toSave.map(e => ({ content: e.text, source: e.source, sourceUrl: e.sourceUrl })),
+      jobId,
+      { details: { entries } },
+    ).catch(err => failJob(jobId, String(err)).catch(() => {}))
+
+    logger.info(`[Paste import] Saved ${ids.length} of ${planned.length} entries, classification started (job ${jobId})`)
+    res.json({ dryRun: false, ...counts, saved: ids.length, jobId, entries })
+  } catch (err) {
+    logger.error(err, 'Paste bulk import error')
+    res.status(500).json({ error: 'Failed to import pasted entries' })
+  }
+})
+
 
 router.get('/jobs/:id', async (req, res) => {
   try {

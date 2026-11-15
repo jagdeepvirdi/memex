@@ -643,7 +643,7 @@ markitdown --help
       (summary comes from the classifier prompt's `whatItDoes` rule; passes `sourceUrl` hint to `classify`)
 - [x] `server/src/routes/ingest.ts` (`/text`, `/url`) — return `intent`; detect instagram.com URL → `source='instagram'` + `sourceUrl`;
       regex-extract GitHub URL into `sourceUrl`
-- [ ] Still open from step 4: multi-repo caption split — each split item needs its own `sourceUrl` (`multiEntity` path in `ingest.ts`)
+- [x] ~~Still open from step 4:~~ multi-repo caption split — each split item needs its own `sourceUrl` (`multiEntity` path in `ingest.ts`) *(done 2026-11-15 in the shared batch (`enrichBatch.ts`): a split item gets the entity's own `repoUrl`/`url` when the model found one, else the note's URL)*
 
 **5. Client**
 - [x] `client/src/components/ingest/IngestPanel.tsx` — send full payload (structured/intent/priority/confidence); priority picker; source auto-detect/selector
@@ -666,20 +666,20 @@ markitdown --help
       creator→`person`, owner→`organization`, repo→`other`; call from `POST /api/items`; `seedEntityGraph.ts` backfill
 - [ ] `server/src/services/digestService.ts` — add `i.intent`, `i.priority` to `ITEM_COLS`; additive `byPriority` field
       (keep `recentItems` so `Digest.test.tsx` passes); update `Digest.tsx` + tests
-- [ ] **Bulk route** `POST /ingest/paste/bulk` (do NOT clone `/keep/bulk` as-is):
-  - [ ] Generalize `classifyAndUpdateBatch` — source, sourceUrl, intent as parameters; fix the early-return job-completion bug
-  - [ ] Add `ingestLimiter` + size cap; per-item error tracking
-  - [ ] Dedupe by normalized URL; optional `items_source_url_idx` in a later migration (021 was taken by `ingest_jobs.details`) (must tolerate existing duplicates)
-  - [ ] `PasteImportPanel` tab reusing Keep job polling (`GET /ingest/jobs/:id`)
+- [x] **Bulk route** `POST /ingest/paste/bulk` (do NOT clone `/keep/bulk` as-is):
+  - [x] Generalize `classifyAndUpdateBatch` — source, sourceUrl, intent as parameters; fix the early-return job-completion bug *(done 2026-11-15: `services/enrichBatch.ts`, entries carry source/sourceUrl; intent now written on apply, in extractions and on split items)*
+  - [x] Add `ingestLimiter` + size cap; per-item error tracking *(done: `ingestLimiter`, max 200 entries / 1M chars / 20k per entry — over-long entries are skipped, never truncated; failures listed in job `details.failed`, job `failed` if every item failed)*
+  - [x] Dedupe by normalized URL (in the paste and against saved items; no index needed yet). *Optional `items_source_url_idx` still deferred — see below.* Text-only entries are deduped within the paste only (`content_hash` is never written).
+  - [x] `PasteImportPanel` ("Bulk Paste" tab): preview (dry run) → import → job polling, skip reasons, failure list *(done 2026-11-15)*
 - [ ] `TableView` — priority filter + bulk triage actions (set priority on selection)
 - [ ] Optional: GitHub API lookup (stars, language, updated) — only if approved; respects strict-local mode
 - [ ] Tests for each of the above
 
 ### Phase 3 — Optional / later
 - [ ] Backfill priority/intent for existing items (explicit opt-in only; all 725 are NULL intent today)
-- [ ] Fix intent plumbing on all capture paths (`classifyAndUpdateBatch`, quicksave) as a bonus
+- [x] Fix intent plumbing on all capture paths (`classifyAndUpdateBatch`, quicksave) as a bonus
       *(partly done 2026-11-12: quicksave, `/text`, `/url`, `/file`, `/voice` previews pass `intent`; still open: the Keep
-      multi-entity split `createItem` call in `classifyAndUpdateBatch` omits it)*
+      multi-entity split `createItem` call in `classifyAndUpdateBatch` omits it) — all done 2026-11-15 in `enrichBatch.ts`)*
 - [ ] Clean stray categories (`Tech>Link`, `Courses>Tech`, `Travel>Links`, 218 bare-`Links` items)
 - [ ] Update stale CLAUDE.md claims (content-hash dedupe, Instagram caption scraping)
 - [ ] If `'repo'` entity type is ever wanted: own migration file with only `ALTER TYPE entity_type ADD VALUE IF NOT EXISTS 'repo'`
