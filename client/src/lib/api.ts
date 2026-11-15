@@ -207,6 +207,14 @@ export async function deleteItem(id: string): Promise<void> {
   })
 }
 
+/** Sets (or, with null, clears) the triage priority on many items at once. */
+export async function setItemsPriority(ids: string[], priority: ItemPriority | null): Promise<{ count: number }> {
+  return apiFetch<{ count: number }>('/items/bulk/priority', {
+    method: 'PUT',
+    body: JSON.stringify({ ids, priority }),
+  })
+}
+
 export async function deleteItemsBulk(ids: string[]): Promise<{ count: number }> {
   return apiFetch<{ count: number }>(`/items/bulk`, {
     method: 'DELETE',

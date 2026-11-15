@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -12,12 +12,8 @@ vi.mock('react-router-dom', () => ({
   useSearchParams: () => [mockSearchParams, mockSetSearchParams],
 }))
 
-vi.mock('sonner', () => ({
-  toast: {
-    success: vi.fn(),
-    error: vi.fn(),
-  },
-}))
+const toast = vi.hoisted(() => ({ success: vi.fn(), error: vi.fn() }))
+vi.mock('sonner', () => ({ toast }))
 
 // Mock Subcomponents
 vi.mock('../components/AppHeader', () => {
@@ -53,6 +49,7 @@ const mockUpdateItem = vi.fn()
 const mockMigrateToVault = vi.fn()
 const mockNlFilter = vi.fn()
 const mockDeleteItem = vi.fn()
+const mockSetItemsPriority = vi.fn()
 
 vi.mock('../lib/api', () => ({
   fetchItems: (...args: any[]) => mockFetchItems(...args),
@@ -60,6 +57,7 @@ vi.mock('../lib/api', () => ({
   migrateToVault: (...args: any[]) => mockMigrateToVault(...args),
   nlFilter: (...args: any[]) => mockNlFilter(...args),
   deleteItem: (...args: any[]) => mockDeleteItem(...args),
+  setItemsPriority: (...args: any[]) => mockSetItemsPriority(...args),
 }))
 
 import TableView from './TableView'
@@ -175,5 +173,140 @@ describe('TableView Component', () => {
     await waitFor(() => {
       expect(mockDeleteItem).toHaveBeenCalledWith('1')
     })
+  })
+})
+
+// ── Priority triage ───────────────────────────────────────────────────────────
+
+describe('TableView — priority triage', () => {
+  const triageItems = {
+    items: [
+      { id: '1', title: 'Alpha repo', type: 'link', content: '', structured: {}, categories: [], tags: [], source: 'manual', priority: 'essential', createdAt: new Date() },
+      { id: '2', title: 'Beta repo', type: 'link', content: '', structured: {}, categories: [], tags: [], source: 'manual', createdAt: new Date() },
+      { id: '3', title: 'Gamma repo', type: 'link', content: '', structured: {}, categories: [], tags: [], source: 'manual', priority: 'skip', createdAt: new Date() },
+    ],
+    total: 3,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockSearchParams.delete('priority')
+    mockFetchItems.mockResolvedValue(triageItems)
+    mockSetItemsPriority.mockResolvedValue({ count: 2 })
+  })
+
+  const load = async () => {
+    render(<TableView />)
+    await screen.findByText('Alpha repo')
+  }
+  const pick = (title: string) => fireEvent.click(screen.getByRole('checkbox', { name: `Select ${title}` }))
+
+  it('shows each item priority as a badge, and a dash when not triaged', async () => {
+    await load()
+    const badges = screen.getAllByTestId('priority-badge')
+    expect(badges.map(b => b.textContent)).toEqual(['Essential', 'Skip'])
+  })
+
+  it('has no bulk bar until something is selected', async () => {
+    await load()
+    expect(screen.queryByTestId('bulk-bar')).not.toBeInTheDocument()
+    pick('Alpha repo')
+    expect(screen.getByTestId('bulk-bar')).toHaveTextContent('1 selected')
+  })
+
+  it('selects and deselects every row from the header checkbox', async () => {
+    await load()
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all items on this page' }))
+    expect(screen.getByTestId('bulk-bar')).toHaveTextContent('3 selected')
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select all items on this page' }))
+    expect(screen.queryByTestId('bulk-bar')).not.toBeInTheDocument()
+  })
+
+  it('"Deselect all" clears the selection', async () => {
+    await load()
+    pick('Alpha repo'); pick('Beta repo')
+    fireEvent.click(screen.getByRole('button', { name: 'Deselect all' }))
+    expect(screen.queryByTestId('bulk-bar')).not.toBeInTheDocument()
+  })
+
+  it('sets the priority on the selected items only, updates the rows and clears the selection', async () => {
+    await load()
+    pick('Beta repo'); pick('Gamma repo')
+    fireEvent.click(within(screen.getByTestId('bulk-bar')).getByRole('button', { name: 'Useful' }))
+
+    await waitFor(() => expect(mockSetItemsPriority).toHaveBeenCalledWith(['2', '3'], 'useful'))
+    await waitFor(() => expect(screen.getAllByTestId('priority-badge').map(b => b.textContent)).toEqual(['Essential', 'Useful', 'Useful']))
+    expect(screen.queryByTestId('bulk-bar')).not.toBeInTheDocument()
+    expect(toast.success).toHaveBeenCalledWith('Marked 2 items as Useful')
+  })
+
+  it('highlights a priority in the picker only when every selected item shares it', async () => {
+    await load()
+    pick('Alpha repo')
+    expect(within(screen.getByTestId('bulk-bar')).getByRole('button', { name: 'Essential' })).toHaveAttribute('aria-pressed', 'true')
+    pick('Gamma repo')
+    expect(within(screen.getByTestId('bulk-bar')).getByRole('button', { name: 'Essential' })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('"Clear priority" sends null', async () => {
+    await load()
+    pick('Alpha repo'); pick('Gamma repo')
+    fireEvent.click(screen.getByRole('button', { name: 'Clear priority' }))
+    await waitFor(() => expect(mockSetItemsPriority).toHaveBeenCalledWith(['1', '3'], null))
+    await waitFor(() => expect(screen.queryByTestId('priority-badge')).not.toBeInTheDocument())
+    expect(toast.success).toHaveBeenCalledWith('Cleared priority on 2 items')
+  })
+
+  it('keeps the selection and reports an error if the update fails', async () => {
+    mockSetItemsPriority.mockRejectedValue(new Error('boom'))
+    await load()
+    pick('Beta repo')
+    fireEvent.click(within(screen.getByTestId('bulk-bar')).getByRole('button', { name: 'Skip' }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Failed to update priority'))
+    expect(screen.getByTestId('bulk-bar')).toHaveTextContent('1 selected')
+    expect(screen.queryAllByTestId('priority-badge')).toHaveLength(2) // Beta unchanged
+  })
+
+  it('passes the priority filter to the query and updates the URL', async () => {
+    mockSearchParams.set('priority', 'none')
+    await load()
+    expect(mockFetchItems.mock.calls[0][0]).toMatchObject({ priority: 'none' })
+    fireEvent.change(screen.getByLabelText('Priority filter'), { target: { value: 'essential' } })
+    const params = mockSetSearchParams.mock.calls[mockSetSearchParams.mock.calls.length - 1][0] as URLSearchParams
+    expect(params.get('priority')).toBe('essential')
+  })
+
+  it('omits the priority filter when set to any', async () => {
+    await load()
+    expect(mockFetchItems.mock.calls[0][0].priority).toBeUndefined()
+  })
+
+  it('drops items that no longer match an active priority filter', async () => {
+    mockSearchParams.set('priority', 'none')
+    const beta = triageItems.items[1]
+    const delta = { ...beta, id: '4', title: 'Delta repo' }
+    mockFetchItems.mockResolvedValue({ items: [beta, delta], total: 2 })
+    render(<TableView />)
+    await screen.findByText('Beta repo')
+    expect(screen.getByText('2 items')).toBeInTheDocument()
+
+    pick('Beta repo')
+    fireEvent.click(within(screen.getByTestId('bulk-bar')).getByRole('button', { name: 'Essential' }))
+
+    await waitFor(() => expect(screen.queryByText('Beta repo')).not.toBeInTheDocument())
+    expect(screen.getByText('Delta repo')).toBeInTheDocument()
+    expect(screen.getByText('1 items')).toBeInTheDocument()
+    expect(mockSetItemsPriority).toHaveBeenCalledWith(['2'], 'essential')
+  })
+
+  it('removes an item cleared of the priority it was filtered by', async () => {
+    mockSearchParams.set('priority', 'essential')
+    mockFetchItems.mockResolvedValue({ items: [triageItems.items[0]], total: 1 })
+    render(<TableView />)
+    await screen.findByText('Alpha repo')
+    pick('Alpha repo')
+    fireEvent.click(screen.getByRole('button', { name: 'Clear priority' }))
+    await waitFor(() => expect(mockSetItemsPriority).toHaveBeenCalledWith(['1'], null))
+    await waitFor(() => expect(screen.queryByText('Alpha repo')).not.toBeInTheDocument())
   })
 })

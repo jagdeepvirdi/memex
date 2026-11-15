@@ -671,7 +671,7 @@ markitdown --help
   - [x] Add `ingestLimiter` + size cap; per-item error tracking *(done: `ingestLimiter`, max 200 entries / 1M chars / 20k per entry — over-long entries are skipped, never truncated; failures listed in job `details.failed`, job `failed` if every item failed)*
   - [x] Dedupe by normalized URL (in the paste and against saved items; no index needed yet). *Optional `items_source_url_idx` still deferred — see below.* Text-only entries are deduped within the paste only (`content_hash` is never written).
   - [x] `PasteImportPanel` ("Bulk Paste" tab): preview (dry run) → import → job polling, skip reasons, failure list *(done 2026-11-15)*
-- [ ] `TableView` — priority filter + bulk triage actions (set priority on selection)
+- [x] `TableView` — priority filter + bulk triage actions (set priority on selection) *(done 2026-11-15: filter, priority column, row checkboxes, bulk bar, `PUT /api/items/bulk/priority` (max 500 ids); items leave the list when they stop matching an active filter)*
 - [ ] Optional: GitHub API lookup (stars, language, updated) — only if approved; respects strict-local mode
 - [ ] Tests for each of the above
 

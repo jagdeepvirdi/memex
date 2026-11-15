@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, Loader2, Check, Filter, Search, RotateCcw, Shield, Download, Bell, Sparkles, X, Send, Trash2, Pencil } from 'lucide-react'
+import { ArrowLeft, Loader2, Check, Filter, Search, RotateCcw, Shield, Download, Bell, Sparkles, X, Send, Trash2, Pencil, Flag } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import Sidebar from '../components/sidebar/Sidebar'
 import { AppHeader } from '../components/AppHeader'
-import { fetchItems, updateItem, migrateToVault, nlFilter, deleteItem } from '../lib/api'
+import { fetchItems, updateItem, migrateToVault, nlFilter, deleteItem, setItemsPriority } from '../lib/api'
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
 import { itemsToCsv, downloadCsv } from '../lib/export'
-import type { Item, ItemType, ParsedFilter } from '../../../shared/types'
+import PriorityPicker, { PriorityBadge } from '../components/PriorityPicker'
+import type { Item, ItemPriority, ItemType, ParsedFilter } from '../../../shared/types'
 
 const TYPE_OPTIONS: { label: string; value: ItemType | 'all' }[] = [
   { label: 'All Types', value: 'all' },
@@ -29,6 +30,16 @@ const STATUS_OPTIONS = [
   { label: 'AI Enriched', value: 'enriched' },
 ]
 
+const PRIORITY_FILTER_OPTIONS = [
+  { label: 'Any Priority', value: 'all' },
+  { label: 'Essential', value: 'essential' },
+  { label: 'Useful', value: 'useful' },
+  { label: 'Skip', value: 'skip' },
+  { label: 'Not triaged', value: 'none' },
+]
+
+const PRIORITY_LABEL: Record<ItemPriority, string> = { essential: 'Essential', useful: 'Useful', skip: 'Skip' }
+
 export default function TableView() {
   const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -39,6 +50,8 @@ export default function TableView() {
   const [bulkReviewing, setBulkReviewing] = useState(false)
   const [migratingId, setMigratingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [applyingPriority, setApplyingPriority] = useState(false)
   const { vaultKey, isLocked } = useVaultStore()
 
   // NL filter mode
@@ -52,17 +65,21 @@ export default function TableView() {
   const status = searchParams.get('status') || 'all'
   const q = searchParams.get('q') || ''
   const hasReminder = searchParams.get('hasReminder') === 'true'
+  const priority = searchParams.get('priority') || 'all'
+  const priorityFilter = priority === 'all' ? undefined : (priority as ItemPriority | 'none')
   const offset = parseInt(searchParams.get('offset') || '0', 10)
   const limit = 50
 
   useEffect(() => {
     setLoading(true)
+    setSelected(new Set())
     fetchItems({
       type: type === 'all' ? undefined : type,
       unreviewed: status === 'unreviewed' ? true : undefined,
       pendingEnrichment: status === 'pendingEnrichment' ? true : undefined,
       enriched: status === 'enriched' ? true : undefined,
       hasReminder: hasReminder || undefined,
+      priority: priorityFilter,
       q: q || undefined,
       limit,
       offset,
@@ -76,7 +93,7 @@ export default function TableView() {
         toast.error('Failed to load items')
       })
       .finally(() => setLoading(false))
-  }, [type, status, q, hasReminder, offset])
+  }, [type, status, q, hasReminder, priority, offset])
 
   const handleUpdateFilter = (key: string, value: string) => {
     const newParams = new URLSearchParams(searchParams)
@@ -161,6 +178,40 @@ export default function TableView() {
     }
   }
 
+  const allSelected = items.length > 0 && items.every(i => selected.has(i.id))
+  const toggleOne = (id: string) =>
+    setSelected(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next })
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(items.map(i => i.id)))
+
+  // The picker highlights a priority only when every selected item already has it.
+  const selectedItems = items.filter(i => selected.has(i.id))
+  const firstPriority = selectedItems[0]?.priority ?? null
+  const commonPriority = selectedItems.every(i => (i.priority ?? null) === firstPriority) ? firstPriority : null
+
+  const handleBulkPriority = async (next: ItemPriority | null) => {
+    const ids = selectedItems.map(i => i.id)
+    if (ids.length === 0 || applyingPriority) return
+    setApplyingPriority(true)
+    try {
+      await setItemsPriority(ids, next)
+      const idSet = new Set(ids)
+      // With a priority filter on, items that no longer match leave the list.
+      const stays = priority === 'all' || (priority === 'none' ? next === null : next === priority)
+      setItems(prev => prev
+        .map(i => (idSet.has(i.id) ? { ...i, priority: next } : i))
+        .filter(i => stays || !idSet.has(i.id)))
+      if (!stays) setTotal(prev => prev - ids.length)
+      setSelected(new Set())
+      const n = `${ids.length} item${ids.length === 1 ? '' : 's'}`
+      toast.success(next ? `Marked ${n} as ${PRIORITY_LABEL[next]}` : `Cleared priority on ${n}`)
+    } catch (err) {
+      console.error(err)
+      toast.error('Failed to update priority')
+    } finally {
+      setApplyingPriority(false)
+    }
+  }
+
   const handleExportCsv = () => {
     if (items.length === 0) return
     const csv = itemsToCsv(items)
@@ -176,6 +227,7 @@ export default function TableView() {
       const result = await nlFilter(nlQuery.trim())
       setItems(result.items)
       setTotal(result.total)
+      setSelected(new Set())
       setParsedFilter(result.parsedFilter)
     } catch (err) {
       toast.error('Natural language filter failed')
@@ -197,6 +249,7 @@ export default function TableView() {
       pendingEnrichment: status === 'pendingEnrichment' ? true : undefined,
       enriched: status === 'enriched' ? true : undefined,
       hasReminder: hasReminder || undefined,
+      priority: priorityFilter,
       q: q || undefined,
       limit,
       offset,
@@ -278,6 +331,15 @@ export default function TableView() {
                 {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
               </select>
 
+              <select
+                aria-label="Priority filter"
+                value={priority}
+                onChange={(e) => handleUpdateFilter('priority', e.target.value)}
+                className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-accent/50 transition-colors"
+              >
+                {PRIORITY_FILTER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+
               <button
                 onClick={() => {
                   const p = new URLSearchParams(searchParams)
@@ -344,14 +406,48 @@ export default function TableView() {
           )}
           </div>
 
+          {/* Bulk triage bar */}
+          {selected.size > 0 && (
+            <div data-testid="bulk-bar" className="flex flex-wrap items-center gap-3 bg-accent/10 border border-accent/20 rounded-xl px-4 py-2.5">
+              <span className="text-xs text-accent font-medium">{selected.size} selected</span>
+              <Flag size={13} className="text-ink-muted" />
+              <PriorityPicker value={commonPriority} onChange={handleBulkPriority} disabled={applyingPriority} />
+              <button
+                onClick={() => handleBulkPriority(null)}
+                disabled={applyingPriority}
+                className="text-xs text-ink-muted hover:text-ink px-2 py-1 rounded-lg hover:bg-white/5 disabled:opacity-50"
+              >
+                Clear priority
+              </button>
+              {applyingPriority && <Loader2 size={14} className="animate-spin text-accent" />}
+              <button
+                onClick={() => setSelected(new Set())}
+                className="ml-auto text-xs text-ink-muted hover:text-ink px-2 py-1 rounded-lg hover:bg-white/5"
+              >
+                Deselect all
+              </button>
+            </div>
+          )}
+
           {/* Table Container */}
           <div className="flex-1 bg-white/[0.02] border border-white/5 rounded-xl overflow-hidden flex flex-col">
             <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
               <table className="w-full text-left border-collapse table-fixed">
                 <thead className="sticky top-0 bg-bg/95 backdrop-blur-sm shadow-sm z-10">
                   <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-ink-muted font-semibold">
-                    <th className="px-6 py-4 w-[25%] min-w-[200px]">Title</th>
+                    <th className="pl-6 pr-2 py-4 w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Select all items on this page"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        disabled={items.length === 0}
+                        className="accent-amber-500 cursor-pointer"
+                      />
+                    </th>
+                    <th className="px-4 py-4 w-[25%] min-w-[200px]">Title</th>
                     <th className="px-4 py-4 w-24">Type</th>
+                    <th className="px-4 py-4 w-24">Priority</th>
                     <th className="px-4 py-4 w-40">Categories</th>
                     <th className="px-4 py-4 w-40">Tags</th>
                     <th className="px-4 py-4 w-24 text-center">Score</th>
@@ -363,8 +459,10 @@ export default function TableView() {
                   {loading ? (
                     [...Array(10)].map((_, i) => (
                       <tr key={i} className="animate-pulse">
-                        <td className="px-6 py-4"><div className="h-4 bg-white/5 rounded w-3/4" /></td>
+                        <td className="pl-6 pr-2 py-4"><div className="h-4 bg-white/5 rounded w-4" /></td>
+                        <td className="px-4 py-4"><div className="h-4 bg-white/5 rounded w-3/4" /></td>
                         <td className="px-4 py-4"><div className="h-4 bg-white/5 rounded w-16" /></td>
+                        <td className="px-4 py-4"><div className="h-4 bg-white/5 rounded w-14" /></td>
                         <td className="px-4 py-4"><div className="h-4 bg-white/5 rounded w-24" /></td>
                         <td className="px-4 py-4"><div className="h-4 bg-white/5 rounded w-20" /></td>
                         <td className="px-4 py-4"><div className="h-4 bg-white/5 rounded w-12 mx-auto" /></td>
@@ -374,14 +472,23 @@ export default function TableView() {
                     ))
                   ) : items.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="py-24 text-center text-ink-muted text-sm">
+                      <td colSpan={9} className="py-24 text-center text-ink-muted text-sm">
                         No items found matching your filters.
                       </td>
                     </tr>
                   ) : (
                     items.map(item => (
-                      <tr key={item.id} className="hover:bg-white/[0.03] transition-colors group">
-                        <td className="px-6 py-4 truncate font-medium text-ink/90 group-hover:text-ink cursor-pointer" onClick={() => navigate(`/item/${item.id}`)}>
+                      <tr key={item.id} className={`hover:bg-white/[0.03] transition-colors group ${selected.has(item.id) ? 'bg-accent/5' : ''}`}>
+                        <td className="pl-6 pr-2 py-4">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${item.title}`}
+                            checked={selected.has(item.id)}
+                            onChange={() => toggleOne(item.id)}
+                            className="accent-amber-500 cursor-pointer"
+                          />
+                        </td>
+                        <td className="px-4 py-4 truncate font-medium text-ink/90 group-hover:text-ink cursor-pointer" onClick={() => navigate(`/item/${item.id}`)}>
                           <div className="flex items-center gap-2">
                             {item.remindAt && (
                               <span title={`Reminder: ${new Date(item.remindAt).toLocaleString()}`}>
@@ -395,6 +502,9 @@ export default function TableView() {
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 uppercase font-bold text-ink-muted">
                             {item.type}
                           </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          {item.priority ? <PriorityBadge value={item.priority} /> : <span className="text-ink-muted/30 text-xs">—</span>}
                         </td>
                         <td className="px-4 py-4 truncate text-xs text-ink-muted" title={item.categories.join(' > ')}>
                           {item.categories.join(' > ') || '—'}

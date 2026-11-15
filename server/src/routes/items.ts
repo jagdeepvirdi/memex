@@ -359,6 +359,33 @@ router.post('/reprocess-bulk', async (req, res) => {
   }
 })
 
+// ── PUT /api/items/bulk/priority — triage many items at once ──────────────────
+
+const MAX_BULK_PRIORITY = 500
+const bulkPrioritySchema = z.object({
+  ids: z.array(z.string().uuid()).min(1).max(MAX_BULK_PRIORITY),
+  priority: z.enum(ITEM_PRIORITIES).nullable(),
+})
+
+router.put('/bulk/priority', async (req, res) => {
+  const parsed = bulkPrioritySchema.safeParse(req.body)
+  if (!parsed.success) {
+    res.status(400).json({ error: 'Invalid request body', details: parsed.error.flatten() })
+    return
+  }
+  const { ids, priority } = parsed.data
+  try {
+    const { rowCount } = await pool.query(
+      'UPDATE items SET priority = $1 WHERE id = ANY($2::uuid[]) AND deleted_at IS NULL',
+      [priority, [...new Set(ids)]],
+    )
+    res.json({ count: rowCount })
+  } catch (err) {
+    logger.error(err, 'PUT /api/items/bulk/priority error')
+    res.status(500).json({ error: 'Failed to update priority' })
+  }
+})
+
 // ── DELETE /api/items/bulk (soft delete) ───────────────────────────────────────
 
 router.delete('/bulk', async (req, res) => {

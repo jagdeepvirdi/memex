@@ -437,3 +437,57 @@ describe('POST /api/items/:id/re-classify privacy guard', () => {
     expect(await run({ title: 'T', content: 'C', encrypted: true })).toEqual({ cloudSafe: false })
   })
 })
+
+// ── PUT /api/items/bulk/priority ──────────────────────────────────────────────
+
+describe('PUT /api/items/bulk/priority', () => {
+  const ID1 = '11111111-1111-4111-8111-111111111111'
+  const ID2 = '22222222-2222-4222-8222-222222222222'
+  const put = (body: unknown) => request(app).put('/api/items/bulk/priority').set('Authorization', AUTH).send(body as object)
+
+  it('requires auth', async () => {
+    expect((await request(app).put('/api/items/bulk/priority').send({ ids: [ID1], priority: 'useful' })).status).toBe(401)
+  })
+
+  it.each([
+    ['missing ids', { priority: 'useful' }],
+    ['empty ids', { ids: [], priority: 'useful' }],
+    ['non-uuid id', { ids: ['abc'], priority: 'useful' }],
+    ['unknown priority', { ids: [ID1], priority: 'urgent' }],
+    ['missing priority', { ids: [ID1] }],
+    ['too many ids', { ids: Array.from({ length: 501 }, (_, i) => `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`), priority: 'skip' }],
+  ])('400s on %s', async (_n, body) => {
+    const res = await put(body)
+    expect(res.status).toBe(400)
+    expect(pool.query).not.toHaveBeenCalled()
+  })
+
+  it('sets the priority on live items only, once per distinct id, and returns the count', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [], rowCount: 2 } as any)
+    const res = await put({ ids: [ID1, ID2, ID1], priority: 'essential' })
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ count: 2 })
+    const [sql, params] = vi.mocked(pool.query).mock.calls[0]
+    expect(sql).toMatch(/UPDATE items SET priority = \$1/)
+    expect(sql).toMatch(/deleted_at IS NULL/)
+    expect(params).toEqual(['essential', [ID1, ID2]])
+  })
+
+  it('clears the priority when null is sent', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [], rowCount: 1 } as any)
+    const res = await put({ ids: [ID1], priority: null })
+    expect(res.status).toBe(200)
+    expect(vi.mocked(pool.query).mock.calls[0][1]).toEqual([null, [ID1]])
+  })
+
+  it('is not shadowed by /:id routes', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [], rowCount: 0 } as any)
+    const res = await put({ ids: [ID1], priority: 'skip' })
+    expect(res.body).toEqual({ count: 0 })
+  })
+
+  it('500s when the update fails', async () => {
+    vi.mocked(pool.query).mockRejectedValueOnce(new Error('db'))
+    expect((await put({ ids: [ID1], priority: 'skip' })).status).toBe(500)
+  })
+})
