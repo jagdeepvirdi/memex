@@ -28,6 +28,7 @@ const mockFetchCategories = vi.fn()
 const mockReprocessBulk = vi.fn()
 const mockFetchAiProviders = vi.fn()
 const mockTestAiProvider = vi.fn()
+const mockFetchApiKeys = vi.fn().mockResolvedValue([])
 
 vi.mock('../lib/api', () => ({
   apiFetch: (url: string, init?: any) => init !== undefined ? mockApiFetch(url, init) : mockApiFetch(url),
@@ -35,6 +36,10 @@ vi.mock('../lib/api', () => ({
   reprocessBulk: (mode: string) => mockReprocessBulk(mode),
   fetchAiProviders: () => mockFetchAiProviders(),
   testAiProvider: (id: string) => mockTestAiProvider(id),
+  fetchApiKeys: () => mockFetchApiKeys(),
+  saveApiKey: vi.fn(),
+  removeApiKey: vi.fn(),
+  testYoutubeKey: vi.fn(),
 }))
 
 const mockDeriveKey = vi.fn()

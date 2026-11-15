@@ -402,9 +402,17 @@ ANTHROPIC_API_KEY=
 CLAUDE_MODEL=claude-sonnet-5-5
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
+
+# YouTube Data API (optional — video descriptions for Explain / Extract recipe / classification)
+YOUTUBE_API_KEY=
+
+# Encrypts keys saved from Settings (optional — defaults to JWT_SECRET)
+KEY_ENCRYPTION_SECRET=
 ```
 
-AI provider, per-task providers, cloud consent and model selection are runtime settings via `PUT /api/settings` — no restart needed. API keys are env-only and never returned by any endpoint.
+AI provider, per-task providers, cloud consent and model selection are runtime settings via `PUT /api/settings` — no restart needed.
+
+**API keys (Claude, Gemini, YouTube)** come from the environment OR from Settings > API keys; the environment wins. Saved keys live in their own `api_keys` table (migration 023), encrypted with AES-256-GCM (key derived from `KEY_ENCRYPTION_SECRET`, else `JWT_SECRET`; the provider name is bound in as AAD), **never in `settings`** (which `GET /api/settings` returns wholesale). Keys are write-only: `GET /api/ai/keys` returns `{configured, source, last4}` only, `PUT/DELETE /api/ai/keys/:provider` save/remove, `POST /api/ai/keys/youtube/test` checks the YouTube key. These routes require a real login session — the bookmarklet key is refused. `services/apiKeys.ts` owns storage, precedence and `redactSecrets()` (provider errors never carry a key). If `JWT_SECRET`/`KEY_ENCRYPTION_SECRET` changes, saved keys become unreadable and must be re-entered. `services/youtubeApi.ts` sends the key in the `X-Goog-Api-Key` header (never the URL) and returns null when there is no key, Strict Local Mode is on, or the API fails.
 
 ## Code Style
 - TypeScript strict mode, no `any`

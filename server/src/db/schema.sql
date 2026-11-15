@@ -1,4 +1,4 @@
--- Memex — canonical schema reference (reflects all 22 migrations)
+-- Memex — canonical schema reference (reflects all 23 migrations)
 -- This file is documentation only. The live DB is built by running migrations in order:
 --   npm run migrate
 -- Do not run this file directly against the DB.
@@ -163,6 +163,16 @@ CREATE TABLE IF NOT EXISTS settings (
   key        TEXT PRIMARY KEY,
   value      JSONB NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ── API keys entered in Settings (migration 023) ──────────────────────────────
+-- Encrypted (AES-256-GCM); never returned by any endpoint. Env vars take priority.
+CREATE TABLE IF NOT EXISTS api_keys (
+  provider    TEXT        PRIMARY KEY CHECK (provider IN ('claude', 'gemini', 'youtube')),
+  ciphertext  TEXT        NOT NULL,
+  iv          TEXT        NOT NULL,
+  last4       TEXT        NOT NULL,
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- ── Password Vault ────────────────────────────────────────────────────────────

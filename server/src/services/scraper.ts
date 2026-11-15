@@ -2,6 +2,7 @@ import { YoutubeTranscript } from 'youtube-transcript';
 import { getSetting, asBool } from './settings.js';
 import logger from '../lib/logger.js'
 import { extractYoutubeId } from './youtubeUrl.js'
+import { fetchVideoDetails } from './youtubeApi.js'
 
 export interface ScrapedContent {
   title: string;
@@ -14,6 +15,10 @@ export interface ScrapedContent {
   transcript?: string;
   transcriptAvailable?: boolean;
   transcriptTruncated?: boolean;
+  /** From the YouTube Data API, only when a key is configured (see youtubeApi.ts). */
+  description?: string;
+  publishedAt?: string;
+  durationSeconds?: number;
   /** Why the transcript (or metadata) could not be fetched, for per-item failure reports. */
   failure?: string;
 }
@@ -85,6 +90,9 @@ async function scrapeYoutube(url: string, videoId: string): Promise<ScrapedConte
     logger.error(error, 'YouTube oEmbed error')
   }
 
+  // The description (YouTube Data API, optional) is fetched alongside the transcript. It never throws.
+  const detailsPromise = fetchVideoDetails(videoId)
+
   let transcript: string | undefined
   let transcriptTruncated = false
   let transcriptError: string | undefined
@@ -99,9 +107,13 @@ async function scrapeYoutube(url: string, videoId: string): Promise<ScrapedConte
     logger.error(error, 'YouTube transcript error')
   }
 
+  const details = await detailsPromise
+  channel = channel ?? details?.channelTitle
+  const description = details?.description || undefined
+
   const transcriptAvailable = transcript !== undefined
-  // Without a transcript, give the classifier title + channel rather than a bare placeholder.
-  const content = transcript ?? [title, channel && `Channel: ${channel}`, 'Transcript unavailable.'].filter(Boolean).join('\n')
+  // Without a transcript, give the classifier title + channel (+ description when we have one) rather than a bare placeholder.
+  const content = transcript ?? [title, channel && `Channel: ${channel}`, description?.slice(0, 2000), 'Transcript unavailable.'].filter(Boolean).join('\n')
 
   return {
     title,
@@ -113,6 +125,9 @@ async function scrapeYoutube(url: string, videoId: string): Promise<ScrapedConte
     transcript,
     transcriptAvailable,
     transcriptTruncated,
+    description,
+    publishedAt: details?.publishedAt,
+    durationSeconds: details?.durationSeconds,
     failure: transcriptAvailable ? undefined : (transcriptError ?? metadataFailure),
   }
 }

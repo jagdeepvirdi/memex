@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai'
 import { ollamaChat, ollamaEmbed } from './ollama.js'
 import { getAiConfig, type AiConfig, type ProviderId } from './settings.js'
 import logger from '../lib/logger.js'
+import { peekApiKey, ensureApiKeysLoaded, redactSecrets } from './apiKeys.js'
 
 export type { ProviderId } from './settings.js'
 
@@ -27,7 +28,7 @@ function toProviderError(provider: ProviderId, err: unknown): AiProviderError {
   if (err instanceof AiProviderError) return err
   const e = err as { name?: string; status?: number; message?: string } | undefined
   const status = typeof e?.status === 'number' ? e.status : undefined
-  const message = e?.message ?? String(err)
+  const message = redactSecrets(e?.message ?? String(err))
   if (status === 429) return new AiProviderError(provider, 'rate_limit', message, status)
   if (status === 401 || status === 403) return new AiProviderError(provider, 'auth', message, status)
   if (e?.name === 'AbortError' || e?.name === 'TimeoutError' || e?.name === 'APIConnectionTimeoutError') {
@@ -88,15 +89,17 @@ const ollamaProvider: Provider = {
   chat: (r) => ollamaChat(r.prompt, r.system, r.config.model, r.format, r.options, r.signal),
 }
 
-let _anthropic: Anthropic | null = null
+// The key can change at runtime (saved in Settings), so the SDK client is rebuilt when it does.
+let _anthropic: { key: string | undefined; client: Anthropic } | null = null
 function getAnthropicClient(): Anthropic {
-  if (!_anthropic) _anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
-  return _anthropic
+  const key = peekApiKey('claude')
+  if (!_anthropic || _anthropic.key !== key) _anthropic = { key, client: new Anthropic({ apiKey: key }) }
+  return _anthropic.client
 }
 
 const claudeProvider: Provider = {
   id: 'claude',
-  available: () => !!process.env.ANTHROPIC_API_KEY,
+  available: () => !!peekApiKey('claude'),
   model: (c) => c.claudeModel,
   async chat(r) {
     const system = withJsonInstruction(r.system, r.format)
@@ -123,15 +126,16 @@ const claudeProvider: Provider = {
   },
 }
 
-let _gemini: GoogleGenAI | null = null
+let _gemini: { key: string | undefined; client: GoogleGenAI } | null = null
 function getGeminiClient(): GoogleGenAI {
-  if (!_gemini) _gemini = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
-  return _gemini
+  const key = peekApiKey('gemini')
+  if (!_gemini || _gemini.key !== key) _gemini = { key, client: new GoogleGenAI({ apiKey: key }) }
+  return _gemini.client
 }
 
 const geminiProvider: Provider = {
   id: 'gemini',
-  available: () => !!process.env.GEMINI_API_KEY,
+  available: () => !!peekApiKey('gemini'),
   model: (c) => c.geminiModel,
   async chat(r) {
     const system = withJsonInstruction(r.system, r.format)
@@ -167,7 +171,8 @@ export function getProvider(id: ProviderId): Provider {
 }
 
 /** Provider ids with their availability — for GET /api/ai/providers. Never exposes keys. */
-export function listProviders(): Array<{ id: ProviderId; configured: boolean }> {
+export async function listProviders(): Promise<Array<{ id: ProviderId; configured: boolean }>> {
+  await ensureApiKeysLoaded()
   return (Object.keys(PROVIDERS) as ProviderId[]).map(id => ({ id, configured: PROVIDERS[id].available() }))
 }
 
@@ -219,6 +224,7 @@ export async function aiChat(
   signal?: AbortSignal,
   opts: AiCallOptions = {},
 ): Promise<string> {
+  await ensureApiKeysLoaded()
   const config = await getAiConfig()
   const providerId = resolveProvider(config, opts)
   const req: ChatRequest = { prompt, system, format, options, signal, config }
@@ -256,6 +262,7 @@ export async function aiEmbed(text: string): Promise<number[]> {
 /** The provider `aiChat` would use for these options right now (does not make a call). */
 export async function activeProvider(opts: AiCallOptions = {}): Promise<ProviderId> {
   try {
+    await ensureApiKeysLoaded()
     return resolveProvider(await getAiConfig(), opts)
   } catch {
     return 'ollama'
@@ -264,6 +271,7 @@ export async function activeProvider(opts: AiCallOptions = {}): Promise<Provider
 
 /** `<provider>:<model>` label for `items.extraction_model`. */
 export async function activeModelLabel(opts: AiCallOptions = {}): Promise<string> {
+  await ensureApiKeysLoaded()
   const config = await getAiConfig()
   let id: ProviderId
   try {

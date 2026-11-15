@@ -6,9 +6,12 @@
 
 import { scrapeUrl, MAX_TRANSCRIPT_CHARS } from './scraper.js'
 import { findYoutubeUrl } from './youtubeUrl.js'
+import { fetchVideoDetails } from './youtubeApi.js'
 
 /** Prose (URLs stripped) below this length counts as "bare link" and triggers a fetch. */
 const BARE_LINK_MAX_CHARS = 200
+/** A description shorter than this is not worth treating as the whole source. */
+const MIN_DESCRIPTION_ONLY_CHARS = 80
 
 export interface SourceItem {
   title: string
@@ -18,11 +21,16 @@ export interface SourceItem {
 
 export interface SourceText {
   text: string
-  basis: 'transcript' | 'content'
+  basis: 'transcript' | 'content' | 'description'
   /** True when the text was cut at MAX_TRANSCRIPT_CHARS. */
   truncated: boolean
   /** Video channel when we fetched it, for prompt context. */
   channel?: string
+  /**
+   * The video description, when a YouTube API key is configured. Often holds the ingredient list or the
+   * links the spoken transcript leaves out. Kept separate from `text` so callers can weigh it.
+   */
+  description?: string
 }
 
 /** The item has nothing the model can read (private video, no captions, empty note). */
@@ -45,6 +53,10 @@ export async function loadSourceText(item: SourceItem): Promise<SourceText> {
     // May throw when Strict Local Mode blocks external fetches — callers surface that as-is.
     const scraped = await scrapeUrl(video.url)
     if (!scraped.transcriptAvailable || !scraped.transcript) {
+      // No captions: the description (YouTube API key) is still something real to work from.
+      if (scraped.description && scraped.description.length >= MIN_DESCRIPTION_ONLY_CHARS) {
+        return { text: scraped.description, basis: 'description', truncated: false, channel: scraped.channel, description: scraped.description }
+      }
       throw new NoSourceTextError(
         `No transcript is available for this video${scraped.failure ? ` (${scraped.failure})` : ''}. ` +
           'It may be private, age-restricted or have captions disabled.',
@@ -55,16 +67,26 @@ export async function loadSourceText(item: SourceItem): Promise<SourceText> {
       basis: 'transcript',
       truncated: scraped.transcriptTruncated === true,
       channel: scraped.channel,
+      description: scraped.description,
     }
   }
 
-  if (!stored) throw new NoSourceTextError('This item has no content to work from.')
+  // A saved video that already holds its transcript: still fetch the description if a key is set.
+  const description = video ? (await fetchVideoDetails(video.videoId))?.description || undefined : undefined
+
+  if (!stored) {
+    if (description && description.length >= MIN_DESCRIPTION_ONLY_CHARS) {
+      return { text: description, basis: 'description', truncated: false, description }
+    }
+    throw new NoSourceTextError('This item has no content to work from.')
+  }
 
   const truncated = stored.length > MAX_TRANSCRIPT_CHARS
   return {
     text: truncated ? stored.slice(0, MAX_TRANSCRIPT_CHARS) : stored,
     basis: video ? 'transcript' : 'content',
     truncated,
+    description,
   }
 }
 

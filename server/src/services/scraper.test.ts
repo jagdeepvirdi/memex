@@ -6,6 +6,9 @@ vi.mock('./settings.js', () => ({
   asBool: (v: unknown) => v === true || v === 'true',
 }));
 vi.mock('../lib/logger.js', () => ({ default: { error: vi.fn(), info: vi.fn(), warn: vi.fn() } }));
+// The YouTube Data API is optional and needs a key from the database; keep these tests offline.
+const mockFetchVideoDetails = vi.fn().mockResolvedValue(null);
+vi.mock('./youtubeApi.js', () => ({ fetchVideoDetails: (...a: unknown[]) => mockFetchVideoDetails(...a) }));
 
 import { YoutubeTranscript } from 'youtube-transcript';
 import { extractYoutubeId, extractInstagramShortcode, findYoutubeUrl, scrapeUrl, MAX_TRANSCRIPT_CHARS } from './scraper';
@@ -189,5 +192,62 @@ describe('scrapeUrl — YouTube transcript language', () => {
       .mockRejectedValueOnce(new Error('Transcript is disabled'));
     const r = await scrapeUrl(`https://youtu.be/${ID}`);
     expect(r).toMatchObject({ transcriptAvailable: false, failure: 'Transcript is disabled' });
+  });
+});
+
+describe('scrapeUrl — YouTube description (Data API key configured)', () => {
+  const fetchMock = vi.fn();
+  const transcript = vi.mocked(YoutubeTranscript.fetchTranscript);
+  const part = [{ text: 'hello', duration: 1, offset: 0 }];
+  const DETAILS = { description: 'Ingredients: 2 cups flour, 1 tsp salt', channelTitle: 'API Channel', publishedAt: '2024-05-01T00:00:00Z', durationSeconds: 600 };
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ title: 'T', author_name: 'oEmbed Channel' }) });
+    transcript.mockReset();
+    mockFetchVideoDetails.mockReset();
+    mockFetchVideoDetails.mockResolvedValue(null);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('adds description, date and duration alongside the transcript', async () => {
+    transcript.mockResolvedValue(part);
+    mockFetchVideoDetails.mockResolvedValue(DETAILS);
+    const r = await scrapeUrl(`https://youtu.be/${ID}`);
+    expect(mockFetchVideoDetails).toHaveBeenCalledWith(ID);
+    expect(r).toMatchObject({ description: DETAILS.description, publishedAt: DETAILS.publishedAt, durationSeconds: 600, transcriptAvailable: true });
+    expect(r.channel).toBe('oEmbed Channel'); // oEmbed stays authoritative
+    expect(r.content).toBe('hello'); // the description does not pollute the transcript content
+  });
+
+  it('is unchanged when no key is configured (no description fields)', async () => {
+    transcript.mockResolvedValue(part);
+    const r = await scrapeUrl(`https://youtu.be/${ID}`);
+    expect(r.description).toBeUndefined();
+    expect(r.publishedAt).toBeUndefined();
+    expect(r.durationSeconds).toBeUndefined();
+  });
+
+  it('uses the API channel when oEmbed fails', async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 401, json: async () => ({}) });
+    transcript.mockResolvedValue(part);
+    mockFetchVideoDetails.mockResolvedValue(DETAILS);
+    expect((await scrapeUrl(`https://youtu.be/${ID}`)).channel).toBe('API Channel');
+  });
+
+  it('gives the classifier the description when there is no transcript', async () => {
+    transcript.mockRejectedValue(new Error('Transcript is disabled'));
+    mockFetchVideoDetails.mockResolvedValue(DETAILS);
+    const r = await scrapeUrl(`https://youtu.be/${ID}`);
+    expect(r.transcriptAvailable).toBe(false);
+    expect(r.content).toContain('Ingredients: 2 cups flour');
+    expect(r.content).toContain('Transcript unavailable.');
+  });
+
+  it('still returns the transcript if the API lookup returns nothing', async () => {
+    transcript.mockResolvedValue(part);
+    mockFetchVideoDetails.mockResolvedValue(null);
+    expect((await scrapeUrl(`https://youtu.be/${ID}`)).transcriptAvailable).toBe(true);
   });
 });

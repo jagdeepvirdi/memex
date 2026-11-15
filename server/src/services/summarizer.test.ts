@@ -74,3 +74,25 @@ describe('summarizeAndClassify', () => {
     expect(hints).not.toHaveProperty('video')
   })
 })
+
+describe('buildYoutubeClassifierText — description', () => {
+  const base = { title: 'T', content: 'c', source: 'youtube', sourceUrl: 'u', channel: 'Ch', transcriptAvailable: true, transcript: 'spoken' } as never
+
+  it('includes the description when there is one', async () => {
+    const { buildYoutubeClassifierText } = await import('./summarizer.js')
+    const text = buildYoutubeClassifierText({ ...(base as object), description: 'A hearty lentil soup with carrots' } as never)
+    expect(text).toContain('Description:\nA hearty lentil soup with carrots')
+    expect(text.indexOf('Description:')).toBeLessThan(text.indexOf('Transcript'))
+  })
+
+  it('caps a very long description', async () => {
+    const { buildYoutubeClassifierText } = await import('./summarizer.js')
+    const text = buildYoutubeClassifierText({ ...(base as object), description: 'd'.repeat(9000) } as never)
+    expect(text.match(/d/g)!.length).toBeLessThan(1700)
+  })
+
+  it('is unchanged without one', async () => {
+    const { buildYoutubeClassifierText } = await import('./summarizer.js')
+    expect(buildYoutubeClassifierText(base)).not.toContain('Description:')
+  })
+})

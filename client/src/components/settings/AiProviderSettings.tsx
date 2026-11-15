@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Check, AlertCircle, Loader2, Cloud, ShieldCheck } from 'lucide-react'
 import { fetchAiProviders, testAiProvider } from '../../lib/api'
 import type { AiProviderId, AiProviderInfo, AiTestResult } from '../../lib/api'
+import { ApiKeysPanel } from './ApiKeysPanel'
 
 interface Props {
   settings: Record<string, any>
@@ -38,13 +39,16 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
   const [testing, setTesting] = useState<AiProviderId | null>(null)
   const [results, setResults] = useState<Partial<Record<AiProviderId, AiTestResult>>>({})
 
+  // Bumped after a key is saved or removed so "configured" is re-read from the server.
+  const [reloadTick, setReloadTick] = useState(0)
+
   useEffect(() => {
     let cancelled = false
     fetchAiProviders()
-      .then(p => { if (!cancelled) setProviders(p) })
+      .then(p => { if (!cancelled) { setProviders(p); setLoadFailed(false) } })
       .catch(() => { if (!cancelled) setLoadFailed(true) })
     return () => { cancelled = true }
-  }, [])
+  }, [reloadTick])
 
   const strictLocal = truthy(settings.strict_local_mode)
   const stored: AiProviderId = isProvider(settings.ai_provider)
@@ -233,14 +237,15 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
         ))}
       </div>
 
+      <ApiKeysPanel onChanged={() => setReloadTick(t => t + 1)} />
+
       {/* Provider status + connection tests */}
       <div className="pt-4 border-t border-white/5 space-y-3">
         <div>
           <p className="text-sm text-ink font-medium">Providers</p>
           <p className="text-xs text-ink-muted mt-0.5">
-            API keys are read from the server's <code className="bg-white/10 px-1 rounded">.env</code>{' '}
-            (<code className="bg-white/10 px-1 rounded">ANTHROPIC_API_KEY</code>, <code className="bg-white/10 px-1 rounded">GEMINI_API_KEY</code>) —
-            they are never stored in the app or sent to the browser. Restart the server after changing them.
+            Availability of each provider and a connection test. Add or change keys in “API keys” above; keys set in the
+            server's <code className="bg-white/10 px-1 rounded">.env</code> need a server restart.
           </p>
         </div>
         {loadFailed && <p className="text-xs text-red-400">Couldn't load provider status.</p>}

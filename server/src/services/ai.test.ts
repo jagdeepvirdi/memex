@@ -12,6 +12,24 @@ vi.mock('./ollama.js', () => ({
 
 vi.mock('../lib/logger.js', () => ({ default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }))
 
+// The real key store reads the database; keep this file deterministic. Env keys behave as before and
+// `stored` simulates a key saved from Settings (env wins, like the real thing).
+const stored: Record<string, string | undefined> = {}
+const ENV_NAME: Record<string, string> = { claude: 'ANTHROPIC_API_KEY', gemini: 'GEMINI_API_KEY', youtube: 'YOUTUBE_API_KEY' }
+const mockEnsureLoaded = vi.fn().mockResolvedValue(undefined)
+vi.mock('./apiKeys.js', () => ({
+  peekApiKey: (p: string) => process.env[ENV_NAME[p]] || stored[p],
+  ensureApiKeysLoaded: () => mockEnsureLoaded(),
+  redactSecrets: (t: string) => {
+    let out = t
+    for (const p of Object.keys(ENV_NAME)) {
+      const k = process.env[ENV_NAME[p]] || stored[p]
+      if (k) out = out.split(k).join('[redacted]')
+    }
+    return out
+  },
+}))
+
 const mockCreate = vi.fn()
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class {
@@ -44,6 +62,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   process.env.ANTHROPIC_API_KEY = 'test-key'
   process.env.GEMINI_API_KEY = 'test-key'
+  for (const k of Object.keys(stored)) delete stored[k]
   mockOllamaChat.mockResolvedValue('from-ollama')
   mockCreate.mockResolvedValue({ content: [{ type: 'text', text: 'from-claude' }] })
   mockGenerate.mockResolvedValue({ text: 'from-gemini' })
@@ -261,9 +280,9 @@ describe('activeProvider / activeModelLabel / listProviders', () => {
     expect(await activeModelLabel()).toBe('ollama:llama3.2')
   })
 
-  it('lists provider availability without exposing keys', () => {
+  it('lists provider availability without exposing keys', async () => {
     delete process.env.GEMINI_API_KEY
-    const list = listProviders()
+    const list = await listProviders()
     expect(list).toEqual([
       { id: 'ollama', configured: true },
       { id: 'claude', configured: true },
@@ -306,5 +325,58 @@ describe('onProvider callback', () => {
     const seen = vi.fn()
     await expect(call(seen, { provider: 'claude' })).rejects.toBeInstanceOf(AiProviderError)
     expect(seen).not.toHaveBeenCalled()
+  })
+})
+
+describe('keys saved from Settings', () => {
+  const NO_ENV = () => { delete process.env.ANTHROPIC_API_KEY; delete process.env.GEMINI_API_KEY }
+
+  it('makes a provider available when only a saved key exists', async () => {
+    NO_ENV()
+    expect(await listProviders()).toEqual([
+      { id: 'ollama', configured: true }, { id: 'claude', configured: false }, { id: 'gemini', configured: false },
+    ])
+    stored.claude = 'sk-saved-claude-key'
+    expect((await listProviders()).find(p => p.id === 'claude')!.configured).toBe(true)
+  })
+
+  it('loads the saved keys before every call, so a key added at runtime is seen', async () => {
+    NO_ENV()
+    stored.gemini = 'saved-gemini-key'
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'gemini' }))
+    await aiChat('hi')
+    expect(mockEnsureLoaded).toHaveBeenCalled()
+    expect(mockGenerate).toHaveBeenCalledTimes(1)
+    expect(mockOllamaChat).not.toHaveBeenCalled()
+  })
+
+  it('still refuses (and stays on Ollama) when neither env nor a saved key exists', async () => {
+    NO_ENV()
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'claude' }))
+    await aiChat('hi')
+    expect(mockCreate).not.toHaveBeenCalled()
+    expect(mockOllamaChat).toHaveBeenCalledTimes(1)
+    await expect(aiChat('hi', undefined, undefined, undefined, undefined, { provider: 'claude' })).rejects.toMatchObject({ kind: 'blocked' })
+  })
+
+  it('an environment key wins over a saved one', async () => {
+    process.env.ANTHROPIC_API_KEY = 'env-key-value'
+    stored.claude = 'saved-key-value'
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'claude' }))
+    mockCreate.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })
+    await aiChat('hi')
+    expect(mockCreate).toHaveBeenCalledTimes(1)
+  })
+
+  it('never lets a key appear in a provider error', async () => {
+    NO_ENV()
+    stored.claude = 'sk-ant-SECRET-VALUE-123'
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'claude' }))
+    mockCreate.mockRejectedValue(Object.assign(new Error('401 invalid x-api-key: sk-ant-SECRET-VALUE-123'), { status: 401 }))
+    const err = await aiChat('hi', undefined, undefined, undefined, undefined, { provider: 'claude', userInitiated: true }).catch(e => e)
+    expect(err).toBeInstanceOf(AiProviderError)
+    expect(err.kind).toBe('auth')
+    expect(err.message).not.toContain('SECRET-VALUE')
+    expect(err.message).toContain('[redacted]')
   })
 })

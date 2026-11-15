@@ -139,6 +139,46 @@ export function fetchAiProviders(): Promise<AiProviderInfo[]> {
   return apiFetch<AiProviderInfo[]>('/ai/providers')
 }
 
+// ── API keys (write-only: the server never returns a key) ───────────────────
+
+export type ApiKeyProvider = 'claude' | 'gemini' | 'youtube'
+
+export interface ApiKeyStatus {
+  provider: ApiKeyProvider
+  label: string
+  configured: boolean
+  /** Which key is in effect: `env` (server .env, wins) or `stored` (saved from Settings, encrypted). */
+  source: 'env' | 'stored' | null
+  /** Last four characters of the key in effect — the only part of a key the client ever sees. */
+  last4?: string
+  /** A key is also saved in the app. */
+  hasStored: boolean
+  /** A saved key exists but can no longer be decrypted. */
+  undecryptable: boolean
+}
+
+export interface YoutubeKeyTest {
+  ok: boolean
+  kind?: string
+  error?: string
+}
+
+export function fetchApiKeys(): Promise<ApiKeyStatus[]> {
+  return apiFetch<ApiKeyStatus[]>('/ai/keys')
+}
+
+export function saveApiKey(provider: ApiKeyProvider, key: string): Promise<ApiKeyStatus> {
+  return apiFetch<ApiKeyStatus>(`/ai/keys/${provider}`, { method: 'PUT', body: JSON.stringify({ key }) })
+}
+
+export function removeApiKey(provider: ApiKeyProvider): Promise<ApiKeyStatus> {
+  return apiFetch<ApiKeyStatus>(`/ai/keys/${provider}`, { method: 'DELETE' })
+}
+
+export function testYoutubeKey(): Promise<YoutubeKeyTest> {
+  return apiFetch<YoutubeKeyTest>('/ai/keys/youtube/test', { method: 'POST' })
+}
+
 export function testAiProvider(provider: AiProviderId): Promise<AiTestResult> {
   return apiFetch<AiTestResult>('/ai/test', { method: 'POST', body: JSON.stringify({ provider }) })
 }

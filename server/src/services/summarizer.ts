@@ -6,6 +6,7 @@ import type { IngestUrlResponse } from '../../../shared/types.js';
 const EXCERPT_HEAD = 4000;
 const EXCERPT_MIDDLE = 1000;
 const EXCERPT_TAIL = 1000;
+const DESCRIPTION_EXCERPT = 1500;
 
 export function excerptTranscript(transcript: string): string {
   const max = EXCERPT_HEAD + EXCERPT_MIDDLE + EXCERPT_TAIL;
@@ -21,6 +22,8 @@ export function excerptTranscript(transcript: string): string {
 export function buildYoutubeClassifierText(scraped: ScrapedContent): string {
   const lines = [`Title: ${scraped.title}`];
   if (scraped.channel) lines.push(`Channel: ${scraped.channel}`);
+  // The description names the dish / tool / topic far more reliably than a transcript excerpt does.
+  if (scraped.description) lines.push('', `Description:\n${scraped.description.slice(0, DESCRIPTION_EXCERPT)}`);
   lines.push(
     '',
     scraped.transcriptAvailable && scraped.transcript

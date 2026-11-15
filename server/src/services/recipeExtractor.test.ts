@@ -187,3 +187,35 @@ describe('renderRecipeContent', () => {
     expect(text).toBe('Pasta\nServings: 2 · Cook: 5m\n\nIngredients:\n- a\n- b\n\nSteps:\n1. x\n2. y')
   })
 })
+
+describe('extractRecipe — video description', () => {
+  it('puts the description in front of the extraction model (ingredients are usually there)', async () => {
+    vi.mocked(loadSourceText).mockResolvedValue({ text: 'cook it', basis: 'transcript', truncated: false, description: 'Ingredients: 500g flour, 10g yeast' })
+    answers(YES, JSON.stringify(RECIPE))
+    await extractRecipe({ title: 'Vid', content: 'x' }, { cloudSafe: true })
+    const extractionPrompt = String(vi.mocked(aiChat).mock.calls[1][0])
+    expect(extractionPrompt).toContain('Ingredients: 500g flour, 10g yeast')
+    expect(extractionPrompt.indexOf('Video description')).toBeLessThan(extractionPrompt.indexOf('Text:'))
+  })
+
+  it('does not repeat the description when it is the whole source', async () => {
+    vi.mocked(loadSourceText).mockResolvedValue({ text: 'Ingredients: 500g flour', basis: 'description', truncated: false, description: 'Ingredients: 500g flour' })
+    answers(YES, JSON.stringify(RECIPE))
+    await extractRecipe({ title: 'Vid', content: 'x' }, { cloudSafe: true })
+    expect(String(vi.mocked(aiChat).mock.calls[1][0]).match(/Ingredients: 500g flour/g)).toHaveLength(1)
+  })
+
+  it('keeps the gate prompt short: title and start of the text only', async () => {
+    vi.mocked(loadSourceText).mockResolvedValue({ text: 'cook it', basis: 'transcript', truncated: false, description: 'd'.repeat(5000) })
+    answers(YES, JSON.stringify(RECIPE))
+    await extractRecipe({ title: 'Vid', content: 'x' }, { cloudSafe: true })
+    expect(String(vi.mocked(aiChat).mock.calls[0][0]).length).toBeLessThan(500)
+  })
+
+  it('caps a very long description', async () => {
+    vi.mocked(loadSourceText).mockResolvedValue({ text: 'cook it', basis: 'transcript', truncated: false, description: 'd'.repeat(9000) })
+    answers(YES, JSON.stringify(RECIPE))
+    await extractRecipe({ title: 'Vid', content: 'x' }, { cloudSafe: true })
+    expect(String(vi.mocked(aiChat).mock.calls[1][0]).match(/d/g)!.length).toBeLessThan(4100)
+  })
+})

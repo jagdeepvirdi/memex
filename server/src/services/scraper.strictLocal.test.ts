@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../db/client', () => ({ pool: { query: vi.fn() } }))
+vi.mock('./youtubeApi.js', () => ({ fetchVideoDetails: vi.fn().mockResolvedValue(null) }))
 vi.mock('./settings.js', async (orig) => ({
   ...(await orig<typeof import('./settings.js')>()),
   getSetting: vi.fn(),

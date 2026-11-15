@@ -26,6 +26,8 @@ const MIN_INGREDIENTS = 3
 const MIN_STEPS = 2
 /** How much of the source the yes/no gate reads (title + start is enough to tell a recipe from a talk). */
 const GATE_CHARS = 3000
+/** Ingredient lists and quantities usually live in the description, not the spoken transcript. */
+const DESCRIPTION_CHARS = 4000
 
 // Wording matters with a small local model. Measured on real videos: "is this mainly about cooking? yes/no"
 // got 7 of 7 right; a "decide whether it teaches a recipe, these are NOT recipes: …" prompt and a
@@ -142,8 +144,12 @@ export async function extractRecipe(item: SourceItem, opts: ExtractOptions): Pro
     ? chunks[0]
     : (chunks.find(c => /ingredient|tablespoon|teaspoon|\bcup\b|\bgrams?\b/i.test(c)) ?? chunks[0])
 
+  const description = source.description && source.basis !== 'description'
+    ? `\n\nVideo description (ingredient lists and quantities are often here):\n${source.description.slice(0, DESCRIPTION_CHARS)}`
+    : ''
+
   const raw = await aiChat(
-    `Title: ${item.title}\n\nText:\n${text}`,
+    `Title: ${item.title}${description}\n\nText:\n${text}`,
     SYSTEM,
     'json',
     { temperature: 0, num_predict: 1500 },

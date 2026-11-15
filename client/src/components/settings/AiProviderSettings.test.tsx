@@ -3,12 +3,18 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 
 const mockFetchAiProviders = vi.fn()
 const mockTestAiProvider = vi.fn()
+const mockFetchApiKeys = vi.fn().mockResolvedValue([])
 vi.mock('../../lib/api', () => ({
   fetchAiProviders: () => mockFetchAiProviders(),
   testAiProvider: (id: string) => mockTestAiProvider(id),
+  fetchApiKeys: () => mockFetchApiKeys(),
+  saveApiKey: vi.fn(),
+  removeApiKey: vi.fn(),
+  testYoutubeKey: vi.fn(),
 }))
 
 import { AiProviderSettings } from './AiProviderSettings'
+import { saveApiKey, removeApiKey } from '../../lib/api'
 
 const PROVIDERS = [
   { id: 'ollama', configured: true, cloud: false, models: ['llama3.2', 'gemma3:4b'] },
@@ -167,7 +173,13 @@ describe('AiProviderSettings — provider status and connection test', () => {
     expect(screen.getByTestId('provider-row-ollama')).toHaveTextContent(/always available/i)
     expect(screen.getByTestId('provider-row-claude')).toHaveTextContent(/key configured/i)
     expect(screen.getByTestId('provider-row-gemini')).toHaveTextContent(/no api key/i)
-    expect(container.querySelector('input[type="password"]')).toBeNull()
+    // The provider rows only report status; the key inputs (in the API keys panel) are write-only and never pre-filled.
+    for (const id of ['ollama', 'claude', 'gemini']) {
+      expect(within(screen.getByTestId(`provider-row-${id}`)).queryByLabelText(/key/i, { selector: 'input' })).toBeNull()
+    }
+    const keyInputs = container.querySelectorAll('input[type="password"]')
+    expect(keyInputs.length).toBe(3)
+    keyInputs.forEach(i => expect((i as HTMLInputElement).value).toBe(''))
   })
 
   it('cannot test a provider with no key', async () => {
@@ -223,5 +235,55 @@ describe('AiProviderSettings — provider list failure', () => {
     render(<AiProviderSettings settings={{}} onUpdate={onUpdate} />)
     await waitFor(() => expect(screen.getByText(/couldn't load provider status/i)).toBeInTheDocument())
     expect(screen.getByLabelText('AI provider')).toBeInTheDocument()
+  })
+})
+
+describe('AiProviderSettings — API keys refresh provider availability', () => {
+  const keyStatus = (over: Record<string, unknown> = {}) => ({
+    provider: 'gemini', label: 'Google Gemini', configured: true, source: 'stored', last4: '4321', hasStored: true, undecryptable: false, ...over,
+  })
+  const noKeys = ['claude', 'gemini', 'youtube'].map(provider => ({
+    provider, label: { claude: 'Anthropic (Claude)', gemini: 'Google Gemini', youtube: 'YouTube Data API' }[provider], configured: false, source: null, hasStored: false, undecryptable: false,
+  }))
+
+  it('re-reads provider status after a key is saved, so "no API key" flips to configured', async () => {
+    mockFetchApiKeys.mockResolvedValue(noKeys)
+    await setup({})
+    expect(screen.getByTestId('provider-row-gemini')).toHaveTextContent(/no api key/i)
+    expect(mockFetchAiProviders).toHaveBeenCalledTimes(1)
+
+    mockFetchAiProviders.mockResolvedValue(PROVIDERS.map(p => (p.id === 'gemini' ? { ...p, configured: true } : p)))
+    vi.mocked(saveApiKey).mockResolvedValue(keyStatus() as never)
+
+    await waitFor(() => expect(screen.getByLabelText('Google Gemini')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Google Gemini'), { target: { value: 'AIzaSyGeminiKeyValue-4321' } })
+    fireEvent.click(within(screen.getByTestId('api-key-gemini')).getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(mockFetchAiProviders).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByTestId('provider-row-gemini')).toHaveTextContent(/key configured/i))
+    expect(screen.getByRole('button', { name: 'Test Gemini' })).toBeEnabled()
+  })
+
+  it('re-reads provider status after a saved key is removed', async () => {
+    mockFetchApiKeys.mockResolvedValue(noKeys.map(k => (k.provider === 'claude' ? { ...k, configured: true, source: 'stored', last4: '1234', hasStored: true } : k)))
+    await setup({})
+    mockFetchAiProviders.mockResolvedValue(PROVIDERS.map(p => (p.id === 'claude' ? { ...p, configured: false } : p)))
+    vi.mocked(removeApiKey).mockResolvedValue({ ...noKeys[0], provider: 'claude' } as never)
+
+    fireEvent.click(await screen.findByRole('button', { name: /Remove saved/ }))
+
+    await waitFor(() => expect(mockFetchAiProviders).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(screen.getByTestId('provider-row-claude')).toHaveTextContent(/no api key/i))
+  })
+
+  it('does not re-read provider status when saving fails', async () => {
+    mockFetchApiKeys.mockResolvedValue(noKeys)
+    await setup({})
+    vi.mocked(saveApiKey).mockRejectedValue(new Error('That key is too short.'))
+    await waitFor(() => expect(screen.getByLabelText('Google Gemini')).toBeInTheDocument())
+    fireEvent.change(screen.getByLabelText('Google Gemini'), { target: { value: 'abc' } })
+    fireEvent.click(within(screen.getByTestId('api-key-gemini')).getByRole('button', { name: 'Save' }))
+    expect(await within(screen.getByTestId('api-key-gemini')).findByRole('alert')).toHaveTextContent('too short')
+    expect(mockFetchAiProviders).toHaveBeenCalledTimes(1)
   })
 })

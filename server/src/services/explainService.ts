@@ -28,6 +28,8 @@ const REDUCE_SYSTEM =
   '"takeaways": ["what to remember or do next, max 5"]}'
 
 const MAX_LIST = 8
+/** How much of the video description goes into the prompt alongside the transcript. */
+const DESCRIPTION_CHARS = 2000
 
 function asStringList(v: unknown, max = MAX_LIST): string[] {
   if (!Array.isArray(v)) return []
@@ -76,7 +78,12 @@ export async function explainItem(item: SourceItem, opts: ExplainOptions): Promi
     onProvider: i => { used = `${i.provider}:${i.model}` },
   }
 
-  const header = [`Title: ${item.title}`, source.channel && `Channel: ${source.channel}`].filter(Boolean).join('\n')
+  const header = [
+    `Title: ${item.title}`,
+    source.channel && `Channel: ${source.channel}`,
+    // Skipped when the description IS the source text (no transcript), so it is not sent twice.
+    source.description && source.basis !== 'description' && `Video description:\n${source.description.slice(0, DESCRIPTION_CHARS)}`,
+  ].filter(Boolean).join('\n')
   const chunks = chunkText(source.text)
 
   let material: string

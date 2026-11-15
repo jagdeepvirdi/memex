@@ -90,3 +90,36 @@ describe('explainItem', () => {
     await expect(explainItem(item, { cloudSafe: true })).rejects.toThrow('boom')
   })
 })
+
+describe('explainItem — video description', () => {
+  it('gives the model the description alongside the transcript', async () => {
+    vi.mocked(loadSourceText).mockResolvedValue({ text: 'short transcript', basis: 'transcript', truncated: false, description: 'Links and the full ingredient list' })
+    answer(GOOD)
+    await explainItem(item, { cloudSafe: true })
+    const prompt = String(vi.mocked(aiChat).mock.calls[0][0])
+    expect(prompt).toContain('Video description:\nLinks and the full ingredient list')
+    expect(prompt).toContain('short transcript')
+  })
+
+  it('does not send the description twice when it IS the source (no captions)', async () => {
+    vi.mocked(loadSourceText).mockResolvedValue({ text: 'the description text', basis: 'description', truncated: false, description: 'the description text' })
+    answer(GOOD)
+    const out = await explainItem(item, { cloudSafe: true })
+    const prompt = String(vi.mocked(aiChat).mock.calls[0][0])
+    expect(prompt.match(/the description text/g)).toHaveLength(1)
+    expect(out.basis).toBe('description')
+  })
+
+  it('caps how much of a long description is sent', async () => {
+    vi.mocked(loadSourceText).mockResolvedValue({ text: 't', basis: 'transcript', truncated: false, description: 'd'.repeat(9000) })
+    answer(GOOD)
+    await explainItem(item, { cloudSafe: true })
+    expect(String(vi.mocked(aiChat).mock.calls[0][0]).match(/d/g)!.length).toBeLessThan(2100)
+  })
+
+  it('is unchanged without a description', async () => {
+    answer(GOOD)
+    await explainItem(item, { cloudSafe: true })
+    expect(String(vi.mocked(aiChat).mock.calls[0][0])).not.toContain('Video description')
+  })
+})
