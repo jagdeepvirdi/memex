@@ -79,6 +79,46 @@ export interface RepoData {
   summary?: string
 }
 
+/** Structured explanation of a video/page, stored at `item.structured.explanation`. */
+export interface ExplanationData {
+  summary: string
+  keyPoints: string[]
+  /** Ordered how-to steps; empty when the source isn't instructional. */
+  steps: string[]
+  takeaways: string[]
+  /** `<provider>:<model>` that produced it. */
+  model: string
+  generatedAt: string
+  /** What the explanation was built from. */
+  basis: 'transcript' | 'content'
+  /** True when the source text was cut (long video / page). */
+  truncated: boolean
+}
+
+/** Optional per-click provider choice; omitted = the per-task default from Settings. */
+export interface ExplainRequest {
+  provider?: 'ollama' | 'claude' | 'gemini'
+  /** Replace an existing explanation. */
+  force?: boolean
+}
+
+export interface ExplainResponse {
+  item: Item
+  explanation: ExplanationData
+}
+
+export interface ExtractRecipeRequest {
+  provider?: 'ollama' | 'claude' | 'gemini'
+  /** Create another recipe even if one was already extracted from this item. */
+  force?: boolean
+}
+
+export interface ExtractRecipeResponse {
+  /** The new `type='recipe'` item (derivedFrom = the source item). */
+  recipe: Item
+  confidence: number
+}
+
 export interface MediaData {
   genre?: string
   year?: number

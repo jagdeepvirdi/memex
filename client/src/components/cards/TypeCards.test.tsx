@@ -142,6 +142,13 @@ describe('RecipeCard', () => {
     expect(screen.getByText(/Prep 15 min/)).toBeInTheDocument()
   })
 
+  it('marks a recipe extracted from another item, and only then', () => {
+    const { rerender } = render(<RecipeCard item={item} />)
+    expect(screen.queryByText(/Extracted from a saved link/)).not.toBeInTheDocument()
+    rerender(<RecipeCard item={{ ...item, derivedFrom: 'vid-1' }} />)
+    expect(screen.getByText(/Extracted from a saved link/)).toBeInTheDocument()
+  })
+
   it('falls back to Recipe label when mealType is absent', () => {
     const noMeal = { ...item, structured: { ...item.structured, mealType: undefined } }
     render(<RecipeCard item={noMeal} />)

@@ -50,6 +50,8 @@ export default function RecipeCard({ item, onClick }: Props) {
         )}
       </div>
 
+      {item.derivedFrom && <Muted>🎬 Extracted from a saved link</Muted>}
+
       {/* Prep time row */}
       {s.prepTime && (
         <Muted>Prep {s.prepTime}</Muted>

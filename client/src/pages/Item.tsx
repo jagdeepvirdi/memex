@@ -10,6 +10,7 @@ import { apiFetch, migrateToVault, fetchItemExtractions, applyExtraction, reClas
 import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
 import PriorityPicker from '../components/PriorityPicker'
+import ItemAiActions, { DerivedFromLink } from '../components/item/ItemAiActions'
 import type { Item, ItemExtraction, ItemPriority, LinkSummary, RepoData } from '../../../shared/types'
 
 const DEV_KIND_LABEL: Record<string, string> = {
@@ -434,6 +435,8 @@ export default function ItemPage() {
                 </a>
               )}
 
+              {item.derivedFrom && <DerivedFromLink itemId={item.derivedFrom} />}
+
               {item.intent && (
                 <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium ${
                   item.intent === 'actionable'
@@ -476,6 +479,9 @@ export default function ItemPage() {
               </div>
             )
           })()}
+
+          {/* On-demand AI: explain / extract recipe (videos and saved links) */}
+          {!isEditing && <ItemAiActions item={item} onItemUpdated={setItem} />}
 
           {/* AI Summary */}
           {!isEditing && (() => {

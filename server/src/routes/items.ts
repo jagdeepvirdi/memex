@@ -1,12 +1,14 @@
 import { Router } from 'express'
 import { z } from 'zod'
 import pLimit from 'p-limit'
+import rateLimit from 'express-rate-limit'
 import AdmZip from 'adm-zip'
 import { randomBytes } from 'crypto'
 import { v4 as uuidv4 } from 'uuid'
 import { pool } from '../db/client.js'
 import {
   fetchItem,
+  createItem,
   setItemCategories,
   setItemTags,
   ITEM_SELECT_SQL,
@@ -28,7 +30,11 @@ import { embedItem } from '../services/embedder.js'
 import { extractAndLinkEntities } from '../services/entityService.js'
 import { generateDigest } from '../services/digestService.js'
 import { scrapeUrl } from '../services/scraper.js'
-import { aiChat } from '../services/ai.js'
+import { aiChat, AiProviderError } from '../services/ai.js'
+import { explainItem, ExplainParseError } from '../services/explainService.js'
+import { extractRecipe, renderRecipeContent } from '../services/recipeExtractor.js'
+import { NoSourceTextError } from '../services/itemSource.js'
+import { findYoutubeUrl } from '../services/youtubeUrl.js'
 import type { ItemType, ItemSource, ItemIntent } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
@@ -590,6 +596,23 @@ router.get('/:id/related', async (req, res) => {
   }
 })
 
+// ── GET /api/items/:id/derived — items extracted from this one (e.g. recipes from a video) ──
+
+router.get('/:id/derived', async (req, res) => {
+  try {
+    const sql = buildItemQuery({
+      where: 'i.derived_from = $1 AND i.deleted_at IS NULL',
+      orderBy: 'i.created_at DESC',
+      limit: '20',
+    })
+    const { rows } = await pool.query<ItemRow>(sql, [req.params.id])
+    res.json(rows.map(rowToItem))
+  } catch (err) {
+    logger.error(err, 'GET /api/items/:id/derived error')
+    res.status(500).json({ error: 'Failed to fetch derived items' })
+  }
+})
+
 // ── GET /api/items/:id/extractions ───────────────────────────────────────────
 
 router.get('/:id/extractions', async (req, res) => {
@@ -805,6 +828,176 @@ router.post('/:id/summarize-links', async (req, res) => {
     res.status(500).json({ error: 'Failed to summarize links' })
   } finally {
     client.release()
+  }
+})
+
+// ── On-demand AI actions: explain / extract recipe ────────────────────────────
+// Both run only when the user clicks. They honour cloudSafe + Strict Local Mode via aiChat(), and a
+// per-click `provider` is refused (not downgraded) if it can't be used.
+
+const aiActionLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: Number(process.env.AI_ACTION_RATE_LIMIT_MAX ?? 10),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many AI requests. Slow down.' },
+})
+
+const aiActionSchema = z.object({
+  provider: z.enum(['ollama', 'claude', 'gemini']).optional(),
+  force: z.boolean().optional(),
+})
+
+interface ActionItemRow extends CloudSafeItem {
+  id: string
+  title: string
+  content: string
+  source: ItemSource
+  source_url: string | null
+  structured: Record<string, unknown> | null
+}
+
+async function loadActionItem(id: string): Promise<ActionItemRow | null> {
+  const { rows } = await pool.query<ActionItemRow>(
+    `SELECT i.id, i.title, i.content, i.source, i.source_url, i.structured, ${CLOUD_SAFE_COLS}
+     FROM items i WHERE i.id = $1 AND i.deleted_at IS NULL`,
+    [id],
+  )
+  return rows[0] ?? null
+}
+
+/** Maps service/provider failures to a status; returns false if the error isn't one we know. */
+function sendActionError(res: import('express').Response, err: unknown): boolean {
+  if (err instanceof NoSourceTextError) { res.status(422).json({ error: err.message }); return true }
+  if (err instanceof ExplainParseError) { res.status(502).json({ error: err.message }); return true }
+  if (err instanceof AiProviderError) {
+    const status = err.kind === 'blocked' ? 409 : err.kind === 'rate_limit' ? 429 : err.kind === 'timeout' ? 504 : 502
+    res.status(status).json({ error: err.message, provider: err.provider, kind: err.kind })
+    return true
+  }
+  if (err instanceof Error && /Strict Local Mode/i.test(err.message)) {
+    res.status(409).json({ error: err.message })
+    return true
+  }
+  return false
+}
+
+// ── POST /api/items/:id/explain — structured explanation saved on the item ────
+
+router.post('/:id/explain', aiActionLimiter, async (req, res) => {
+  const body = aiActionSchema.safeParse(req.body ?? {})
+  if (!body.success) {
+    res.status(400).json({ error: 'Invalid request body', details: body.error.flatten() })
+    return
+  }
+  try {
+    const row = await loadActionItem(String(req.params.id))
+    if (!row) { res.status(404).json({ error: 'Item not found' }); return }
+    if (row.encrypted) { res.status(400).json({ error: 'Encrypted items cannot be explained' }); return }
+    if (row.structured?.explanation && !body.data.force) {
+      res.status(409).json({ error: 'This item already has an explanation', existing: true })
+      return
+    }
+
+    const explanation = await explainItem(
+      { title: row.title, content: row.content, sourceUrl: row.source_url },
+      { provider: body.data.provider, cloudSafe: cloudSafe(row) },
+    )
+
+    await pool.query(
+      `UPDATE items
+         SET structured = jsonb_set(COALESCE(structured, '{}'::jsonb), '{explanation}', $1::jsonb),
+             extraction_model = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [JSON.stringify(explanation), explanation.model, row.id],
+    )
+
+    const client = await pool.connect()
+    try {
+      const item = await fetchItem(client, row.id)
+      res.json({ item, explanation })
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    if (sendActionError(res, err)) return
+    logger.error(err, 'POST /api/items/:id/explain error')
+    res.status(500).json({ error: 'Failed to explain item' })
+  }
+})
+
+// ── POST /api/items/:id/extract-recipe — creates a NEW linked recipe item ─────
+
+router.post('/:id/extract-recipe', aiActionLimiter, async (req, res) => {
+  const body = aiActionSchema.safeParse(req.body ?? {})
+  if (!body.success) {
+    res.status(400).json({ error: 'Invalid request body', details: body.error.flatten() })
+    return
+  }
+  try {
+    const row = await loadActionItem(String(req.params.id))
+    if (!row) { res.status(404).json({ error: 'Item not found' }); return }
+    if (row.encrypted) { res.status(400).json({ error: 'Encrypted items cannot be processed' }); return }
+
+    if (!body.data.force) {
+      const { rows: existing } = await pool.query<{ id: string }>(
+        `SELECT id FROM items WHERE derived_from = $1 AND type = 'recipe' AND deleted_at IS NULL LIMIT 1`,
+        [row.id],
+      )
+      if (existing[0]) {
+        res.status(409).json({ error: 'A recipe was already extracted from this item', existingId: existing[0].id })
+        return
+      }
+    }
+
+    const result = await extractRecipe(
+      { title: row.title, content: row.content, sourceUrl: row.source_url },
+      { provider: body.data.provider, cloudSafe: cloudSafe(row) },
+    )
+    if (!result.found) {
+      res.status(422).json({ error: result.reason, found: false })
+      return
+    }
+
+    const structured = { ...result.recipe } as unknown as Record<string, unknown>
+    const video = findYoutubeUrl(row.source_url ?? '') ?? findYoutubeUrl(row.content)
+    const sourceUrl = row.source_url ?? video?.url ?? undefined
+
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+      const recipe = await createItem(client, {
+        title: result.title,
+        type: 'recipe',
+        content: renderRecipeContent(result.title, result.recipe),
+        structured,
+        source: video ? 'youtube' : row.source,
+        sourceUrl,
+        categories: mapToCategories('recipe', structured),
+        tags: ['recipe'],
+        reviewed: false, // AI-made: goes to the review queue
+        confidence: result.confidence,
+        intent: 'actionable',
+        derivedFrom: row.id,
+      })
+      await client.query('UPDATE items SET extraction_model = $1 WHERE id = $2', [result.model, recipe.id])
+      await client.query('COMMIT')
+
+      embedItem(recipe.title, recipe.content)
+        .then(vector => pool.query('UPDATE items SET embedding = $1 WHERE id = $2', [JSON.stringify(vector), recipe.id]))
+        .catch(err => logger.error(err, `Embedding failed for ${recipe.id}`))
+
+      res.status(201).json({ recipe, confidence: result.confidence })
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+  } catch (err) {
+    if (sendActionError(res, err)) return
+    logger.error(err, 'POST /api/items/:id/extract-recipe error')
+    res.status(500).json({ error: 'Failed to extract recipe' })
   }
 })
 

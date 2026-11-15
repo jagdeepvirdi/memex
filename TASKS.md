@@ -825,17 +825,17 @@ markitdown --help
 
 ### Phase C — Explain & Extract on request
 - [x] Migration `0NN_derived_from.sql` — `items.derived_from UUID REFERENCES items(id) ON DELETE SET NULL` (+ index); mirror in `schema.sql` + migration-count comment (required by `schema.test.ts`)
-- [ ] `shared/types.ts` — `Item.derivedFrom` (done); `ExplainResponse`; `structured.explanation` shape; request types with optional `provider`
-- [ ] `server/src/services/explainService.ts` (new) — fetch/cached transcript (or page text) → chunk → map-reduce summary → structured explanation (key points, steps, takeaways); uses `aiChat({task:'explain'})`; honours `cloudSafe` + strict-local
-- [ ] `server/src/services/recipeExtractor.ts` (new) — transcript/text → `RecipeData` (ingredients, steps, times, servings) with validation; returns `{ recipe, confidence }`; flags "no recipe found" instead of inventing one
-- [ ] `server/src/routes/items.ts` — `POST /api/items/:id/explain` and `POST /api/items/:id/extract-recipe`:
+- [x] `shared/types.ts` — `Item.derivedFrom`, `ExplanationData`, `ExplainRequest/Response`, `ExtractRecipeRequest/Response` *(done 2026-11-15)*
+- [x] `server/src/services/explainService.ts` (new) — fetch/cached transcript (or page text) → chunk → map-reduce summary → structured explanation (key points, steps, takeaways); uses `aiChat({task:'explain'})`; honours `cloudSafe` + strict-local *(done 2026-11-15; source loading in `itemSource.ts` — fetches the transcript for bare video links)*
+- [x] `server/src/services/recipeExtractor.ts` (new) — transcript/text → `RecipeData` (ingredients, steps, times, servings) with validation; returns `{ recipe, confidence }`; flags "no recipe found" instead of inventing one *(done 2026-11-15; rejects results with <2 ingredients or <2 steps)*
+- [x] `server/src/routes/items.ts` — `POST /api/items/:id/explain` and `POST /api/items/:id/extract-recipe`: *(done 2026-11-15; 10/min limiter; also `GET /:id/derived`, and `derived_from` added to `ITEM_SELECT_SQL` — it was missing, so `derivedFrom` never reached the client)*
   - explain → saves to `structured.explanation` on the same item (sets `extraction_model`)
   - extract-recipe → **creates a new `type='recipe'` item** under `Food`, `derived_from` = video item, `source_url` = video URL, `reviewed=false`; original video item untouched
   - both Zod-validated, rate-limited, return 409 if already extracted (with a force flag)
-- [ ] `client/src/pages/Item.tsx` — *Explain* and *Extract recipe* buttons (shown by item kind), provider chooser, progress state, link between video item and derived recipe both ways
-- [ ] `client/src/components/cards/*` — recipe card shows "from video" link
+- [x] `client/src/pages/Item.tsx` — *Explain* and *Extract recipe* buttons (shown by item kind), provider chooser, progress state, link between video item and derived recipe both ways *(done 2026-11-15; `components/item/ItemAiActions.tsx`)*
+- [x] `client/src/components/cards/*` — recipe card shows "Extracted from a saved link" marker; the Item page links back to the source
 - [ ] `server/src/services/entityService.ts` — optional: channel as `organization` entity (YouTube channel) — only if the Phase 2 entity work above has shipped
-- [ ] Tests: explain/extract services (mocked `aiChat`), route tests (new item created + linked, duplicate guard), Item page tests
+- [x] Tests: explain/extract services, itemSource, route tests (linked item created, duplicate guard, error mapping, rollback), ItemAiActions + Item page + RecipeCard *(done 2026-11-15: server 472 → 534, client 529)*
 - **Acceptance:** on a cooking video, *Extract recipe* creates a separate, editable recipe item linked to the video; on a lecture/tutorial, *Explain* stores a structured explanation; neither runs unless the user clicks.
 
 ### Risks

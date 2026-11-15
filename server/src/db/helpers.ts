@@ -113,11 +113,12 @@ export async function createItem(
     confidence?: number
     intent?: ItemIntent
     priority?: ItemPriority | null
+    derivedFrom?: string | null
   },
 ): Promise<Item> {
   const { rows } = await client.query<{ id: string }>(
-    `INSERT INTO items (title, type, content, raw_content, structured, source, source_url, reviewed, confidence, intent, priority)
-     VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, $9, $10)
+    `INSERT INTO items (title, type, content, raw_content, structured, source, source_url, reviewed, confidence, intent, priority, derived_from)
+     VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING id`,
     [
       item.title,
@@ -130,6 +131,7 @@ export async function createItem(
       item.confidence ?? null,
       item.intent ?? null,
       item.priority ?? null,
+      item.derivedFrom ?? null,
     ],
   )
   const id = rows[0].id
@@ -221,7 +223,7 @@ export const CLOUD_SAFE_COLS = `
 export const ITEM_SELECT_SQL = `
   SELECT
     i.id, i.title, i.type, i.content, i.structured,
-    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence, i.intent, i.priority, i.remind_at, i.public_token, i.share_expires_at,
+    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence, i.intent, i.priority, i.derived_from, i.remind_at, i.public_token, i.share_expires_at,
     COALESCE(
       (SELECT array_agg(c.name ORDER BY ic2.depth)
        FROM item_categories ic2

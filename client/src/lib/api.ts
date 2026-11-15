@@ -15,6 +15,10 @@ import type {
   SimilarItem,
   NLFilterResponse,
   DigestResponse,
+  ExplainRequest,
+  ExplainResponse,
+  ExtractRecipeRequest,
+  ExtractRecipeResponse,
 } from '../../../shared/types'
 import { toast } from 'sonner'
 import { useAuthStore } from '../store/authStore'
@@ -28,6 +32,14 @@ export class SessionExpiredError extends Error {
   constructor() {
     super('Session expired')
     this.name = 'SessionExpiredError'
+  }
+}
+
+/** A non-2xx API response. `body` is the parsed JSON error payload when there was one (e.g. `existingId`). */
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number, public readonly body?: Record<string, unknown>) {
+    super(message)
+    this.name = 'ApiError'
   }
 }
 
@@ -86,12 +98,14 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (!res.ok) {
     const text = await res.text();
     let error;
+    let body: Record<string, unknown> | undefined;
     try {
-      error = JSON.parse(text).error;
+      body = JSON.parse(text) as Record<string, unknown>;
+      error = body.error as string | undefined;
     } catch {
       error = text;
     }
-    throw new Error(error || `API error ${res.status}`);
+    throw new ApiError(error || `API error ${res.status}`, res.status, body);
   }
   if (res.status === 204 || res.headers?.get('content-length') === '0') return undefined as T
   return res.json() as Promise<T>
@@ -305,4 +319,19 @@ export async function setReminder(itemId: string, remindAt: string | null): Prom
 
 export async function summarizeItemLinks(itemId: string): Promise<Item> {
   return apiFetch<Item>(`/items/${itemId}/summarize-links`, { method: 'POST' })
+}
+
+// ── On-demand AI actions (run only when the user clicks) ──────────────────────
+
+export function explainItem(itemId: string, opts: ExplainRequest = {}): Promise<ExplainResponse> {
+  return apiFetch<ExplainResponse>(`/items/${itemId}/explain`, { method: 'POST', body: JSON.stringify(opts) })
+}
+
+export function extractRecipeFromItem(itemId: string, opts: ExtractRecipeRequest = {}): Promise<ExtractRecipeResponse> {
+  return apiFetch<ExtractRecipeResponse>(`/items/${itemId}/extract-recipe`, { method: 'POST', body: JSON.stringify(opts) })
+}
+
+/** Items extracted from this one (e.g. recipes pulled out of a video). */
+export function fetchDerivedItems(itemId: string): Promise<Item[]> {
+  return apiFetch<Item[]>(`/items/${itemId}/derived`)
 }

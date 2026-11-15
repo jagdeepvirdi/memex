@@ -7,7 +7,7 @@ const mockNavigate = vi.fn()
 vi.mock('react-router-dom', () => ({
   useParams: () => ({ id: 'item-123' }),
   useNavigate: () => mockNavigate,
-  Link: ({ children, to }: any) => <a href={to}>{children}</a>,
+  Link: ({ children, to, ...rest }: any) => <a href={to} {...rest}>{children}</a>,
 }))
 
 vi.mock('../components/sidebar/Sidebar', () => ({
@@ -58,6 +58,14 @@ vi.mock('../lib/api', () => ({
   shareItem: vi.fn(),
   unshareItem: vi.fn(),
   updateItem: (...a: any[]) => mockUpdateItem(...a),
+  summarizeItemLinks: vi.fn(),
+  // ItemAiActions (mounted for link/video items)
+  explainItem: vi.fn(),
+  extractRecipeFromItem: vi.fn(),
+  fetchAiProviders: vi.fn().mockResolvedValue([]),
+  fetchDerivedItems: vi.fn().mockResolvedValue([]),
+  fetchItem: vi.fn().mockResolvedValue({ id: 'parent-1', title: 'Parent video' }),
+  ApiError: class ApiError extends Error {},
 }))
 
 import ItemPage from './Item'
@@ -351,5 +359,55 @@ describe('ItemPage — developer knowledge block', () => {
     render(<ItemPage />)
     await screen.findByText('Understanding Sourdough')
     expect(screen.queryByTestId('dev-knowledge')).not.toBeInTheDocument()
+  })
+})
+
+// ── On-demand AI actions + provenance link ────────────────────────────────────
+
+describe('ItemPage — explain / extract recipe', () => {
+  const videoItem = (over: Record<string, unknown> = {}) => makeItem({
+    type: 'link', source: 'youtube', content: 'https://youtu.be/dQw4w9WgXcQ',
+    sourceUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    structured: { videoId: 'dQw4w9WgXcQ', videoKind: 'recipe' }, ...over,
+  })
+
+  it('shows Explain and Extract recipe on a video item', async () => {
+    mockApiFetch.mockResolvedValueOnce(videoItem()).mockResolvedValueOnce([])
+    render(<ItemPage />)
+    expect(await screen.findByRole('button', { name: /explain this/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /extract recipe/i })).toBeInTheDocument()
+  })
+
+  it('shows a saved explanation from structured.explanation', async () => {
+    mockApiFetch.mockResolvedValueOnce(videoItem({
+      structured: { explanation: {
+        summary: 'Pasta basics.', keyPoints: ['Salt'], steps: [], takeaways: [],
+        model: 'ollama:llama3.2', generatedAt: '2026-11-15T00:00:00Z', basis: 'transcript', truncated: false,
+      } },
+    })).mockResolvedValueOnce([])
+    render(<ItemPage />)
+    expect(await screen.findByTestId('explanation')).toHaveTextContent('Pasta basics.')
+  })
+
+  it('does not show them on an ordinary note, nor on a recipe for extraction', async () => {
+    mockApiFetch.mockResolvedValueOnce(makeItem({ type: 'note' })).mockResolvedValueOnce([])
+    render(<ItemPage />)
+    await screen.findByText('Understanding Sourdough')
+    expect(screen.queryByTestId('ai-actions')).not.toBeInTheDocument()
+  })
+
+  it('links a derived recipe back to the item it came from', async () => {
+    mockApiFetch.mockResolvedValueOnce(makeItem({ derivedFrom: 'parent-1' })).mockResolvedValueOnce([])
+    render(<ItemPage />)
+    const link = await screen.findByTestId('derived-from')
+    expect(link).toHaveAttribute('href', '/item/parent-1')
+    await waitFor(() => expect(link).toHaveTextContent('From: Parent video'))
+  })
+
+  it('has no provenance link for items that were not derived', async () => {
+    mockApiFetch.mockResolvedValueOnce(makeItem()).mockResolvedValueOnce([])
+    render(<ItemPage />)
+    await screen.findByText('Understanding Sourdough')
+    expect(screen.queryByTestId('derived-from')).not.toBeInTheDocument()
   })
 })
