@@ -50,6 +50,23 @@ export function extractInstagramShortcode(url: string): string | null {
   return match ? match[1] : null;
 }
 
+/**
+ * Prefers the English caption track. Without a language the library takes whichever track YouTube lists
+ * first, which for many videos is an arbitrary auto-translation (a TEDx talk came back in Chinese, a
+ * Turkish recipe in Afrikaans). Falls back to the default track only when English is not offered; any
+ * other failure (captions disabled, video unavailable) is not retried.
+ */
+async function fetchTranscriptParts(videoId: string) {
+  try {
+    return await YoutubeTranscript.fetchTranscript(videoId, { lang: 'en' })
+  } catch (err) {
+    if (err instanceof Error && /No transcripts are available in/i.test(err.message)) {
+      return await YoutubeTranscript.fetchTranscript(videoId)
+    }
+    throw err
+  }
+}
+
 async function scrapeYoutube(url: string, videoId: string): Promise<ScrapedContent> {
   const canonical = `https://www.youtube.com/watch?v=${videoId}`
   let title = `YouTube Video (${videoId})`
@@ -72,7 +89,7 @@ async function scrapeYoutube(url: string, videoId: string): Promise<ScrapedConte
   let transcriptTruncated = false
   let transcriptError: string | undefined
   try {
-    const parts = await YoutubeTranscript.fetchTranscript(videoId)
+    const parts = await fetchTranscriptParts(videoId)
     const full = parts.map(p => p.text).join(' ').trim()
     if (!full) throw new Error('Transcript was empty')
     transcriptTruncated = full.length > MAX_TRANSCRIPT_CHARS

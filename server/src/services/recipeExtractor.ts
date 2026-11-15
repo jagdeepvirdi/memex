@@ -1,6 +1,11 @@
 // On-demand recipe extraction from a saved video / page. Returns `found: false` rather than
 // inventing a recipe when the source doesn't contain one — a small model will happily hallucinate
-// steps otherwise. The caller saves the result as a NEW linked item (never edits the source).
+// steps otherwise (in a real-video test it "found" recipes in a WSL tutorial and a TEDx talk).
+// The caller saves the result as a NEW linked item (never edits the source).
+//
+// Two defences, because the model's own "found" flag and "confidence" proved unreliable:
+//   1. a short yes/no gate ("is this a cooking recipe?") before any extraction;
+//   2. confidence is computed here from how complete the recipe is, not taken from the model.
 
 import { aiChat, type AiCallOptions } from './ai.js'
 import { loadSourceText, chunkText, type SourceItem } from './itemSource.js'
@@ -16,18 +21,28 @@ export type RecipeExtraction =
   | { found: false; reason: string; model: string }
   | { found: true; title: string; recipe: RecipeData; confidence: number; model: string }
 
-/** A real recipe has at least this many of each; fewer means the model is guessing. */
-const MIN_INGREDIENTS = 2
+/** A real recipe has at least this many of each; fewer means the model is guessing or the source omits them. */
+const MIN_INGREDIENTS = 3
 const MIN_STEPS = 2
+/** How much of the source the yes/no gate reads (title + start is enough to tell a recipe from a talk). */
+const GATE_CHARS = 3000
+
+// Wording matters with a small local model. Measured on real videos: "is this mainly about cooking? yes/no"
+// got 7 of 7 right; a "decide whether it teaches a recipe, these are NOT recipes: …" prompt and a
+// multi-label category prompt each got 2 cooking videos wrong.
+const GATE_SYSTEM =
+  'Is this video mainly about cooking or baking a food or drink dish — the host shows or explains how to make it? ' +
+  'Answer yes for cooking and baking videos. Answer no for anything else (technology, talks, science, crafts, ' +
+  'health advice, reviews, vlogs). Return JSON: {"answer": "yes" | "no"}'
 
 const SYSTEM =
-  'You extract a cooking recipe from a transcript or article. Use ONLY what the text says — never ' +
-  'invent ingredients, quantities or steps. If the text does not actually contain a recipe ' +
-  '(for example a review, vlog or restaurant tour), set "found" to false. Return JSON: ' +
+  'You extract a cooking recipe from a transcript or article. Write every field in English ' +
+  '(translate if the text is in another language, keeping quantities exactly). Use ONLY what the text ' +
+  'says — never invent ingredients, quantities or steps. If the text does not actually contain a recipe, ' +
+  'set "found" to false. Return JSON: ' +
   '{"found": boolean, "title": "dish name", "ingredients": ["quantity + ingredient, as stated"], ' +
   '"steps": ["ordered cooking steps"], "servings": "string or null", "prepTime": "string or null", ' +
-  '"cookTime": "string or null", "cuisine": "string or null", "mealType": "string or null", ' +
-  '"confidence": 0-100 (how completely the text specifies the recipe)}'
+  '"cookTime": "string or null", "cuisine": "string or null", "mealType": "string or null"}'
 
 function list(v: unknown): string[] {
   if (!Array.isArray(v)) return []
@@ -36,6 +51,25 @@ function list(v: unknown): string[] {
 
 function opt(v: unknown): string | undefined {
   return typeof v === 'string' && v.trim() && v.trim().toLowerCase() !== 'null' ? v.trim() : undefined
+}
+
+/** A digit, a unicode fraction, or a common quantity word — "2 cups flour", "½ tsp salt", "a pinch of salt". */
+const HAS_QUANTITY = /\d|[½¼¾⅓⅔⅛]|\b(?:one|two|three|four|five|six|half|quarter|dozen|pinch|dash|handful|couple)\b/i
+
+/**
+ * Confidence from completeness, 0–100: how many ingredients carry a quantity, how many ingredients and
+ * steps there are, and whether servings or a time are given. The model's own number is ignored — it gave
+ * 90 to a two-ingredient fragment and 0 to a complete recipe.
+ */
+export function scoreRecipe(r: RecipeData): number {
+  const quantified = r.ingredients.filter(i => HAS_QUANTITY.test(i)).length / Math.max(1, r.ingredients.length)
+  const score =
+    20 +
+    Math.round(35 * quantified) +
+    (r.ingredients.length >= 5 ? 15 : r.ingredients.length >= 3 ? 8 : 0) +
+    (r.steps.length >= 4 ? 15 : 7) +
+    (r.servings || r.prepTime || r.cookTime ? 15 : 0)
+  return Math.max(0, Math.min(100, score))
 }
 
 /** Validates the model output. Exported for tests. */
@@ -55,26 +89,51 @@ export function parseRecipe(raw: string, fallbackTitle: string): Omit<Extract<Re
     return { found: false, reason: 'No complete recipe (ingredients and steps) was found in this content.' }
   }
 
-  const rawConfidence = typeof o.confidence === 'number' && Number.isFinite(o.confidence) ? o.confidence : 50
-  return {
-    found: true,
-    title: opt(o.title) ?? fallbackTitle,
-    recipe: {
-      ingredients,
-      steps,
-      servings: opt(o.servings),
-      prepTime: opt(o.prepTime),
-      cookTime: opt(o.cookTime),
-      cuisine: opt(o.cuisine),
-      mealType: opt(o.mealType),
-    },
-    confidence: Math.max(0, Math.min(100, Math.round(rawConfidence))),
+  const recipe: RecipeData = {
+    ingredients,
+    steps,
+    servings: opt(o.servings),
+    prepTime: opt(o.prepTime),
+    cookTime: opt(o.cookTime),
+    cuisine: opt(o.cuisine),
+    mealType: opt(o.mealType),
+  }
+  return { found: true, title: opt(o.title) ?? fallbackTitle, recipe, confidence: scoreRecipe(recipe) }
+}
+
+/** Parses the gate answer. Anything unreadable fails open: extraction's own checks still apply. */
+export function parseGate(raw: string): boolean {
+  try {
+    const o = JSON.parse(raw) as { answer?: unknown }
+    return !(typeof o.answer === 'string' && o.answer.trim().toLowerCase() === 'no')
+  } catch {
+    return true
   }
 }
 
 export async function extractRecipe(item: SourceItem, opts: ExtractOptions): Promise<RecipeExtraction> {
   const source = await loadSourceText(item)
   let model = 'unknown'
+  const call = (): AiCallOptions => ({
+    task: 'extract',
+    provider: opts.provider,
+    cloudSafe: opts.cloudSafe,
+    userInitiated: true,
+    onProvider: i => { model = `${i.provider}:${i.model}` },
+  })
+
+  // Gate: a cheap yes/no on the title and start of the text before spending a full extraction.
+  const gateRaw = await aiChat(
+    `Title: ${item.title}\n\nText:\n${source.text.slice(0, GATE_CHARS)}`,
+    GATE_SYSTEM,
+    'json',
+    { temperature: 0, num_predict: 60 },
+    opts.signal,
+    call(),
+  )
+  if (!parseGate(gateRaw)) {
+    return { found: false, reason: 'This does not look like a recipe or cooking video.', model }
+  }
 
   // Recipes are dense in one place; a small model needs the whole thing in view. Use the largest
   // chunk-sized window when the source is long, preferring the part that mentions ingredients.
@@ -89,13 +148,7 @@ export async function extractRecipe(item: SourceItem, opts: ExtractOptions): Pro
     'json',
     { temperature: 0, num_predict: 1500 },
     opts.signal,
-    {
-      task: 'extract',
-      provider: opts.provider,
-      cloudSafe: opts.cloudSafe,
-      userInitiated: true,
-      onProvider: i => { model = `${i.provider}:${i.model}` },
-    },
+    call(),
   )
 
   const parsed = parseRecipe(raw, item.title)

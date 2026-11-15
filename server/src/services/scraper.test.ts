@@ -145,3 +145,49 @@ describe('URL Scraper Detection', () => {
     });
   });
 });
+
+describe('scrapeUrl — YouTube transcript language', () => {
+  const fetchMock = vi.fn();
+  const transcript = vi.mocked(YoutubeTranscript.fetchTranscript);
+  const part = [{ text: 'hello', duration: 1, offset: 0 }];
+
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+    fetchMock.mockReset();
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ title: 'T', author_name: 'C' }) });
+    transcript.mockReset();
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('asks for the English track first', async () => {
+    transcript.mockResolvedValue(part);
+    await scrapeUrl(`https://youtu.be/${ID}`);
+    expect(transcript).toHaveBeenCalledTimes(1);
+    expect(transcript).toHaveBeenCalledWith(ID, { lang: 'en' });
+  });
+
+  it('falls back to the default track when English is not offered', async () => {
+    transcript
+      .mockRejectedValueOnce(new Error('[YoutubeTranscript] No transcripts are available in en this video (x). Available languages: tr'))
+      .mockResolvedValueOnce(part);
+    const r = await scrapeUrl(`https://youtu.be/${ID}`);
+    expect(transcript).toHaveBeenCalledTimes(2);
+    expect(transcript).toHaveBeenLastCalledWith(ID);
+    expect(r.transcriptAvailable).toBe(true);
+  });
+
+  it('does not retry when the failure is not about language (captions disabled)', async () => {
+    transcript.mockRejectedValue(new Error('Transcript is disabled on this video'));
+    const r = await scrapeUrl(`https://youtu.be/${ID}`);
+    expect(transcript).toHaveBeenCalledTimes(1);
+    expect(r).toMatchObject({ transcriptAvailable: false, failure: 'Transcript is disabled on this video' });
+  });
+
+  it('reports the failure if the fallback track also fails', async () => {
+    transcript
+      .mockRejectedValueOnce(new Error('No transcripts are available in en this video'))
+      .mockRejectedValueOnce(new Error('Transcript is disabled'));
+    const r = await scrapeUrl(`https://youtu.be/${ID}`);
+    expect(r).toMatchObject({ transcriptAvailable: false, failure: 'Transcript is disabled' });
+  });
+});

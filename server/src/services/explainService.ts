@@ -14,12 +14,13 @@ export interface ExplainOptions {
 }
 
 const MAP_SYSTEM =
-  'You condense one part of a longer transcript or article into factual notes. ' +
+  'You condense one part of a longer transcript or article into factual notes, written in English. ' +
   'Return only a short bullet list of the concrete points, steps and facts in THIS part. ' +
   'Do not add anything that is not in the text.'
 
 const REDUCE_SYSTEM =
   'You explain a video or article clearly for someone deciding whether and how to use it. ' +
+  'Always write in English, even if the source text is in another language. ' +
   'Use ONLY the supplied text. Never invent facts. Return JSON: ' +
   '{"summary": "2-4 sentence plain-English explanation", ' +
   '"keyPoints": ["the main ideas, max 8"], ' +
