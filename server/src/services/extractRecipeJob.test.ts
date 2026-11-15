@@ -7,6 +7,7 @@ vi.mock('./ingestJobs', () => ({
   reportJobProgress: vi.fn().mockResolvedValue(undefined),
   completeJob: vi.fn().mockResolvedValue(undefined),
   failJob: vi.fn().mockResolvedValue(undefined),
+  cancelJob: vi.fn().mockResolvedValue(true),
 }))
 vi.mock('../db/helpers', () => ({ createItem: vi.fn() }))
 vi.mock('./classifier', () => ({ mapToCategories: vi.fn().mockReturnValue(['Food', 'Savory']) }))
@@ -15,7 +16,8 @@ vi.mock('../lib/logger', () => ({ default: { error: vi.fn(), warn: vi.fn(), info
 
 import { runExtractRecipeJob, type ExtractRecipeJobInput } from './extractRecipeJob'
 import { extractRecipe } from './recipeExtractor'
-import { reportJobProgress, completeJob, failJob } from './ingestJobs'
+import { reportJobProgress, completeJob, failJob, cancelJob } from './ingestJobs'
+import { cancelRunningJob, runningJobCount } from './jobControl'
 import { createItem } from '../db/helpers'
 import { embedItem } from './embedder'
 import { NoSourceTextError } from './itemSource'
@@ -198,5 +200,89 @@ describe('runExtractRecipeJob — failure is recorded on the job, never thrown',
     vi.mocked(extractRecipe).mockRejectedValue(new NoSourceTextError('x'))
     vi.mocked(failJob).mockRejectedValue(new Error('db down'))
     await expect(runExtractRecipeJob(INPUT)).resolves.toBeUndefined()
+  })
+})
+
+/** An extractRecipe that only ends when its signal aborts (as the real model call does). */
+function hangUntilAborted() {
+  vi.mocked(extractRecipe).mockImplementation((_item, opts) => new Promise((_resolve, reject) => {
+    opts.signal!.addEventListener('abort', () => reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' })))
+  }))
+}
+const started = () => new Promise<void>(r => setTimeout(r, 0))
+
+describe('runExtractRecipeJob — the user cancels', () => {
+  it('stops the model call, marks the job cancelled (not failed), creates nothing, and logs no error', async () => {
+    hangUntilAborted()
+    const run = runExtractRecipeJob(INPUT)
+    await started()
+    expect(cancelRunningJob('job-1')).toBe(true)
+    await run
+
+    expect(cancelJob).toHaveBeenCalledTimes(1)
+    expect(cancelJob).toHaveBeenCalledWith('job-1', { itemId: 'vid-1' })
+    expect(failJob).not.toHaveBeenCalled()
+    expect(completeJob).not.toHaveBeenCalled()
+    expect(pool.connect).not.toHaveBeenCalled()
+    expect(createItem).not.toHaveBeenCalled()
+    expect(embedItem).not.toHaveBeenCalled()
+    expect(logger.error).not.toHaveBeenCalled()
+  })
+
+  it('is honoured even if a recipe was just found: no item is created', async () => {
+    vi.mocked(extractRecipe).mockImplementation(async () => {
+      cancelRunningJob('job-1') // the user clicks Cancel as the last model call returns
+      return FOUND
+    })
+    await runExtractRecipeJob(INPUT)
+    expect(createItem).not.toHaveBeenCalled()
+    expect(pool.connect).not.toHaveBeenCalled()
+    expect(completeJob).not.toHaveBeenCalled()
+    expect(cancelJob).toHaveBeenCalledTimes(1)
+  })
+
+  it('is honoured when nothing was found too: the job ends cancelled, not completed', async () => {
+    vi.mocked(extractRecipe).mockImplementation(async () => {
+      cancelRunningJob('job-1')
+      return { found: false, reason: 'No recipe', model: 'm' }
+    })
+    await runExtractRecipeJob(INPUT)
+    expect(completeJob).not.toHaveBeenCalled()
+    expect(cancelJob).toHaveBeenCalledTimes(1)
+  })
+
+  it('a timeout is still a failure, not a cancel', async () => {
+    vi.mocked(extractRecipe).mockRejectedValue(Object.assign(new Error('aborted due to timeout'), { name: 'TimeoutError' }))
+    await runExtractRecipeJob(INPUT)
+    expect(failJob).toHaveBeenCalledTimes(1)
+    expect(cancelJob).not.toHaveBeenCalled()
+  })
+
+  it('is registered while it runs and unregistered afterwards, whatever the outcome', async () => {
+    let during = -1
+    vi.mocked(extractRecipe).mockImplementation(async () => { during = runningJobCount(); return FOUND })
+    await runExtractRecipeJob(INPUT)
+    expect(during).toBe(1)
+    expect(runningJobCount()).toBe(0)
+
+    vi.mocked(extractRecipe).mockRejectedValue(new NoSourceTextError('x'))
+    await runExtractRecipeJob(INPUT)
+    expect(runningJobCount()).toBe(0)
+
+    hangUntilAborted()
+    const run = runExtractRecipeJob(INPUT)
+    await started()
+    cancelRunningJob('job-1')
+    await run
+    expect(runningJobCount()).toBe(0)
+  })
+
+  it('survives the cancellation being unrecordable', async () => {
+    vi.mocked(cancelJob).mockRejectedValue(new Error('db down'))
+    hangUntilAborted()
+    const run = runExtractRecipeJob(INPUT)
+    await started()
+    cancelRunningJob('job-1')
+    await expect(run).resolves.toBeUndefined()
   })
 })

@@ -8,6 +8,7 @@ vi.mock('../../lib/api', async orig => ({
   ...(await orig<typeof import('../../lib/api')>()),
   explainItem: vi.fn(),
   fetchIngestJob: vi.fn(),
+  cancelIngestJob: vi.fn(),
   fetchItem: vi.fn(),
   fetchAiProviders: vi.fn().mockResolvedValue([]),
   fetchDerivedItems: vi.fn().mockResolvedValue([]),
@@ -16,7 +17,7 @@ vi.mock('../../lib/api', async orig => ({
 
 import { useActionJob, describeJobStage, type ActionJobKind } from './useActionJob'
 import ItemAiActions from './ItemAiActions'
-import { ApiError, explainItem, extractRecipeFromItem, fetchIngestJob, fetchItem } from '../../lib/api'
+import { ApiError, cancelIngestJob, explainItem, extractRecipeFromItem, fetchIngestJob, fetchItem } from '../../lib/api'
 import type { Item } from '../../../../shared/types'
 
 const ITEM = { id: 'vid-1', title: 'Long video', type: 'link', content: 'x', structured: { videoId: 'dQw4w9WgXcQ' }, categories: [], tags: [], source: 'youtube', sourceUrl: 'https://youtu.be/dQw4w9WgXcQ', reviewed: false, createdAt: new Date(), updatedAt: new Date() } as Item
@@ -40,6 +41,7 @@ beforeEach(() => {
   launch.mockReset().mockResolvedValue({ jobId: 'job-1' })
   onCompleted.mockReset().mockResolvedValue(undefined)
   vi.mocked(explainItem).mockResolvedValue({ jobId: 'job-1' })
+  vi.mocked(cancelIngestJob).mockResolvedValue({ status: 'cancelling' })
   vi.mocked(fetchItem).mockResolvedValue({ ...ITEM, structured: { explanation: { summary: 's' } } } as Item)
 })
 afterEach(() => vi.useRealTimers())
@@ -65,7 +67,7 @@ describe('describeJobStage', () => {
 describe('useActionJob', () => {
   it('starts idle and polls nothing', () => {
     const { result } = setup()
-    expect(result.current.run).toEqual({ running: false, percent: 0, label: '' })
+    expect(result.current.run).toEqual({ running: false, percent: 0, label: '', cancelling: false })
     expect(fetchIngestJob).not.toHaveBeenCalled()
   })
 
@@ -77,7 +79,7 @@ describe('useActionJob', () => {
 
     expect(launch).toHaveBeenCalledWith({ provider: 'ollama', force: false })
     expect(sessionStorage.getItem(keyFor('explain'))).toBe('job-1')
-    expect(result.current.run).toEqual({ running: true, percent: 29, label: 'Summarising part 3 of 6…' })
+    expect(result.current.run).toEqual({ running: true, percent: 29, label: 'Summarising part 3 of 6…', cancelling: false })
 
     vi.mocked(fetchIngestJob).mockResolvedValue(processing({ progress: 57, details: { stage: 'summarising', part: 5, parts: 6 } }) as never)
     await tick()
@@ -210,7 +212,7 @@ describe('useActionJob', () => {
     await settle()
     expect(fetchIngestJob).toHaveBeenCalledWith('job-77')
     expect(launch).not.toHaveBeenCalled()
-    expect(result.current.run).toEqual({ running: true, percent: 71, label: 'Writing the explanation…' })
+    expect(result.current.run).toEqual({ running: true, percent: 71, label: 'Writing the explanation…', cancelling: false })
   })
 
   it('shows a result that finished while the user was away', async () => {
@@ -323,5 +325,202 @@ describe('ItemAiActions — progress UI for both actions', () => {
     fireEvent.click(await screen.findByRole('button', { name: /explain this/i }))
     await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Another AI task is still running. Wait for it to finish.'))
     expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
+  })
+})
+
+// ── Cancel ───────────────────────────────────────────────────────────────────
+
+const CANCELLED = { status: 'cancelled', progress: 29, total: 7, completed: 2, details: { itemId: 'vid-1' } }
+
+/** Starts a job that keeps processing, and returns the hook ready to cancel. */
+async function runningJob(kind: ActionJobKind = 'explain') {
+  vi.mocked(fetchIngestJob).mockResolvedValue(processing() as never)
+  const hook = setup(kind)
+  await act(async () => { await hook.result.current.start({}) })
+  await settle()
+  return hook
+}
+
+describe('useActionJob — cancel', () => {
+  it('does nothing when no job is running', async () => {
+    const { result } = setup()
+    await act(async () => { await result.current.cancel() })
+    expect(cancelIngestJob).not.toHaveBeenCalled()
+    expect(result.current.run.running).toBe(false)
+  })
+
+  it('asks the server to stop that job, and shows "Cancelling…" straight away', async () => {
+    const { result } = await runningJob()
+    await act(async () => { await result.current.cancel() })
+    expect(cancelIngestJob).toHaveBeenCalledWith('job-1')
+    expect(result.current.run).toMatchObject({ running: true, cancelling: true, label: 'Cancelling…' })
+  })
+
+  it('once the job reports cancelled: back to idle with no error toast, no result, and the job id forgotten', async () => {
+    const { result } = await runningJob()
+    await act(async () => { await result.current.cancel() })
+    vi.mocked(fetchIngestJob).mockResolvedValue(CANCELLED as never)
+    await tick()
+    expect(result.current.run).toEqual({ running: false, percent: 0, label: '', cancelling: false })
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(onCompleted).not.toHaveBeenCalled()
+    expect(sessionStorage.getItem(keyFor('explain'))).toBeNull()
+  })
+
+  it('does not wait for the next 1.5 s poll to show the outcome', async () => {
+    const { result } = await runningJob()
+    vi.mocked(fetchIngestJob).mockResolvedValue(CANCELLED as never)
+    await act(async () => { await result.current.cancel() })
+    await settle()
+    expect(result.current.run.running).toBe(false)
+  })
+
+  it('keeps showing "Cancelling…" while the server finishes stopping (progress polls do not undo it)', async () => {
+    const { result } = await runningJob()
+    await act(async () => { await result.current.cancel() })
+    vi.mocked(fetchIngestJob).mockResolvedValue(processing({ progress: 43, details: { stage: 'summarising', part: 4, parts: 6 } }) as never)
+    await tick()
+    expect(result.current.run).toMatchObject({ running: true, cancelling: true, label: 'Cancelling…', percent: 43 })
+  })
+
+  it('pressing Cancel twice asks the server once', async () => {
+    const { result } = await runningJob()
+    await act(async () => { await result.current.cancel() })
+    await act(async () => { await result.current.cancel() })
+    expect(cancelIngestJob).toHaveBeenCalledTimes(1)
+  })
+
+  it('if the job finished first (409), shows its real result instead of pretending it was cancelled', async () => {
+    const { result } = await runningJob()
+    vi.mocked(cancelIngestJob).mockRejectedValue(new ApiError('This job has already finished.', 409, { status: 'completed' }))
+    vi.mocked(fetchIngestJob).mockResolvedValue(completed as never)
+    await act(async () => { await result.current.cancel() })
+    await settle()
+    expect(onCompleted).toHaveBeenCalledTimes(1)
+    expect(result.current.run.running).toBe(false)
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('if the cancel is accepted but the job had just completed, the result is still shown', async () => {
+    const { result } = await runningJob()
+    vi.mocked(fetchIngestJob).mockResolvedValue(completed as never)
+    await act(async () => { await result.current.cancel() })
+    await settle()
+    expect(onCompleted).toHaveBeenCalledTimes(1)
+  })
+
+  it('quietly goes idle if the job no longer exists (404)', async () => {
+    const { result } = await runningJob()
+    vi.mocked(cancelIngestJob).mockRejectedValue(new ApiError('Job not found', 404))
+    await act(async () => { await result.current.cancel() })
+    expect(result.current.run.running).toBe(false)
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(sessionStorage.getItem(keyFor('explain'))).toBeNull()
+  })
+
+  it('if the request fails, tells the user, restores the normal progress and lets them try again', async () => {
+    const { result } = await runningJob()
+    vi.mocked(cancelIngestJob).mockRejectedValueOnce(new Error('Failed to fetch'))
+    await act(async () => { await result.current.cancel() })
+    expect(toast.error).toHaveBeenCalledWith('Failed to fetch')
+    expect(result.current.run).toMatchObject({ running: true, cancelling: false })
+    expect(result.current.run.label).not.toBe('Cancelling…')
+
+    await act(async () => { await result.current.cancel() }) // can retry
+    expect(cancelIngestJob).toHaveBeenCalledTimes(2)
+    expect(result.current.run.cancelling).toBe(true)
+  })
+
+  it('a job cancelled elsewhere (or cleared as stale) just ends quietly, without the user pressing anything', async () => {
+    const { result } = await runningJob()
+    vi.mocked(fetchIngestJob).mockResolvedValue(CANCELLED as never)
+    await tick()
+    expect(result.current.run.running).toBe(false)
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(onCompleted).not.toHaveBeenCalled()
+  })
+
+  it('a cancelled job found when returning to the page ends quietly too', async () => {
+    sessionStorage.setItem(keyFor('explain'), 'job-77')
+    vi.mocked(fetchIngestJob).mockResolvedValue(CANCELLED as never)
+    const { result } = setup()
+    await settle()
+    expect(result.current.run.running).toBe(false)
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(sessionStorage.getItem(keyFor('explain'))).toBeNull()
+  })
+
+  it('a new job after a cancel starts clean (not stuck on "Cancelling…")', async () => {
+    const { result } = await runningJob()
+    await act(async () => { await result.current.cancel() })
+    vi.mocked(fetchIngestJob).mockResolvedValue(CANCELLED as never)
+    await tick()
+    expect(result.current.run.running).toBe(false)
+
+    launch.mockResolvedValue({ jobId: 'job-2' })
+    vi.mocked(fetchIngestJob).mockResolvedValue(processing() as never)
+    await act(async () => { await result.current.start({}) })
+    await settle()
+    expect(result.current.run).toMatchObject({ running: true, cancelling: false, label: 'Summarising part 3 of 6…' })
+  })
+
+  it('works the same for an Extract recipe job, using its own job id', async () => {
+    launch.mockResolvedValue({ jobId: 'job-extract' })
+    const { result } = await runningJob('extract-recipe')
+    await act(async () => { await result.current.cancel() })
+    expect(cancelIngestJob).toHaveBeenCalledWith('job-extract')
+  })
+})
+
+describe('ItemAiActions — Cancel button', () => {
+  beforeEach(() => { vi.useRealTimers(); vi.useFakeTimers({ shouldAdvanceTime: true }) })
+
+  it('is not shown when nothing is running', async () => {
+    render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
+    await screen.findByRole('button', { name: /explain this/i })
+    expect(screen.queryByRole('button', { name: /^cancel/i })).not.toBeInTheDocument()
+  })
+
+  it('stops an explanation: shows "Cancelling…", then returns to normal with the buttons enabled and no error', async () => {
+    vi.mocked(fetchIngestJob).mockResolvedValue(processing() as never)
+    render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: /explain this/i }))
+    const cancelBtn = await screen.findByRole('button', { name: 'Cancel' })
+
+    fireEvent.click(cancelBtn)
+    await waitFor(() => expect(cancelIngestJob).toHaveBeenCalledWith('job-1'))
+    expect(await screen.findByRole('button', { name: 'Cancelling…' })).toBeDisabled()
+    expect(screen.getByTestId('job-progress')).toHaveTextContent('Cancelling…')
+
+    vi.mocked(fetchIngestJob).mockResolvedValue(CANCELLED as never)
+    await tick()
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument())
+    expect(screen.getByRole('button', { name: /explain this/i })).toBeEnabled()
+    expect(screen.getByRole('button', { name: /extract recipe/i })).toBeEnabled()
+    expect(toast.error).not.toHaveBeenCalled()
+    expect(fetchItem).not.toHaveBeenCalled() // nothing was saved, so nothing to reload
+  })
+
+  it('stops an extraction the same way, using the extract job id', async () => {
+    vi.mocked(extractRecipeFromItem).mockResolvedValue({ jobId: 'job-x' })
+    vi.mocked(fetchIngestJob).mockResolvedValue({ status: 'processing', progress: 33, total: 3, completed: 1, details: { itemId: 'vid-1', stage: 'checking' } } as never)
+    render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: /extract recipe/i }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(cancelIngestJob).toHaveBeenCalledWith('job-x'))
+    expect(screen.queryByTestId('derived-recipes')).not.toBeInTheDocument()
+  })
+
+  it('shows the real result if the job finished before the cancel landed', async () => {
+    vi.mocked(fetchIngestJob).mockResolvedValue(processing() as never)
+    render(<ItemAiActions item={ITEM} onItemUpdated={vi.fn()} />)
+    fireEvent.click(await screen.findByRole('button', { name: /explain this/i }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }))
+    vi.mocked(cancelIngestJob).mockRejectedValue(new ApiError('This job has already finished.', 409))
+    vi.mocked(fetchIngestJob).mockResolvedValue(completed as never)
+    vi.mocked(fetchItem).mockResolvedValue({ ...ITEM, structured: { explanation: { summary: 'late result' } } } as Item)
+    await tick()
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('Explanation saved'))
   })
 })

@@ -90,7 +90,7 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
   const [recipes, setRecipes] = useState<Item[]>([])
   const [noRecipe, setNoRecipe] = useState<string | null>(null)
 
-  const { run: explainRun, start: startExplain } = useActionJob({
+  const { run: explainRun, start: startExplain, cancel: cancelExplain } = useActionJob({
     itemId: item.id,
     kind: 'explain',
     launch: opts => explainItem(item.id, opts),
@@ -100,7 +100,7 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
     },
   })
 
-  const { run: recipeRun, start: startExtract } = useActionJob({
+  const { run: recipeRun, start: startExtract, cancel: cancelExtract } = useActionJob({
     itemId: item.id,
     kind: 'extract-recipe',
     launch: opts => extractRecipeFromItem(item.id, opts),
@@ -155,6 +155,7 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
   const extracting = recipeRun.running
   const busy = explaining || extracting
   const activeRun = explaining ? explainRun : extracting ? recipeRun : null
+  const cancelActive = explaining ? cancelExplain : cancelExtract
   const primary = 'bg-accent/10 hover:bg-accent/20 text-accent border-accent/20'
   const secondary = 'bg-white/5 hover:bg-white/10 text-ink-muted border-white/10'
 
@@ -215,9 +216,19 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
           >
             <div className="h-full bg-accent transition-all duration-500" style={{ width: `${activeRun.percent}%` }} />
           </div>
-          <p className="text-[11px] text-ink-muted">
-            {activeRun.label} <span className="text-ink-muted/70">You can leave this page — it keeps going and the result is saved.</span>
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[11px] text-ink-muted">
+              {activeRun.label} <span className="text-ink-muted/70">You can leave this page — it keeps going and the result is saved.</span>
+            </p>
+            <button
+              onClick={() => void cancelActive()}
+              disabled={activeRun.cancelling}
+              title="Stop this and discard it — nothing is saved"
+              className="shrink-0 text-[11px] text-ink-muted hover:text-ink border border-white/10 hover:bg-white/5 px-2.5 py-1 rounded-md transition-colors disabled:opacity-50"
+            >
+              {activeRun.cancelling ? 'Cancelling…' : 'Cancel'}
+            </button>
+          </div>
         </div>
       )}
 

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { fetchIngestJob } from '../../lib/api'
+import { ApiError, cancelIngestJob, fetchIngestJob } from '../../lib/api'
 import type { IngestJobStatus } from '../../lib/api'
 import type { ExplainRequest } from '../../../../shared/types'
 
@@ -16,9 +16,12 @@ export interface JobRun {
   percent: number
   /** What it is doing right now, e.g. "Summarising part 3 of 6…". */
   label: string
+  /** The user pressed Cancel and the server has been asked to stop; waiting for it to confirm. */
+  cancelling: boolean
 }
 
-const IDLE: JobRun = { running: false, percent: 0, label: '' }
+const IDLE: JobRun = { running: false, percent: 0, label: '', cancelling: false }
+const CANCELLING_LABEL = 'Cancelling…'
 
 /** Per-kind wording for failures the hook has to report itself. */
 const MESSAGES: Record<ActionJobKind, { failed: string; couldNotShow: string }> = {
@@ -81,6 +84,8 @@ export function useActionJob(config: ActionJobConfig) {
   const [run, setRun] = useState<JobRun>(IDLE)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
   const failures = useRef(0)
+  const currentJob = useRef<string | null>(null)
+  const cancelling = useRef(false)
   const latest = useRef(config)
   latest.current = config
 
@@ -91,6 +96,8 @@ export function useActionJob(config: ActionJobConfig) {
   const finish = useCallback((failureMessage?: string) => {
     stop()
     forget(kind, itemId)
+    currentJob.current = null
+    cancelling.current = false
     setRun(IDLE)
     if (failureMessage) toast.error(failureMessage)
   }, [kind, itemId, stop])
@@ -116,6 +123,8 @@ export function useActionJob(config: ActionJobConfig) {
       try {
         await latest.current.onCompleted(job)
         forget(kind, itemId)
+        currentJob.current = null
+        cancelling.current = false
         setRun(IDLE)
       } catch {
         finish(MESSAGES[kind].couldNotShow)
@@ -126,14 +135,26 @@ export function useActionJob(config: ActionJobConfig) {
       finish(job.error || MESSAGES[kind].failed)
       return false
     }
-    setRun({ running: true, percent: Math.max(3, job.progress), label: describeJobStage(kind, job) })
+    // Stopped by the user: back to normal, no result to show and nothing to apologise for.
+    if (job.status === 'cancelled') {
+      finish()
+      return false
+    }
+    setRun({
+      running: true,
+      percent: Math.max(3, job.progress),
+      label: cancelling.current ? CANCELLING_LABEL : describeJobStage(kind, job),
+      cancelling: cancelling.current,
+    })
     return true
   }, [kind, itemId, finish, stop])
 
   const follow = useCallback((jobId: string) => {
     stop()
     failures.current = 0
-    setRun({ running: true, percent: 3, label: 'Starting…' })
+    currentJob.current = jobId
+    cancelling.current = false
+    setRun({ running: true, percent: 3, label: 'Starting…', cancelling: false })
     void check(jobId)
     timer.current = setInterval(() => {
       void check(jobId).then(keepGoing => { if (!keepGoing) stop() })
@@ -147,6 +168,29 @@ export function useActionJob(config: ActionJobConfig) {
     follow(jobId)
   }, [kind, itemId, follow])
 
+  /**
+   * Asks the server to stop the job. The bar switches to "Cancelling…" at once and the normal polling reports the
+   * outcome: `cancelled` (back to idle), or — if it finished first — its real result.
+   */
+  const cancel = useCallback(async () => {
+    const jobId = currentJob.current
+    if (!jobId || cancelling.current) return
+    cancelling.current = true
+    setRun(r => ({ ...r, cancelling: true, label: CANCELLING_LABEL }))
+    try {
+      await cancelIngestJob(jobId)
+      void check(jobId) // don't wait for the next tick to show the outcome
+    } catch (err) {
+      const status = err instanceof ApiError ? err.status : undefined
+      if (status === 409) { void check(jobId); return } // already finished: show what actually happened
+      if (status === 404) { finish(); return } // gone: nothing left to cancel
+      // Could not reach the server or it refused: the job is still running, so say so and keep following it.
+      cancelling.current = false
+      setRun(r => ({ ...r, cancelling: false, label: describeJobStage(kind, { details: undefined }) }))
+      toast.error(err instanceof Error ? err.message : 'Could not cancel')
+    }
+  }, [check, finish, kind])
+
   // Pick a job back up after navigating away and returning.
   useEffect(() => {
     setRun(IDLE)
@@ -155,5 +199,5 @@ export function useActionJob(config: ActionJobConfig) {
     return stop
   }, [kind, itemId, follow, stop])
 
-  return { run, start }
+  return { run, start, cancel }
 }

@@ -19,7 +19,8 @@ import { setItemTags, createItem } from '../db/helpers.js';
 import { extractAndLinkEntities } from '../services/entityService.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
 import logger from '../lib/logger.js'
-import { createJob, saveJobDetails, failJob, hasRunningJob } from '../services/ingestJobs.js'
+import { createJob, saveJobDetails, failJob, hasRunningJob, cancelJob } from '../services/ingestJobs.js'
+import { cancelRunningJob, isCancellableJobKind } from '../services/jobControl.js'
 import { z } from 'zod'
 import { getSetting, asBool } from '../services/settings.js'
 import { loadBackfillPlan, previewSample, runBackfill, BACKFILL_KIND, DELAY_MIN_MS, DELAY_MAX_MS } from '../services/youtubeBackfill.js'
@@ -255,6 +256,34 @@ router.get('/jobs/:id', async (req, res) => {
     res.status(500).json({ error: 'Failed to fetch job' })
   }
 });
+
+// ── POST /api/ingest/jobs/:id/cancel — stop a running Explain / Extract recipe job ──────────────
+// 202 { status: 'cancelling' } when its runner was told to stop (the job row turns 'cancelled' a moment later, once the
+// model call has been aborted); 200 { status: 'cancelled' } when no runner exists any more (server restarted) and the
+// stale row was just cleared. Finished jobs keep their outcome (409); other kinds of job cannot be cancelled (400).
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+router.post('/jobs/:id/cancel', async (req, res) => {
+  const id = String(req.params.id)
+  if (!UUID.test(id)) return res.status(404).json({ error: 'Job not found' })
+  try {
+    const { rows } = await pool.query<{ status: string; kind: string | null }>('SELECT status, kind FROM ingest_jobs WHERE id = $1', [id])
+    if (rows.length === 0) return res.status(404).json({ error: 'Job not found' })
+    const { status, kind } = rows[0]
+    if (!isCancellableJobKind(kind)) return res.status(400).json({ error: 'This kind of job cannot be cancelled.' })
+    if (status !== 'processing') return res.status(409).json({ error: 'This job has already finished.', status })
+
+    if (cancelRunningJob(id)) return res.status(202).json({ status: 'cancelling' })
+
+    // Nothing is running it (the server restarted mid-job): clear the stale row so it stops blocking new jobs.
+    await cancelJob(id)
+    res.json({ status: 'cancelled' })
+  } catch (err) {
+    logger.error(err, 'POST /api/ingest/jobs/:id/cancel error')
+    res.status(500).json({ error: 'Failed to cancel the job' })
+  }
+})
 
 // ── POST /api/ingest/youtube/backfill ─────────────────────────────────────────
 // Re-reads existing items that are (just) a YouTube link: sets source_url, fetches

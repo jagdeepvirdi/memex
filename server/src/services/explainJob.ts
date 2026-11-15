@@ -9,7 +9,8 @@
 import { pool } from '../db/client.js'
 import { explainItem, type ExplainProgress } from './explainService.js'
 import { describeActionError } from './actionErrors.js'
-import { reportJobProgress, completeJob, failJob } from './ingestJobs.js'
+import { reportJobProgress, completeJob, failJob, cancelJob } from './ingestJobs.js'
+import { registerJobAbort, unregisterJob } from './jobControl.js'
 import logger from '../lib/logger.js'
 import type { AiCallOptions } from './ai.js'
 import { EXPLAIN_JOB_KIND, AI_JOB_STALE_MINUTES, AI_JOB_TIMEOUT_MS } from './actionJobs.js'
@@ -40,13 +41,16 @@ export interface ExplainJobDetails {
 
 export async function runExplainJob(input: ExplainJobInput): Promise<void> {
   const { jobId, itemId } = input
+  // The user can stop this job (POST /api/ingest/jobs/:id/cancel): that aborts `control`, which cancels the model call.
+  const control = registerJobAbort(jobId)
+  const signal = AbortSignal.any([control.signal, AbortSignal.timeout(EXPLAIN_JOB_TIMEOUT_MS)])
   try {
     const explanation = await explainItem(
       { title: input.title, content: input.content, sourceUrl: input.sourceUrl },
       {
         provider: input.provider,
         cloudSafe: input.cloudSafe,
-        signal: AbortSignal.timeout(EXPLAIN_JOB_TIMEOUT_MS),
+        signal,
         onProgress: p => {
           const details: ExplainJobDetails = { itemId, stage: p.stage, part: p.part, parts: p.parts }
           // Progress is a courtesy: a failed write must not stop the explanation.
@@ -54,6 +58,12 @@ export async function runExplainJob(input: ExplainJobInput): Promise<void> {
         },
       },
     )
+
+    // Cancelled just as it finished: honour the user's choice, save nothing.
+    if (control.signal.aborted) {
+      await cancelJob(jobId, { itemId } satisfies ExplainJobDetails).catch(() => {})
+      return
+    }
 
     await pool.query(
       `UPDATE items
@@ -64,11 +74,18 @@ export async function runExplainJob(input: ExplainJobInput): Promise<void> {
     )
     await completeJob(jobId, { itemId, model: explanation.model } satisfies ExplainJobDetails)
   } catch (err) {
+    // A user cancel surfaces as an aborted call (an AbortError or a provider "timeout"): that is not a failure.
+    if (control.signal.aborted) {
+      await cancelJob(jobId, { itemId } satisfies ExplainJobDetails).catch(() => {})
+      return
+    }
     const known = describeActionError(err)
     if (!known) logger.error(err, `Explain job ${jobId} failed`)
     const timedOut = err instanceof Error && (err.name === 'TimeoutError' || err.name === 'AbortError')
     const message = known?.message
       ?? (timedOut ? 'Explaining took too long and was stopped. Try again, or pick a faster provider.' : 'Failed to explain item')
     await failJob(jobId, message, { itemId, ...(known?.kind ? { kind: known.kind } : {}) }).catch(() => {})
+  } finally {
+    unregisterJob(jobId)
   }
 }

@@ -420,7 +420,7 @@ export interface PasteImportResponse {
 }
 
 export interface IngestJobStatus {
-  status: 'processing' | 'completed' | 'failed' | string
+  status: 'processing' | 'completed' | 'failed' | 'cancelled' | string
   progress: number
   total: number
   completed: number
@@ -451,6 +451,15 @@ export function previewPasteImport(text: string): Promise<PasteImportResponse> {
 /** Saves the new entries instantly and starts background classification (poll `fetchIngestJob`). */
 export function startPasteImport(text: string): Promise<PasteImportResponse> {
   return apiFetch<PasteImportResponse>('/ingest/paste/bulk', { method: 'POST', body: JSON.stringify({ text, dryRun: false }) })
+}
+
+/**
+ * Asks the server to stop a running Explain / Extract recipe job. `cancelling`: it was told to stop and will turn
+ * `cancelled` in a moment; `cancelled`: it had no runner left and the stale job was cleared. Rejects with a 409
+ * (ApiError) if the job had already finished, 400 for jobs that cannot be cancelled, 404 if it no longer exists.
+ */
+export function cancelIngestJob(jobId: string): Promise<{ status: 'cancelling' | 'cancelled' }> {
+  return apiFetch<{ status: 'cancelling' | 'cancelled' }>(`/ingest/jobs/${jobId}/cancel`, { method: 'POST' })
 }
 
 export function fetchIngestJob(jobId: string): Promise<IngestJobStatus> {

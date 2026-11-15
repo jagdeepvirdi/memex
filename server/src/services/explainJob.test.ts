@@ -6,12 +6,14 @@ vi.mock('./ingestJobs', () => ({
   reportJobProgress: vi.fn().mockResolvedValue(undefined),
   completeJob: vi.fn().mockResolvedValue(undefined),
   failJob: vi.fn().mockResolvedValue(undefined),
+  cancelJob: vi.fn().mockResolvedValue(true),
 }))
 vi.mock('../lib/logger', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }))
 
 import { runExplainJob, EXPLAIN_JOB_KIND, EXPLAIN_JOB_STALE_MINUTES, EXPLAIN_JOB_TIMEOUT_MS, type ExplainJobInput } from './explainJob'
 import { explainItem, ExplainParseError } from './explainService'
-import { reportJobProgress, completeJob, failJob } from './ingestJobs'
+import { reportJobProgress, completeJob, failJob, cancelJob } from './ingestJobs'
+import { cancelRunningJob, runningJobCount } from './jobControl'
 import { NoSourceTextError } from './itemSource'
 import { AiProviderError } from './ai'
 import { pool } from '../db/client'
@@ -148,5 +150,96 @@ describe('runExplainJob — failure is recorded on the job, never thrown', () =>
     vi.mocked(explainItem).mockRejectedValue(new ExplainParseError())
     vi.mocked(failJob).mockRejectedValue(new Error('db down'))
     await expect(runExplainJob(INPUT)).resolves.toBeUndefined()
+  })
+})
+
+/** An explainItem that only ends when its signal aborts (as the real model call does). */
+function hangUntilAborted() {
+  vi.mocked(explainItem).mockImplementation((_item, opts) => new Promise((_resolve, reject) => {
+    opts.signal!.addEventListener('abort', () => reject(Object.assign(new Error('The operation was aborted'), { name: 'AbortError' })))
+  }))
+}
+const started = () => new Promise<void>(r => setTimeout(r, 0))
+
+describe('runExplainJob — the user cancels', () => {
+  it('stops the model call, marks the job cancelled (not failed), saves nothing, and logs no error', async () => {
+    hangUntilAborted()
+    const run = runExplainJob(INPUT)
+    await started()
+    expect(cancelRunningJob('job-1')).toBe(true)
+    await run
+
+    expect(cancelJob).toHaveBeenCalledTimes(1)
+    expect(cancelJob).toHaveBeenCalledWith('job-1', { itemId: 'item-1' })
+    expect(failJob).not.toHaveBeenCalled()
+    expect(completeJob).not.toHaveBeenCalled()
+    expect(pool.query).not.toHaveBeenCalled() // nothing was written to the item
+    expect(logger.error).not.toHaveBeenCalled()
+  })
+
+  it('treats a provider that reports the abort as a "timeout" error as a cancel too', async () => {
+    vi.mocked(explainItem).mockImplementation((_item, opts) => new Promise((_resolve, reject) => {
+      opts.signal!.addEventListener('abort', () => reject(new AiProviderError('claude', 'timeout', 'timed out')))
+    }))
+    const run = runExplainJob(INPUT)
+    await started()
+    cancelRunningJob('job-1')
+    await run
+    expect(cancelJob).toHaveBeenCalledTimes(1)
+    expect(failJob).not.toHaveBeenCalled()
+  })
+
+  it('is honoured even if the explanation was just finishing: nothing is saved', async () => {
+    vi.mocked(explainItem).mockImplementation(async () => {
+      cancelRunningJob('job-1') // the user clicks Cancel as the last model call returns
+      return EXPLANATION as never
+    })
+    await runExplainJob(INPUT)
+    expect(pool.query).not.toHaveBeenCalled()
+    expect(completeJob).not.toHaveBeenCalled()
+    expect(cancelJob).toHaveBeenCalledTimes(1)
+  })
+
+  it('a timeout is still a failure, not a cancel', async () => {
+    vi.mocked(explainItem).mockRejectedValue(Object.assign(new Error('aborted due to timeout'), { name: 'TimeoutError' }))
+    await runExplainJob(INPUT)
+    expect(failJob).toHaveBeenCalledTimes(1)
+    expect(cancelJob).not.toHaveBeenCalled()
+  })
+
+  it('passes a signal the model call can be cancelled with, that is not already aborted', async () => {
+    await runExplainJob(INPUT)
+    const signal = vi.mocked(explainItem).mock.calls[0][1].signal!
+    expect(signal).toBeInstanceOf(AbortSignal)
+    expect(signal.aborted).toBe(false)
+  })
+
+  it('is registered while it runs and unregistered afterwards, whatever the outcome', async () => {
+    let during = -1
+    vi.mocked(explainItem).mockImplementation(async () => { during = runningJobCount(); return EXPLANATION as never })
+    await runExplainJob(INPUT)
+    expect(during).toBe(1)
+    expect(runningJobCount()).toBe(0)
+
+    vi.mocked(explainItem).mockRejectedValue(new ExplainParseError())
+    await runExplainJob(INPUT)
+    expect(runningJobCount()).toBe(0)
+
+    hangUntilAborted()
+    const run = runExplainJob(INPUT)
+    await started()
+    cancelRunningJob('job-1')
+    await run
+    expect(runningJobCount()).toBe(0)
+    expect(cancelRunningJob('job-1')).toBe(false) // nothing left to cancel once it has ended
+  })
+
+  it('survives the cancellation being unrecordable', async () => {
+    vi.mocked(cancelJob).mockRejectedValue(new Error('db down'))
+    hangUntilAborted()
+    const run = runExplainJob(INPUT)
+    await started()
+    cancelRunningJob('job-1')
+    await expect(run).resolves.toBeUndefined()
   })
 })

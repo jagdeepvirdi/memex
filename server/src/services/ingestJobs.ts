@@ -43,6 +43,18 @@ export async function failJob(id: string, error: string, details?: unknown): Pro
   )
 }
 
+/**
+ * Marks a job as stopped by the user. Only a job that is still processing changes (a job that already finished keeps
+ * its outcome), so cancelling twice, or racing a job that is just completing, is harmless. Returns whether it changed.
+ */
+export async function cancelJob(id: string, details?: unknown): Promise<boolean> {
+  const { rowCount } = await pool.query(
+    "UPDATE ingest_jobs SET status='cancelled', completed_at=NOW(), details=COALESCE($2::jsonb, details) WHERE id=$1 AND status='processing'",
+    [id, details === undefined ? null : JSON.stringify(details)],
+  )
+  return (rowCount ?? 0) > 0
+}
+
 /** Stores the running per-item results without finishing the job (so a poll can show them). */
 export async function saveJobDetails(id: string, details: unknown): Promise<void> {
   await pool.query('UPDATE ingest_jobs SET details=$2::jsonb WHERE id=$1', [id, JSON.stringify(details)])
