@@ -30,6 +30,19 @@ export function cloudSafe(item: CloudSafeItem): boolean {
   return true
 }
 
+// Content check: the category guard above cannot see a bank note filed under Tech, or a home address in an ordinary
+// note. This looks at the text itself. It is deliberately over-cautious: a false positive only keeps a note on the
+// machine, a false negative sends it out. Not yet wired into cloudSafe() (that would change every AI flow); new
+// features that read notes in bulk call it explicitly.
+const CREDENTIAL_WORDS =
+  /\b(iban|swift|ifsc|routing number|cvv|cvc|otp|pin|passcode|password|passwd|account no|account number|acct|ssn|aadhaar|pan card)\b/i
+const LONG_DIGIT_RUN = /[0-9][0-9 -]{8,}[0-9]/
+const HOME_ADDRESS = /\b(my (home|house|flat|apartment|residential)? ?address|home address|residential address|my home|my flat|my apartment)\b/i
+
+export function looksSensitiveContent(text: string): boolean {
+  return LONG_DIGIT_RUN.test(text) || CREDENTIAL_WORDS.test(text) || HOME_ADDRESS.test(text)
+}
+
 /** True only if every item is safe — use for calls that bundle several items into one prompt. */
 export function allCloudSafe(items: CloudSafeItem[]): boolean {
   return items.every(cloudSafe)
