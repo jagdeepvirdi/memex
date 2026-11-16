@@ -15,7 +15,9 @@ vi.mock('../lib/logger.js', () => ({ default: { warn: vi.fn(), error: vi.fn(), i
 // The real key store reads the database; keep this file deterministic. Env keys behave as before and
 // `stored` simulates a key saved from Settings (env wins, like the real thing).
 const stored: Record<string, string | undefined> = {}
-const ENV_NAME: Record<string, string> = { claude: 'ANTHROPIC_API_KEY', gemini: 'GEMINI_API_KEY', youtube: 'YOUTUBE_API_KEY' }
+const ENV_NAME: Record<string, string> = {
+  claude: 'ANTHROPIC_API_KEY', gemini: 'GEMINI_API_KEY', openai: 'OPENAI_API_KEY', youtube: 'YOUTUBE_API_KEY',
+}
 const mockEnsureLoaded = vi.fn().mockResolvedValue(undefined)
 vi.mock('./apiKeys.js', () => ({
   peekApiKey: (p: string) => process.env[ENV_NAME[p]] || stored[p],
@@ -44,14 +46,21 @@ vi.mock('@google/genai', () => ({
   },
 }))
 
+const mockOpenAI = vi.fn()
+vi.mock('openai', () => ({
+  default: class {
+    chat = { completions: { create: (...a: unknown[]) => mockOpenAI(...a) } }
+  },
+}))
+
 import { aiChat, activeProvider, activeModelLabel, listProviders, AiProviderError } from './ai.js'
 
-const OLD = { a: process.env.ANTHROPIC_API_KEY, g: process.env.GEMINI_API_KEY }
+const OLD = { a: process.env.ANTHROPIC_API_KEY, g: process.env.GEMINI_API_KEY, o: process.env.OPENAI_API_KEY }
 
 function cfg(over: Partial<AiConfig> = {}): AiConfig {
   return {
     model: 'llama3.2', useClaude: false, strictLocal: false,
-    provider: 'ollama', claudeModel: 'claude-test', geminiModel: 'gemini-test',
+    provider: 'ollama', claudeModel: 'claude-test', geminiModel: 'gemini-test', openaiModel: 'gpt-test',
     perTask: {}, allowCloud: false,
     ...over,
   }
@@ -62,10 +71,12 @@ beforeEach(() => {
   vi.clearAllMocks()
   process.env.ANTHROPIC_API_KEY = 'test-key'
   process.env.GEMINI_API_KEY = 'test-key'
+  process.env.OPENAI_API_KEY = 'test-key'
   for (const k of Object.keys(stored)) delete stored[k]
   mockOllamaChat.mockResolvedValue('from-ollama')
   mockCreate.mockResolvedValue({ content: [{ type: 'text', text: 'from-claude' }] })
   mockGenerate.mockResolvedValue({ text: 'from-gemini' })
+  mockOpenAI.mockResolvedValue({ choices: [{ message: { content: 'from-openai' }, finish_reason: 'stop' }] })
 })
 
 afterEach(() => {
@@ -73,6 +84,8 @@ afterEach(() => {
   else process.env.ANTHROPIC_API_KEY = OLD.a
   if (OLD.g === undefined) delete process.env.GEMINI_API_KEY
   else process.env.GEMINI_API_KEY = OLD.g
+  if (OLD.o === undefined) delete process.env.OPENAI_API_KEY
+  else process.env.OPENAI_API_KEY = OLD.o
 })
 
 describe('aiChat routing', () => {
@@ -164,6 +177,106 @@ describe('explicit provider requests', () => {
     delete process.env.GEMINI_API_KEY
     mockGetAiConfig.mockResolvedValue(cloud())
     await expect(explicit('gemini')).rejects.toMatchObject({ kind: 'blocked' })
+  })
+})
+
+describe('OpenAI provider', () => {
+  const sent = () => mockOpenAI.mock.calls[0][0]
+
+  it('uses OpenAI when it is the provider, with the configured model and a system + user message', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'openai', openaiModel: 'gpt-4.1-mini' }))
+    expect(await aiChat('hello', 'be brief')).toBe('from-openai')
+    expect(mockOllamaChat).not.toHaveBeenCalled()
+    expect(sent().model).toBe('gpt-4.1-mini')
+    expect(sent().messages).toEqual([{ role: 'system', content: 'be brief' }, { role: 'user', content: 'hello' }])
+    expect(sent().response_format).toBeUndefined()
+  })
+
+  it('omits the system message when there is none', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'openai' }))
+    await aiChat('hello')
+    expect(sent().messages).toEqual([{ role: 'user', content: 'hello' }])
+  })
+
+  it('passes temperature and the token cap to a non-reasoning model', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'openai', openaiModel: 'gpt-4.1-mini' }))
+    await aiChat('hi', undefined, undefined, { temperature: 0, num_predict: 300 })
+    expect(sent().temperature).toBe(0)
+    expect(sent().max_completion_tokens).toBe(300)
+    expect(sent().max_tokens).toBeUndefined()
+  })
+
+  it.each(['gpt-5.4-mini', 'gpt-5.2', 'o4-mini'])(
+    'drops temperature and raises a tiny token cap for the reasoning model %s',
+    async (openaiModel) => {
+      mockGetAiConfig.mockResolvedValue(cloud({ provider: 'openai', openaiModel }))
+      await aiChat('hi', undefined, undefined, { temperature: 0, num_predict: 16 })
+      expect(sent()).not.toHaveProperty('temperature')
+      expect(sent().max_completion_tokens).toBeGreaterThanOrEqual(1024)
+    },
+  )
+
+  it('does not shrink a large cap for a reasoning model', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'openai', openaiModel: 'gpt-5.4-mini' }))
+    await aiChat('hi', undefined, undefined, { num_predict: 4000 })
+    expect(sent().max_completion_tokens).toBe(4000)
+  })
+
+  it('requests JSON mode, asks for JSON in the system prompt and strips code fences', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'openai' }))
+    mockOpenAI.mockResolvedValue({ choices: [{ message: { content: '```json\n{"a":1}\n```' }, finish_reason: 'stop' }] })
+    expect(await aiChat('hi', 'You classify.', 'json')).toBe('{"a":1}')
+    expect(sent().response_format).toEqual({ type: 'json_object' })
+    expect(sent().messages[0].content).toContain('You classify.')
+    expect(sent().messages[0].content).toContain('ONLY valid JSON')
+  })
+
+  it('treats an empty response as a bad_response and names the finish reason', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud())
+    mockOpenAI.mockResolvedValue({ choices: [{ message: { content: '' }, finish_reason: 'length' }] })
+    await expect(
+      aiChat('hi', undefined, undefined, undefined, undefined, { provider: 'openai' }),
+    ).rejects.toMatchObject({ kind: 'bad_response', provider: 'openai', message: expect.stringContaining('length') })
+  })
+
+  it('maps a 401 to an auth error and a 429 to rate_limit, surfaced for explicit requests', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud())
+    const explicit = () => aiChat('hi', undefined, undefined, undefined, undefined, { provider: 'openai' })
+    mockOpenAI.mockRejectedValueOnce(Object.assign(new Error('bad key'), { status: 401 }))
+    await expect(explicit()).rejects.toMatchObject({ kind: 'auth', provider: 'openai', status: 401 })
+    mockOpenAI.mockRejectedValueOnce(Object.assign(new Error('slow down'), { status: 429 }))
+    await expect(explicit()).rejects.toMatchObject({ kind: 'rate_limit', provider: 'openai' })
+  })
+
+  it('falls back to Ollama for a background call when OpenAI fails', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'openai' }))
+    mockOpenAI.mockRejectedValue(Object.assign(new Error('down'), { status: 500 }))
+    expect(await aiChat('hi')).toBe('from-ollama')
+  })
+
+  it('is refused when the key is missing, and never called in strict local mode or on private content', async () => {
+    const explicit = (extra = {}) => aiChat('hi', undefined, undefined, undefined, undefined, { provider: 'openai', ...extra })
+    mockGetAiConfig.mockResolvedValue(cloud())
+    delete process.env.OPENAI_API_KEY
+    await expect(explicit()).rejects.toMatchObject({ kind: 'blocked' })
+    process.env.OPENAI_API_KEY = 'test-key'
+    mockGetAiConfig.mockResolvedValue(cloud({ strictLocal: true }))
+    await expect(explicit()).rejects.toMatchObject({ kind: 'blocked' })
+    mockGetAiConfig.mockResolvedValue(cloud())
+    await expect(explicit({ cloudSafe: false })).rejects.toMatchObject({ kind: 'blocked' })
+    expect(mockOpenAI).not.toHaveBeenCalled()
+  })
+
+  it('works from a key saved in Settings, redacts it from errors, and labels the model', async () => {
+    delete process.env.OPENAI_API_KEY
+    stored.openai = 'sk-saved-openai-secret'
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'openai' }))
+    expect(await aiChat('hi')).toBe('from-openai')
+    expect(await activeModelLabel()).toBe('openai:gpt-test')
+    mockOpenAI.mockRejectedValueOnce(Object.assign(new Error('Incorrect key sk-saved-openai-secret'), { status: 401 }))
+    await expect(
+      aiChat('hi', undefined, undefined, undefined, undefined, { provider: 'openai' }),
+    ).rejects.toMatchObject({ message: 'Incorrect key [redacted]' })
   })
 })
 
@@ -287,6 +400,7 @@ describe('activeProvider / activeModelLabel / listProviders', () => {
       { id: 'ollama', configured: true },
       { id: 'claude', configured: true },
       { id: 'gemini', configured: false },
+      { id: 'openai', configured: true },
     ])
     expect(JSON.stringify(list)).not.toContain('test-key')
   })
@@ -329,12 +443,15 @@ describe('onProvider callback', () => {
 })
 
 describe('keys saved from Settings', () => {
-  const NO_ENV = () => { delete process.env.ANTHROPIC_API_KEY; delete process.env.GEMINI_API_KEY }
+  const NO_ENV = () => {
+    delete process.env.ANTHROPIC_API_KEY; delete process.env.GEMINI_API_KEY; delete process.env.OPENAI_API_KEY
+  }
 
   it('makes a provider available when only a saved key exists', async () => {
     NO_ENV()
     expect(await listProviders()).toEqual([
-      { id: 'ollama', configured: true }, { id: 'claude', configured: false }, { id: 'gemini', configured: false },
+      { id: 'ollama', configured: true }, { id: 'claude', configured: false },
+      { id: 'gemini', configured: false }, { id: 'openai', configured: false },
     ])
     stored.claude = 'sk-saved-claude-key'
     expect((await listProviders()).find(p => p.id === 'claude')!.configured).toBe(true)

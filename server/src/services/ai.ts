@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { GoogleGenAI } from '@google/genai'
+import OpenAI from 'openai'
 import { ollamaChat, ollamaEmbed } from './ollama.js'
 import { getAiConfig, type AiConfig, type ProviderId } from './settings.js'
 import logger from '../lib/logger.js'
@@ -160,10 +161,60 @@ const geminiProvider: Provider = {
   },
 }
 
+let _openai: { key: string | undefined; client: OpenAI } | null = null
+function getOpenAIClient(): OpenAI {
+  const key = peekApiKey('openai')
+  if (!_openai || _openai.key !== key) _openai = { key, client: new OpenAI({ apiKey: key }) }
+  return _openai.client
+}
+
+// Reasoning models (o-series, gpt-5 family) spend completion tokens on hidden reasoning, so a small cap can come back
+// empty, and they reject a custom temperature. Everything else gets the caller's temperature and cap unchanged.
+const isReasoningModel = (model: string) => /^(o\d|gpt-5)/i.test(model)
+const REASONING_MIN_TOKENS = 1024
+
+const openaiProvider: Provider = {
+  id: 'openai',
+  available: () => !!peekApiKey('openai'),
+  model: (c) => c.openaiModel,
+  async chat(r) {
+    const system = withJsonInstruction(r.system, r.format)
+    const model = r.config.openaiModel
+    const reasoning = isReasoningModel(model)
+    const cap = maxTokens(r.options)
+    try {
+      const completion = await getOpenAIClient().chat.completions.create(
+        {
+          model,
+          max_completion_tokens: reasoning ? Math.max(cap, REASONING_MIN_TOKENS) : cap,
+          ...(!reasoning && typeof r.options?.temperature === 'number' ? { temperature: r.options.temperature } : {}),
+          // JSON mode needs the word "JSON" in the messages; withJsonInstruction always adds it.
+          ...(r.format ? { response_format: { type: 'json_object' as const } } : {}),
+          messages: [
+            ...(system ? [{ role: 'system' as const, content: system }] : []),
+            { role: 'user' as const, content: r.prompt },
+          ],
+        },
+        { signal: withTimeout(r.signal) },
+      )
+      const choice = completion.choices[0]
+      const text = choice?.message?.content
+      if (!text) {
+        const why = choice?.finish_reason ? ` (finish_reason: ${choice.finish_reason})` : ''
+        throw new AiProviderError('openai', 'bad_response', `OpenAI returned no text${why}`)
+      }
+      return r.format ? stripJsonFences(text) : text
+    } catch (err) {
+      throw toProviderError('openai', err)
+    }
+  },
+}
+
 const PROVIDERS: Record<ProviderId, Provider> = {
   ollama: ollamaProvider,
   claude: claudeProvider,
   gemini: geminiProvider,
+  openai: openaiProvider,
 }
 
 export function getProvider(id: ProviderId): Provider {

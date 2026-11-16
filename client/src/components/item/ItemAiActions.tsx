@@ -10,6 +10,7 @@ import {
   fetchItem,
 } from '../../lib/api'
 import type { AiProviderId, AiProviderInfo } from '../../lib/api'
+import { AI_PROVIDER_IDS, AI_PROVIDER_META } from '../../lib/aiProviders'
 import type { ExplanationData, Item } from '../../../../shared/types'
 import { useActionJob } from './useActionJob'
 
@@ -34,11 +35,9 @@ export function aiActionsFor(item: Item): { explain: boolean; extractRecipe: boo
   }
 }
 
-const PROVIDER_LABEL: Record<AiProviderId, string> = {
-  ollama: 'Ollama (local)',
-  claude: 'Claude (cloud)',
-  gemini: 'Gemini (cloud)',
-}
+const PROVIDER_LABEL = Object.fromEntries(
+  AI_PROVIDER_IDS.map(id => [id, AI_PROVIDER_META[id].label]),
+) as Record<AiProviderId, string>
 
 // ── Components ────────────────────────────────────────────────────────────────
 
@@ -192,7 +191,7 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
             className="bg-bg border border-white/10 rounded-md px-2 py-1 text-xs text-ink outline-none focus:border-accent/50"
           >
             <option value="">Default (Settings)</option>
-            {(['ollama', 'claude', 'gemini'] as const).map(id => {
+            {AI_PROVIDER_IDS.map(id => {
               const info = providers?.find(p => p.id === id)
               return (
                 <option key={id} value={id} disabled={!!providers && !info?.configured}>

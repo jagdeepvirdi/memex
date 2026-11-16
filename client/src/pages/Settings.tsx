@@ -520,7 +520,7 @@ export default function SettingsPage() {
                   <div>
                      <p className="text-sm text-ink font-medium">Strict Local Mode</p>
                      <p className="text-xs text-ink-muted mt-0.5 max-w-md">
-                       Runs all AI on local Ollama — Claude and Gemini are never called, even if enabled above — and blocks
+                       Runs all AI on local Ollama — Claude, Gemini and OpenAI are never called, even if enabled above — and blocks
                        fetching external URLs.
                      </p>
                   </div>

@@ -20,8 +20,8 @@ export function asBool(v: unknown): boolean {
   return v === true || v === 'true'
 }
 
-export type ProviderId = 'ollama' | 'claude' | 'gemini'
-export const PROVIDER_IDS: readonly ProviderId[] = ['ollama', 'claude', 'gemini']
+export type ProviderId = 'ollama' | 'claude' | 'gemini' | 'openai'
+export const PROVIDER_IDS: readonly ProviderId[] = ['ollama', 'claude', 'gemini', 'openai']
 
 export function isProviderId(v: unknown): v is ProviderId {
   return typeof v === 'string' && (PROVIDER_IDS as readonly string[]).includes(v)
@@ -37,6 +37,7 @@ export interface AiConfig {
   provider: ProviderId
   claudeModel: string
   geminiModel: string
+  openaiModel: string
   /** Per-task provider overrides, e.g. { classify: 'ollama', explain: 'gemini' }. */
   perTask: Record<string, ProviderId>
   /** Consent to send item content to a cloud provider. Always false in strict-local mode. */
@@ -45,11 +46,13 @@ export interface AiConfig {
 
 const AI_SETTING_KEYS = [
   'ai_model', 'use_claude', 'strict_local_mode',
-  'ai_provider', 'claude_model', 'gemini_model', 'ai_task_providers', 'allow_cloud',
+  'ai_provider', 'claude_model', 'gemini_model', 'openai_model', 'ai_task_providers', 'allow_cloud',
 ]
 
 export const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5-5'
 export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
+// OpenAI retires model ids regularly (gpt-5-mini shuts down 2026-12-11); the model is editable in Settings.
+export const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini'
 
 export async function getAiConfig(): Promise<AiConfig> {
   const values: Record<string, unknown> = {}
@@ -85,6 +88,7 @@ export async function getAiConfig(): Promise<AiConfig> {
     provider: strictLocal ? 'ollama' : storedProvider,
     claudeModel: str('claude_model', process.env.CLAUDE_MODEL ?? DEFAULT_CLAUDE_MODEL),
     geminiModel: str('gemini_model', process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL),
+    openaiModel: str('openai_model', process.env.OPENAI_MODEL ?? DEFAULT_OPENAI_MODEL),
     perTask: strictLocal ? {} : perTask,
     allowCloud: strictLocal ? false : consent,
   }

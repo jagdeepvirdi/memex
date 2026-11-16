@@ -9,15 +9,17 @@ import { getAiConfig } from './settings'
 const rows = (o: Record<string, unknown>) =>
   vi.mocked(pool.query).mockResolvedValue({ rows: Object.entries(o).map(([key, value]) => ({ key, value })) } as never)
 
-const ENV = { c: process.env.CLAUDE_MODEL, g: process.env.GEMINI_MODEL }
+const ENV = { c: process.env.CLAUDE_MODEL, g: process.env.GEMINI_MODEL, o: process.env.OPENAI_MODEL }
 beforeEach(() => {
   vi.clearAllMocks()
   delete process.env.CLAUDE_MODEL
   delete process.env.GEMINI_MODEL
+  delete process.env.OPENAI_MODEL
 })
 afterEach(() => {
   if (ENV.c !== undefined) process.env.CLAUDE_MODEL = ENV.c
   if (ENV.g !== undefined) process.env.GEMINI_MODEL = ENV.g
+  if (ENV.o !== undefined) process.env.OPENAI_MODEL = ENV.o
 })
 
 describe('getAiConfig', () => {
@@ -64,13 +66,22 @@ describe('getAiConfig', () => {
   })
 
   it('keeps only valid per-task providers', async () => {
-    rows({ ai_task_providers: { explain: 'gemini', classify: 'ollama', bad: 'openai', worse: 5 } })
+    rows({ ai_task_providers: { explain: 'gemini', classify: 'ollama', bad: 'mistral', worse: 5 } })
     expect((await getAiConfig()).perTask).toEqual({ explain: 'gemini', classify: 'ollama' })
   })
 
   it('ignores a malformed ai_provider and non-object per-task values', async () => {
     rows({ ai_provider: 'skynet', ai_task_providers: ['gemini'] })
     expect(await getAiConfig()).toMatchObject({ provider: 'ollama', perTask: {} })
+  })
+
+  it('accepts openai as a provider and resolves its model: setting, then env, then default', async () => {
+    rows({ ai_provider: 'openai', allow_cloud: true, ai_task_providers: { ask: 'openai' } })
+    expect(await getAiConfig()).toMatchObject({ provider: 'openai', openaiModel: 'gpt-5.4-mini', perTask: { ask: 'openai' } })
+    process.env.OPENAI_MODEL = 'gpt-from-env'
+    expect((await getAiConfig()).openaiModel).toBe('gpt-from-env')
+    rows({ openai_model: 'gpt-from-settings' })
+    expect((await getAiConfig()).openaiModel).toBe('gpt-from-settings')
   })
 
   it('resolves cloud model names from settings, then env, then defaults', async () => {

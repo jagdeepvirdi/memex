@@ -935,7 +935,7 @@ const aiActionLimiter = rateLimit({
 })
 
 const aiActionSchema = z.object({
-  provider: z.enum(['ollama', 'claude', 'gemini']).optional(),
+  provider: z.enum(['ollama', 'claude', 'gemini', 'openai']).optional(),
   force: z.boolean().optional(),
 })
 

@@ -17,8 +17,8 @@ Memex is a personal knowledge management web app that ingests, auto-classifies, 
   - Classification + summarization: `llama3.2` (3B, fast) or `gemma3:4b` (better quality)
   - Embeddings: `nomic-embed-text`
   - JSON mode + Temperature 0.0 enforced for extraction reliability
-- **AI (Optional)**: Anthropic Claude and Google Gemini — cloud providers, off by default. Used only when a key is set (`ANTHROPIC_API_KEY` / `GEMINI_API_KEY`), the provider is selected in Settings, cloud consent (`allow_cloud`) is on, Strict Local Mode is off, and the content passes `cloudSafe()`.
-- **AI Routing**: `server/src/services/ai.ts` — single `aiChat()` function with a provider registry (Ollama / Claude / Gemini); dispatches by DB settings, per-task overrides and the `cloudSafe` guard
+- **AI (Optional)**: Anthropic Claude, Google Gemini and OpenAI (ChatGPT API) — cloud providers, off by default. Used only when a key is set (`ANTHROPIC_API_KEY` / `GEMINI_API_KEY` / `OPENAI_API_KEY`), the provider is selected in Settings, cloud consent (`allow_cloud`) is on, Strict Local Mode is off, and the content passes `cloudSafe()`.
+- **AI Routing**: `server/src/services/ai.ts` — single `aiChat()` function with a provider registry (Ollama / Claude / Gemini / OpenAI); dispatches by DB settings, per-task overrides and the `cloudSafe` guard
 - **Secret Storage**: AES-256-GCM client-side encryption (Web Crypto API) — no AI involved
 - **URL Parsing**: `https://r.jina.ai/{url}` — free tier, no API key needed for basic use
 - **YouTube**: `youtube-transcript` npm package — free, no API key
@@ -179,7 +179,8 @@ Routing logic (`aiChat(prompt, system, format, options, signal, { task, provider
 - A cloud provider is used only if ALL hold: `strict_local_mode` off, `allow_cloud` on, API key set, `cloudSafe !== false`. Otherwise the call stays on Ollama (`ai_model`, default `llama3.2`).
 - An explicit `provider` that can't be honoured is refused with `AiProviderError` (`kind: 'blocked'`), never silently downgraded.
 - Provider failures map to one `AiProviderError` (`rate_limit | timeout | auth | blocked | bad_response | unavailable`). Background calls fall back to Ollama (logged); user-initiated/explicit calls surface the error.
-- Cloud model ids: `claude_model` / `gemini_model` settings → `CLAUDE_MODEL` / `GEMINI_MODEL` env → defaults `claude-sonnet-5-5` / `gemini-2.5-flash`.
+- Cloud model ids: `claude_model` / `gemini_model` / `openai_model` settings → `CLAUDE_MODEL` / `GEMINI_MODEL` / `OPENAI_MODEL` env → defaults `claude-sonnet-5-5` / `gemini-2.5-flash` / `gpt-5.4-mini` (OpenAI retires ids regularly — check the default is current).
+- OpenAI (`openaiProvider` in `ai.ts`, `openai` npm package, Chat Completions): sends `max_completion_tokens`; for reasoning models (`o*`, `gpt-5*`) it omits `temperature` and raises a small token cap to at least 1024, because hidden reasoning tokens count against the cap and an empty reply would otherwise come back. JSON calls use `response_format: json_object`. Saving an OpenAI key needs migration 024 (widens the `api_keys.provider` CHECK); without it `PUT /api/ai/keys/openai` returns 503 telling the user to run `npm run migrate`. Embeddings still always go through Ollama.
 - `items.extraction_model` records `<provider>:<model>` of the provider that actually answered.
 - Privacy guard `services/cloudSafe.ts`: encrypted/`password` items, top-level `Passwords`/`Personal` categories and `private`/`no-cloud`/`local-only` tags never leave Ollama. Calls that bundle several items (insights, digest, RAG) are pinned local if any item is private.
 - `GET /api/ai/providers` lists providers + `configured` flags + models (never keys); `POST /api/ai/test {provider}` does one tiny round-trip.
@@ -298,10 +299,10 @@ Key-value table with JSONB values. Default rows:
 | key | default |
 |---|---|
 | `ai_model` | `"llama3.2"` (Ollama chat model) |
-| `ai_provider` | `"ollama"` (`ollama` / `claude` / `gemini`) |
+| `ai_provider` | `"ollama"` (`ollama` / `claude` / `gemini` / `openai`) |
 | `ai_task_providers` | `{}` (per-task overrides, e.g. `{"explain":"gemini"}`) |
 | `allow_cloud` | `false` (consent to send item content to a cloud provider) |
-| `claude_model` / `gemini_model` | unset → env → built-in default |
+| `claude_model` / `gemini_model` / `openai_model` | unset → env → built-in default |
 | `use_claude` | `false` (legacy; migrated on read) |
 | `auto_lock_timeout` | `15` (minutes) |
 | `strict_local_mode` | `false` |
@@ -402,6 +403,8 @@ ANTHROPIC_API_KEY=
 CLAUDE_MODEL=claude-sonnet-5-5
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-2.5-flash
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-5.4-mini
 
 # YouTube Data API (optional — video descriptions for Explain / Extract recipe / classification)
 YOUTUBE_API_KEY=
@@ -412,7 +415,7 @@ KEY_ENCRYPTION_SECRET=
 
 AI provider, per-task providers, cloud consent and model selection are runtime settings via `PUT /api/settings` — no restart needed.
 
-**API keys (Claude, Gemini, YouTube)** come from the environment OR from Settings > API keys; the environment wins. Saved keys live in their own `api_keys` table (migration 023), encrypted with AES-256-GCM (key derived from `KEY_ENCRYPTION_SECRET`, else `JWT_SECRET`; the provider name is bound in as AAD), **never in `settings`** (which `GET /api/settings` returns wholesale). Keys are write-only: `GET /api/ai/keys` returns `{configured, source, last4}` only, `PUT/DELETE /api/ai/keys/:provider` save/remove, `POST /api/ai/keys/youtube/test` checks the YouTube key. These routes require a real login session — the bookmarklet key is refused (see below). `services/apiKeys.ts` owns storage, precedence and `redactSecrets()` (provider errors never carry a key). If `JWT_SECRET`/`KEY_ENCRYPTION_SECRET` changes, saved keys become unreadable and must be re-entered. `services/youtubeApi.ts` sends the key in the `X-Goog-Api-Key` header (never the URL) and returns null when there is no key, Strict Local Mode is on, or the API fails.
+**API keys (Claude, Gemini, OpenAI, YouTube)** come from the environment OR from Settings > API keys; the environment wins. Saved keys live in their own `api_keys` table (migration 023), encrypted with AES-256-GCM (key derived from `KEY_ENCRYPTION_SECRET`, else `JWT_SECRET`; the provider name is bound in as AAD), **never in `settings`** (which `GET /api/settings` returns wholesale). Keys are write-only: `GET /api/ai/keys` returns `{configured, source, last4}` only, `PUT/DELETE /api/ai/keys/:provider` save/remove, `POST /api/ai/keys/youtube/test` checks the YouTube key. These routes require a real login session — the bookmarklet key is refused (see below). `services/apiKeys.ts` owns storage, precedence and `redactSecrets()` (provider errors never carry a key). If `JWT_SECRET`/`KEY_ENCRYPTION_SECRET` changes, saved keys become unreadable and must be re-entered. `services/youtubeApi.ts` sends the key in the `X-Goog-Api-Key` header (never the URL) and returns null when there is no key, Strict Local Mode is on, or the API fails.
 
 ## On-demand AI jobs (Explain, Extract recipe)
 Both run as background jobs on the `ingest_jobs` table (needs migration 021). `POST /api/items/:id/explain` and `/extract-recipe` validate, create a job (`services/actionJobs.ts`) and return `202 { jobId }`; the work runs in `explainJob.ts` / `extractRecipeJob.ts`. Poll `GET /api/ingest/jobs/:id` — `progress`, `details.stage` (explain: reading / summarising part n of N / writing; extract: reading / checking / extracting) — then read the result: Explain saves `item.structured.explanation`; Extract creates a NEW unreviewed recipe item (`derived_from`) and completes with `details.found` + `recipeId`, or `found:false` + `reason` ("no recipe" is a normal outcome, not a failure). Failures are stored as a readable `error` (`services/actionErrors.ts`). Only **one AI job runs at a time** across both kinds (409 otherwise; a job older than 20 min counts as dead), with a 15 min cap.
@@ -458,4 +461,4 @@ Key tokens:
 ## Non-Goals (v1)
 - No cloud hosting — runs on your laptop/desktop
 - No real-time collaboration
-- Cloud AI (Claude/Gemini) is never the default — it requires a key, an explicit provider choice and cloud consent in Settings, and is blocked by Strict Local Mode and the `cloudSafe` guard
+- Cloud AI (Claude/Gemini/OpenAI) is never the default — it requires a key, an explicit provider choice and cloud consent in Settings, and is blocked by Strict Local Mode and the `cloudSafe` guard

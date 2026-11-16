@@ -1,7 +1,7 @@
-// User-supplied API keys (Claude, Gemini, YouTube Data API).
+// User-supplied API keys (Claude, Gemini, OpenAI, YouTube Data API).
 //
 // Where a key comes from, in priority order:
-//   1. the environment (ANTHROPIC_API_KEY / GEMINI_API_KEY / YOUTUBE_API_KEY) — always wins;
+//   1. the environment (ANTHROPIC_API_KEY / GEMINI_API_KEY / OPENAI_API_KEY / YOUTUBE_API_KEY) — always wins;
 //   2. a key saved from the Settings page, stored ENCRYPTED in `api_keys` (migration 023).
 //
 // Rules this module enforces:
@@ -16,18 +16,20 @@ import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypt
 import { pool } from '../db/client.js'
 import logger from '../lib/logger.js'
 
-export const KEY_PROVIDERS = ['claude', 'gemini', 'youtube'] as const
+export const KEY_PROVIDERS = ['claude', 'gemini', 'openai', 'youtube'] as const
 export type KeyProvider = (typeof KEY_PROVIDERS)[number]
 
 export const KEY_ENV: Record<KeyProvider, string> = {
   claude: 'ANTHROPIC_API_KEY',
   gemini: 'GEMINI_API_KEY',
+  openai: 'OPENAI_API_KEY',
   youtube: 'YOUTUBE_API_KEY',
 }
 
 export const KEY_LABEL: Record<KeyProvider, string> = {
   claude: 'Anthropic (Claude)',
   gemini: 'Google Gemini',
+  openai: 'OpenAI (ChatGPT)',
   youtube: 'YouTube Data API',
 }
 

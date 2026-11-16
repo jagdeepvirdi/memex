@@ -25,7 +25,7 @@ beforeAll(() => {
   AUTH = `Bearer ${jwt.sign({ userId: 'u1', email: 't@t.com' }, secret)}`
 })
 
-const OLD = { a: process.env.ANTHROPIC_API_KEY, g: process.env.GEMINI_API_KEY }
+const OLD = { a: process.env.ANTHROPIC_API_KEY, g: process.env.GEMINI_API_KEY, o: process.env.OPENAI_API_KEY }
 const settingsRows = (o: Record<string, unknown> = {}) =>
   vi.mocked(pool.query).mockResolvedValue({ rows: Object.entries(o).map(([key, value]) => ({ key, value })) } as any)
 
@@ -34,8 +34,11 @@ beforeEach(() => {
   settingsRows()
   process.env.ANTHROPIC_API_KEY = 'sk-ant-secret-123'
   delete process.env.GEMINI_API_KEY
+  delete process.env.OPENAI_API_KEY
 })
 afterEach(() => {
+  if (OLD.o === undefined) delete process.env.OPENAI_API_KEY
+  else process.env.OPENAI_API_KEY = OLD.o
   if (OLD.a === undefined) delete process.env.ANTHROPIC_API_KEY
   else process.env.ANTHROPIC_API_KEY = OLD.a
   if (OLD.g === undefined) delete process.env.GEMINI_API_KEY
@@ -51,10 +54,18 @@ describe('GET /api/ai/providers', () => {
     const res = await request(app).get('/api/ai/providers').set('Authorization', AUTH)
     expect(res.status).toBe(200)
     expect(res.body.map((p: any) => [p.id, p.configured, p.cloud])).toEqual([
-      ['ollama', true, false], ['claude', true, true], ['gemini', false, true],
+      ['ollama', true, false], ['claude', true, true], ['gemini', false, true], ['openai', false, true],
     ])
     expect(res.body[0].models).toEqual(['llama3.2', 'gemma3:4b'])
     expect(JSON.stringify(res.body)).not.toContain('sk-ant-secret-123')
+  })
+
+  it('suggests OpenAI models, with the configured one first', async () => {
+    settingsRows({ openai_model: 'gpt-custom' })
+    const res = await request(app).get('/api/ai/providers').set('Authorization', AUTH)
+    const openai = res.body.find((p: any) => p.id === 'openai')
+    expect(openai.models[0]).toBe('gpt-custom')
+    expect(openai.models).toContain('gpt-5.4-mini')
   })
 
   it('puts the currently configured model first and de-duplicates', async () => {
@@ -76,7 +87,7 @@ describe('POST /api/ai/test', () => {
   })
 
   it('rejects an unknown provider', async () => {
-    expect((await post({ provider: 'openai' })).status).toBe(400)
+    expect((await post({ provider: 'mistral' })).status).toBe(400)
     expect((await post({})).status).toBe(400)
   })
 

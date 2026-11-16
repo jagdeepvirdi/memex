@@ -79,7 +79,7 @@ describe('GET /api/ai/keys', () => {
   it('lists the three providers as unconfigured by default', async () => {
     const res = await auth(request(app).get('/api/ai/keys'))
     expect(res.status).toBe(200)
-    expect(res.body.map((k: { provider: string }) => k.provider)).toEqual(['claude', 'gemini', 'youtube'])
+    expect(res.body.map((k: { provider: string }) => k.provider)).toEqual(['claude', 'gemini', 'openai', 'youtube'])
     expect(res.body.every((k: { configured: boolean }) => !k.configured)).toBe(true)
   })
 
@@ -104,6 +104,14 @@ describe('PUT /api/ai/keys/:provider', () => {
     expect(table[0].last4).toBe('1234')
   })
 
+  it('saves an OpenAI key the same way, encrypted and never echoed back', async () => {
+    const res = await auth(request(app).put('/api/ai/keys/openai').send({ key: 'sk-proj-OpenAiSecretValueABCD7788' }))
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ provider: 'openai', label: 'OpenAI (ChatGPT)', configured: true, source: 'stored', last4: '7788' })
+    expect(JSON.stringify(res.body)).not.toContain('OpenAiSecret')
+    expect(JSON.stringify(table)).not.toContain('OpenAiSecret')
+  })
+
   it('shows up in the listing afterwards, still without the key', async () => {
     await auth(request(app).put('/api/ai/keys/gemini').send({ key: 'AIzaSyGeminiSecretValueXYZ0001' }))
     const res = await auth(request(app).get('/api/ai/keys'))
@@ -119,7 +127,7 @@ describe('PUT /api/ai/keys/:provider', () => {
   })
 
   it('rejects an unknown provider', async () => {
-    const res = await auth(request(app).put('/api/ai/keys/openai').send({ key: SECRET }))
+    const res = await auth(request(app).put('/api/ai/keys/mistral').send({ key: SECRET }))
     expect(res.status).toBe(400)
     expect(table).toHaveLength(0)
   })

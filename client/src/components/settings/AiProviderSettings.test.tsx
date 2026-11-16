@@ -20,6 +20,7 @@ const PROVIDERS = [
   { id: 'ollama', configured: true, cloud: false, models: ['llama3.2', 'gemma3:4b'] },
   { id: 'claude', configured: true, cloud: true, models: ['claude-sonnet-5-5', 'claude-opus-5-5'] },
   { id: 'gemini', configured: false, cloud: true, models: ['gemini-2.5-flash'] },
+  { id: 'openai', configured: false, cloud: true, models: ['gpt-5.4-mini', 'gpt-5.2'] },
 ]
 
 const onUpdate = vi.fn()
@@ -32,6 +33,39 @@ const setup = async (settings: Record<string, unknown> = {}) => {
 beforeEach(() => {
   vi.clearAllMocks()
   mockFetchAiProviders.mockResolvedValue(PROVIDERS)
+})
+
+describe('AiProviderSettings — OpenAI', () => {
+  it('offers OpenAI as a provider and saves the choice', async () => {
+    await setup({})
+    expect(within(screen.getByLabelText('AI provider')).getByRole('option', { name: /OpenAI \(cloud\)/ })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('AI provider'), { target: { value: 'openai' } })
+    expect(onUpdate).toHaveBeenCalledWith({ ai_provider: 'openai' })
+  })
+
+  it('stores the OpenAI model under openai_model and suggests its models', async () => {
+    await setup({ ai_provider: 'openai', allow_cloud: true, openai_model: 'gpt-5.4-mini' })
+    const input = screen.getByLabelText('Model') as HTMLInputElement
+    expect(input.value).toBe('gpt-5.4-mini')
+    fireEvent.change(input, { target: { value: 'gpt-5.2' } })
+    fireEvent.blur(input)
+    expect(onUpdate).toHaveBeenCalledWith({ openai_model: 'gpt-5.2' })
+  })
+
+  it('offers OpenAI per task and can test it once a key exists', async () => {
+    await setup({})
+    expect(within(screen.getByLabelText('Ask Memex provider')).getByRole('option', { name: /OpenAI/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Test OpenAI' })).toBeDisabled()
+  })
+
+  it('runs the OpenAI connection test and reports the model', async () => {
+    mockFetchAiProviders.mockResolvedValue(PROVIDERS.map(p => (p.id === 'openai' ? { ...p, configured: true } : p)))
+    mockTestAiProvider.mockResolvedValue({ ok: true, provider: 'openai', model: 'gpt-5.4-mini', latencyMs: 640 })
+    await setup({ ai_provider: 'openai', allow_cloud: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Test OpenAI' }))
+    await waitFor(() => expect(screen.getByTestId('provider-row-openai')).toHaveTextContent('Working · gpt-5.4-mini · 640 ms'))
+    expect(mockTestAiProvider).toHaveBeenCalledWith('openai')
+  })
 })
 
 describe('AiProviderSettings — provider and model', () => {
@@ -174,11 +208,12 @@ describe('AiProviderSettings — provider status and connection test', () => {
     expect(screen.getByTestId('provider-row-claude')).toHaveTextContent(/key configured/i)
     expect(screen.getByTestId('provider-row-gemini')).toHaveTextContent(/no api key/i)
     // The provider rows only report status; the key inputs (in the API keys panel) are write-only and never pre-filled.
-    for (const id of ['ollama', 'claude', 'gemini']) {
+    expect(screen.getByTestId('provider-row-openai')).toHaveTextContent(/no api key/i)
+    for (const id of ['ollama', 'claude', 'gemini', 'openai']) {
       expect(within(screen.getByTestId(`provider-row-${id}`)).queryByLabelText(/key/i, { selector: 'input' })).toBeNull()
     }
     const keyInputs = container.querySelectorAll('input[type="password"]')
-    expect(keyInputs.length).toBe(3)
+    expect(keyInputs.length).toBe(4)
     keyInputs.forEach(i => expect((i as HTMLInputElement).value).toBe(''))
   })
 
@@ -242,8 +277,8 @@ describe('AiProviderSettings — API keys refresh provider availability', () => 
   const keyStatus = (over: Record<string, unknown> = {}) => ({
     provider: 'gemini', label: 'Google Gemini', configured: true, source: 'stored', last4: '4321', hasStored: true, undecryptable: false, ...over,
   })
-  const noKeys = ['claude', 'gemini', 'youtube'].map(provider => ({
-    provider, label: { claude: 'Anthropic (Claude)', gemini: 'Google Gemini', youtube: 'YouTube Data API' }[provider], configured: false, source: null, hasStored: false, undecryptable: false,
+  const noKeys = ['claude', 'gemini', 'openai', 'youtube'].map(provider => ({
+    provider, label: { claude: 'Anthropic (Claude)', gemini: 'Google Gemini', openai: 'OpenAI (ChatGPT)', youtube: 'YouTube Data API' }[provider], configured: false, source: null, hasStored: false, undecryptable: false,
   }))
 
   it('re-reads provider status after a key is saved, so "no API key" flips to configured', async () => {

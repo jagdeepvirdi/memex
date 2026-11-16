@@ -1,11 +1,11 @@
 ---
-last_updated: 2026-11-16T01:50:00
+last_updated: 2026-11-16T16:20:00
 ---
 
 # Memex — Task Backlog
 
-## ▶ Start here (written 2026-11-16, end of session 7cd4efef)
-Full summary: `sessions/2026-11-15_21-59_7cd4efef/SESSION.md`. Rules: never start Ollama (it crashes the laptop); start only Postgres (`docker compose up -d postgres`) and stop it after.
+## ▶ Start here (updated 2026-11-16, end of session 38a4c2a0)
+**Next up: L2 (OpenAI provider) then L1 (Settings split), see "Public Launch" below.** Redesign is deferred. Open questions for the user: push `4d73500`? delete the placeholder `client/TASKS.md` + `server/TASKS.md`? license (MIT?). Summaries: `sessions/2026-11-16_12-45_38a4c2a0/SESSION.md` (this session), `sessions/2026-11-15_21-59_7cd4efef/SESSION.md` (previous). Rules: never start Ollama (it crashes the laptop); start only Postgres (`docker compose up -d postgres`) and stop it after.
 1. ~~Run after-pass #2~~ **DONE 2026-11-16.** 279 items via gemini → claude: 137 unchanged, 141 re-bucketed (~25 are noise). `Tech > AI > Explainers` 51→10, `Tech > AI > Tools` 27→3, `Finance > Notes` 11→0, `Tech` 2→109; the 33 programming courses now land in `Tech`. It also sent 11 shop/product links to top-level `Personal` (the `shopping` → `Personal` fuzzy mapping), fixed by a new `refineCategories` guard (links leave `Personal` unless Contacts or a profile). Output and compare files are in `sessions/baselines/` (`classify-after-pass2-2026-11-16.json`, `compare-after-pass2-2026-11-16.txt`; gitignored). Not re-run end-to-end after the guard; it was checked on the 14 saved `Personal` entries (11 → `Links`, 3 contacts stay).
    Known leftovers: 3 YouTube courses flipped `link` → `media`; "Udemy Course" / "Oracle Learn" still in `Links`; a couple of ML tutorials sit in `Tech > AI > Explainers`.
 2. ~~Commit~~ **DONE.** Place mining was already committed (990d323); classifier guardrails + `classifier.refine.test.ts` (generic fixtures, no personal titles) + TASKS.md committed 2026-11-16.
@@ -26,10 +26,15 @@ Repo is PUBLIC: generic fixtures and demo data only, no personal note titles, re
 - [ ] Move `BookmarkletSection` out of `Settings.tsx`; update `Settings.test.tsx`
 
 ### L2 — OpenAI (ChatGPT API) provider
-- [ ] `ProviderId` + `PROVIDER_IDS` (`settings.ts`), `openaiProvider` in the `ai.ts` registry (`openai` npm package, JSON mode via the existing `withJsonInstruction`), `KEY_PROVIDERS` in `apiKeys.ts`, `OPENAI_API_KEY` env var, `openai_model` setting
-- [ ] Check OpenAI's current docs for the default model id when building; keep it editable like Claude/Gemini
-- [ ] Client: replace the hard-coded claude/gemini ternary in `AiProviderSettings` with a provider config map; add OpenAI to labels, key panel, status rows, test button, per-task dropdowns
-- [ ] `GET /api/ai/providers`, `POST /api/ai/test`, tests (mirror the existing Claude/Gemini cases); update CLAUDE.md routing section
+- [x] `ProviderId` + `PROVIDER_IDS` (`settings.ts`), `openaiProvider` in the `ai.ts` registry (`openai` npm package, JSON mode via the existing `withJsonInstruction`), `KEY_PROVIDERS` in `apiKeys.ts`, `OPENAI_API_KEY` env var, `openai_model` setting <!-- done: 2026-11-16 -->
+      *(reasoning models `o*`/`gpt-5*`: no `temperature`, token cap floored at 1024; migration 024 widens the `api_keys.provider` CHECK; also added to `items.ts` explain/extract zod, `shared/types.ts`, the two baseline scripts, `.env.example`, CLAUDE.md)*
+- [x] Check OpenAI's current docs for the default model id when building; keep it editable like Claude/Gemini <!-- done: 2026-11-16 -->
+      *(default `gpt-5.4-mini` per the docs search; `gpt-5`/`gpt-5-mini`/`gpt-5-nano` shut down 2026-12-11, `gpt-4o-mini` deprecated. Re-check before launch.)*
+- [x] Client: replace the hard-coded claude/gemini ternary in `AiProviderSettings` with a provider config map; add OpenAI to labels, key panel, status rows, test button, per-task dropdowns <!-- done: 2026-11-16 -->
+      *(new `client/src/lib/aiProviders.ts`; also used by `ItemAiActions`)*
+- [x] `GET /api/ai/providers`, `POST /api/ai/test`, tests (mirror the existing Claude/Gemini cases); update CLAUDE.md routing section <!-- done: 2026-11-16 -->
+      *(server 1113 tests, client 706 tests, both `tsc` clean; migration 024 applied to the local DB and checked against the real constraint)*
+- [ ] **Live check with a real OpenAI key** (Settings > API keys > Test OpenAI). Everything is verified against mocks only; no key was available. Try both a reasoning model (`gpt-5.4-mini`) and a non-reasoning one.
 - [ ] Optional: custom base URL for OpenAI-compatible endpoints (OpenRouter, Groq, LM Studio)
 - [ ] Fix stale default `gemini-2.5-flash` in code (unavailable to new Google accounts)
 

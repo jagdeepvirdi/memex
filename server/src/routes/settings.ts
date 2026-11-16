@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
 });
 
 // PUT /api/settings
-const ProviderEnum = z.enum(['ollama', 'claude', 'gemini'])
+const ProviderEnum = z.enum(['ollama', 'claude', 'gemini', 'openai'])
 const modelName = z.string().trim().min(1).max(100)
 
 // Only the AI-provider keys are validated; every other setting is stored as before.
@@ -32,6 +32,7 @@ const SettingsBody = z.object({
   allow_cloud: z.boolean().optional(),
   claude_model: modelName.optional(),
   gemini_model: modelName.optional(),
+  openai_model: modelName.optional(),
 }).passthrough();
 
 router.put('/', async (req, res) => {

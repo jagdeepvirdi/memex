@@ -13,9 +13,10 @@ import logger from '../lib/logger.js'
 const router = Router()
 
 // Suggestions only — the Settings UI also lets the user type any model id.
-const SUGGESTED_MODELS: Record<'claude' | 'gemini', string[]> = {
+const SUGGESTED_MODELS: Record<'claude' | 'gemini' | 'openai', string[]> = {
   claude: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5'],
   gemini: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+  openai: ['gpt-5.4-mini', 'gpt-5.2'],
 }
 
 // Each test is a real (tiny) round-trip, so keep it from being hammered.
@@ -42,6 +43,7 @@ router.get('/providers', async (_req, res) => {
       ollama: uniq([config.model, ...installed]),
       claude: uniq([config.claudeModel, ...SUGGESTED_MODELS.claude]),
       gemini: uniq([config.geminiModel, ...SUGGESTED_MODELS.gemini]),
+      openai: uniq([config.openaiModel, ...SUGGESTED_MODELS.openai]),
     }
     res.json((await listProviders()).map(p => ({
       id: p.id,
@@ -55,14 +57,14 @@ router.get('/providers', async (_req, res) => {
   }
 })
 
-const TestBody = z.object({ provider: z.enum(['ollama', 'claude', 'gemini']) })
+const TestBody = z.object({ provider: z.enum(['ollama', 'claude', 'gemini', 'openai']) })
 
 // POST /api/ai/test { provider } → one tiny round-trip to verify the provider works.
 // Sends a fixed prompt only (no user data). Honours strict-local and cloud consent like any other call.
 router.post('/test', testLimiter, async (req, res) => {
   const parsed = TestBody.safeParse(req.body)
   if (!parsed.success) {
-    res.status(400).json({ error: 'provider must be one of: ollama, claude, gemini' })
+    res.status(400).json({ error: 'provider must be one of: ollama, claude, gemini, openai' })
     return
   }
   const { provider } = parsed.data
@@ -125,7 +127,7 @@ router.get('/keys', requireSession, async (_req, res) => {
 router.put('/keys/:provider', requireSession, keyWriteLimiter, async (req, res) => {
   const provider = req.params.provider
   if (!isKeyProvider(provider)) {
-    res.status(400).json({ error: 'provider must be one of: claude, gemini, youtube' })
+    res.status(400).json({ error: 'provider must be one of: claude, gemini, openai, youtube' })
     return
   }
   const body = KeyBody.safeParse(req.body)
@@ -141,8 +143,10 @@ router.put('/keys/:provider', requireSession, keyWriteLimiter, async (req, res) 
       res.status(400).json({ error: err.message })
       return
     }
-    if ((err as { code?: string }).code === '42P01') {
-      res.status(503).json({ error: 'The api_keys table is missing — run "npm run migrate" in server/ and try again.' })
+    // 42P01: table missing (migration 023). 23514: the table predates migration 024 and rejects an OpenAI key.
+    const code = (err as { code?: string }).code
+    if (code === '42P01' || code === '23514') {
+      res.status(503).json({ error: 'The database needs its latest migration — run "npm run migrate" in server/ and try again.' })
       return
     }
     logger.error({ provider, err: redact(String(err)) }, 'PUT /api/ai/keys error')
@@ -154,7 +158,7 @@ router.put('/keys/:provider', requireSession, keyWriteLimiter, async (req, res) 
 router.delete('/keys/:provider', requireSession, keyWriteLimiter, async (req, res) => {
   const provider = req.params.provider
   if (!isKeyProvider(provider)) {
-    res.status(400).json({ error: 'provider must be one of: claude, gemini, youtube' })
+    res.status(400).json({ error: 'provider must be one of: claude, gemini, openai, youtube' })
     return
   }
   try {

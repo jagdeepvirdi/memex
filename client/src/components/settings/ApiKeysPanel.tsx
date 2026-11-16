@@ -17,13 +17,17 @@ const HELP: Record<ApiKeyProvider, { use: string; where: string }> = {
     use: 'Lets Gemini answer when you pick it (Settings above) and cloud AI is allowed.',
     where: 'Create one at aistudio.google.com → Get API key.',
   },
+  openai: {
+    use: 'Lets ChatGPT models answer when you pick OpenAI (Settings above) and cloud AI is allowed. This is the paid API, separate from a ChatGPT subscription.',
+    where: 'Create one at platform.openai.com → API keys.',
+  },
   youtube: {
     use: 'Fetches a video’s full description, where recipes and links usually are. Used by Explain and Extract recipe, and helps when captions are disabled.',
     where: 'Google Cloud console → enable “YouTube Data API v3” → Credentials → API key. The free daily quota is plenty.',
   },
 }
 
-const ORDER: ApiKeyProvider[] = ['claude', 'gemini', 'youtube']
+const ORDER: ApiKeyProvider[] = ['claude', 'gemini', 'openai', 'youtube']
 
 function describeSource(s: ApiKeyStatus): string {
   const tail = s.last4 ? ` · ends in ${s.last4}` : ''

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Check, AlertCircle, Loader2, Cloud, ShieldCheck } from 'lucide-react'
 import { fetchAiProviders, testAiProvider } from '../../lib/api'
 import type { AiProviderId, AiProviderInfo, AiTestResult } from '../../lib/api'
+import { AI_PROVIDER_IDS, AI_PROVIDER_META } from '../../lib/aiProviders'
 import { ApiKeysPanel } from './ApiKeysPanel'
 
 interface Props {
@@ -9,12 +10,8 @@ interface Props {
   onUpdate: (patch: Record<string, any>) => void | Promise<void>
 }
 
-const PROVIDERS: AiProviderId[] = ['ollama', 'claude', 'gemini']
-const LABEL: Record<AiProviderId, string> = {
-  ollama: 'Ollama (local)',
-  claude: 'Claude (cloud)',
-  gemini: 'Gemini (cloud)',
-}
+const PROVIDERS: AiProviderId[] = AI_PROVIDER_IDS
+const LABEL = Object.fromEntries(PROVIDERS.map(id => [id, AI_PROVIDER_META[id].label])) as Record<AiProviderId, string>
 
 // Task names must match the `task` passed to aiChat() on the server.
 const TASKS: Array<{ id: string; label: string; hint: string }> = [
@@ -68,7 +65,7 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
     return !!p && p.cloud && !p.configured
   }
 
-  const modelKey = provider === 'ollama' ? 'ai_model' : provider === 'claude' ? 'claude_model' : 'gemini_model'
+  const modelKey = AI_PROVIDER_META[provider].modelKey
   const currentModel: string = settings[modelKey] ?? (provider === 'ollama' ? 'llama3.2' : '')
 
   // Cloud model ids are free text (with suggestions); commit on blur/Enter so we don't save per keystroke.
@@ -113,7 +110,7 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
           <ShieldCheck size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
           <p>
             Strict Local Mode is on — all AI runs on local Ollama and cloud providers are never called.
-            Turn it off under Vault Security to use Claude or Gemini.
+            Turn it off under Vault Security to use a cloud provider.
           </p>
         </div>
       )}
@@ -181,7 +178,7 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
         <div>
           <p className="text-sm text-ink font-medium flex items-center gap-1.5"><Cloud size={14} aria-hidden="true" /> Allow cloud AI</p>
           <p className="text-xs text-ink-muted mt-0.5 max-w-md">
-            Lets Claude or Gemini receive item content when selected above or per task. Nothing is sent without this.
+            Lets the selected cloud provider (Claude, Gemini or OpenAI) receive item content, as the default or per task. Nothing is sent without this.
             Passwords, Personal items and anything tagged <code className="bg-white/10 px-1 rounded">private</code>,{' '}
             <code className="bg-white/10 px-1 rounded">no-cloud</code> or <code className="bg-white/10 px-1 rounded">local-only</code> always stay local.
           </p>
@@ -281,7 +278,7 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
                 className="flex items-center gap-2 text-xs bg-white/5 hover:bg-white/10 text-ink px-3 py-1.5 rounded-lg font-medium transition-all disabled:opacity-40 shrink-0"
               >
                 {testing === id && <Loader2 size={12} className="animate-spin" aria-hidden="true" />}
-                Test {id === 'ollama' ? 'Ollama' : id === 'claude' ? 'Claude' : 'Gemini'}
+                Test {AI_PROVIDER_META[id].shortName}
               </button>
             </div>
           )

@@ -72,7 +72,7 @@ describe('PUT /api/settings — AI provider validation', () => {
 
   it.each([
     ['unknown provider', { ai_provider: 'skynet' }],
-    ['unknown per-task provider', { ai_task_providers: { explain: 'openai' } }],
+    ['unknown per-task provider', { ai_task_providers: { explain: 'mistral' } }],
     ['non-boolean consent', { allow_cloud: 'yes' }],
     ['empty model name', { claude_model: '   ' }],
     ['non-object body', ['x']],
