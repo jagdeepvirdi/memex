@@ -79,10 +79,13 @@ Type rules:
 - stock: stock ticker — structured: { "ticker": "", "exchange": "" }
 - spec: technical specs — structured key-value pairs
 - link: saved URL, video, social post
-  Developer knowledge is also type link: a GitHub repo, an AI prompt or skill, an explainer about a dev/AI tool, or a tool.
+  Developer knowledge about AI is also type link: a GitHub repo, an AI prompt or skill, an explainer about an AI tool or AI technique, or an AI tool.
   Use categories ["Tech", "AI", "<Repos|Prompts & Skills|Explainers|Tools>"] and structured:
   { "kind": "repo|prompt|skill|explainer|tool", "repoName": "owner/repo", "repoUrl": "", "creatorHandle": "", "whatItDoes": "<plain-English: what it is and what it is for>", "promptText": "" }
   Choose the category by TOPIC, never by where it was posted: an Instagram or YouTube caption about a repo is Repos, not Instagram or YouTube.
+  Topic beats platform for EVERY item: a tech or programming course, tutorial or video saved from YouTube, Instagram or any website is categories ["Tech"], not Links > YouTube/Instagram/Articles/Docs. Use those Links leaves only when no topic category fits.
+  Tech > AI is ONLY for AI. A general programming tutorial or course (Python, SQL, web, data), a non-AI app or dev tool (Photoshop, VSCode), or a plain software or product page is categories ["Tech"], never Tech > AI.
+  Use the leaf Notes ONLY for finance notes. A shop, product, property listing, job post or any saved web page that fits no leaf is categories ["Links"].
 - note: everything else
 
 Intent rules:
@@ -386,6 +389,64 @@ function mapDevKnowledgeCategories(structured: Record<string, unknown>): string[
   return kind ? [...DEV_ROOT, DEV_KIND_LEAF[kind]] : null
 }
 
+// ── Guardrails: stop the model's catch-all leaves from misfiling items ────────
+// Measured on the 2026-11-15 Gemini baseline of 199 bare-`Links` items: `Tech > AI > Explainers/Tools` took generic
+// programming courses and apps (Photoshop, VSCode), `Finance > Notes` took shops and property listings (the
+// `notes` → `Finance > Notes` collision), and `Media > Books > Technical` took online courses. `normalizeCategories`
+// and `CANONICAL_MAPPING` stay unchanged (the categories route and tests rely on them); these checks run last.
+
+const AI_SIGNAL =
+  /\b(ai|a\.i\.|llms?|gpt|chatgpt|openai|claude|anthropic|gemini|copilot|cursor|mcp|agents?|agentic|prompts?|machine learning|deep learning|neural|generative|genai|transformers?|rag|embeddings?|diffusion|midjourney|hugging ?face|ollama|langchain)\b/i
+
+const FINANCE_SIGNAL =
+  /\b(bank|banking|account|balance|invoice|tax|loan|salary|payment|fund|funds|invest\w*|stocks?|shares?|dividends?|crypto\w*|budget|expense|income|insurance|mortgage|credit|debit|emi|gst|trading|portfolio|finance|financial)\b/i
+
+// A saved link to a person's profile really is a contact, so it keeps the privacy-pinned `Personal` category.
+const PROFILE_SIGNAL = /\b(facebook|instagram|linkedin|whatsapp|telegram|profile)\b/i
+
+const sameLeaf = (a: string[], b: string[]) => a.length === b.length && a.every((v, i) => v === b[i])
+
+/** What the model itself said about the item: title, summary, tags and the "what it does" line. */
+function modelText(result: ClassificationResult): string {
+  const what = (result.structured as { whatItDoes?: unknown }).whatItDoes
+  return [result.title, result.summary, ...result.tags, typeof what === 'string' ? what : ''].join(' ')
+}
+
+/**
+ * Corrects four known misfilings, otherwise returns the result untouched:
+ * - Personal (not Contacts) on a saved link that is not a profile                    → type default (Links)
+ * - Tech > AI > Explainers/Tools without any AI signal in what the model said  → Tech
+ * - Finance > Notes on a saved link with no finance signal                      → type default (Links)
+ * - Media > Books > … on something that is not a book                           → Tech (technical) or type default
+ * Repos, Prompts & Skills, real notes and real books are never touched.
+ */
+export function refineCategories(result: ClassificationResult, sourceText = ''): ClassificationResult {
+  const cats = result.categories
+  // What the model said plus the start of the original text (its title line): a signal in either keeps the category.
+  const text = `${modelText(result)} ${sourceText.slice(0, 400)}`
+
+  if ((sameLeaf(cats, ['Tech', 'AI', 'Explainers']) || sameLeaf(cats, ['Tech', 'AI', 'Tools'])) && !AI_SIGNAL.test(text)) {
+    return { ...result, categories: ['Tech'] }
+  }
+
+  if (result.type === 'link' && sameLeaf(cats, ['Finance', 'Notes']) && !FINANCE_SIGNAL.test(text)) {
+    return { ...result, categories: mapToCategories(result.type, result.structured) }
+  }
+
+  // `shopping`, `todo`, `work`… all fuzzy-map to `Personal`, which is the privacy-pinned Numbers/Contacts area. A saved
+  // link (a shop, a product page) does not belong there unless it is a contact or someone's profile.
+  if (result.type === 'link' && cats[0] === 'Personal' && cats[1] !== 'Contacts' && !PROFILE_SIGNAL.test(text)) {
+    return { ...result, categories: mapToCategories(result.type, result.structured) }
+  }
+
+  if (cats[0] === 'Media' && cats[1] === 'Books' && result.type !== 'book') {
+    const categories = cats[2] === 'Technical' ? ['Tech'] : mapToCategories(result.type, result.structured)
+    return { ...result, categories }
+  }
+
+  return result
+}
+
 function applyGithubRepo(result: ClassificationResult, ref: GithubRepoRef): ClassificationResult {
   const prior = result.structured as Partial<RepoData>
   const structured: RepoData = {
@@ -551,7 +612,7 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
       if (kind) r = { ...r, structured: { ...r.structured, videoKind: kind } }
       r = applyYoutube(r, hints.video)
     }
-    return withGithubMeta(applyDevKnowledge(r, text, hints))
+    return withGithubMeta(refineCategories(applyDevKnowledge(r, text, hints), text))
   }
 
   // ── Attempt 1: normal prompt ──────────────────────────────────────────────

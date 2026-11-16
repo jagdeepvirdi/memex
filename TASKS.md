@@ -1,4 +1,76 @@
+---
+last_updated: 2026-11-16T01:50:00
+---
+
 # Memex — Task Backlog
+
+## ▶ Start here (written 2026-11-16, end of session 7cd4efef)
+Full summary: `sessions/2026-11-15_21-59_7cd4efef/SESSION.md`. Rules: never start Ollama (it crashes the laptop); start only Postgres (`docker compose up -d postgres`) and stop it after.
+1. ~~Run after-pass #2~~ **DONE 2026-11-16.** 279 items via gemini → claude: 137 unchanged, 141 re-bucketed (~25 are noise). `Tech > AI > Explainers` 51→10, `Tech > AI > Tools` 27→3, `Finance > Notes` 11→0, `Tech` 2→109; the 33 programming courses now land in `Tech`. It also sent 11 shop/product links to top-level `Personal` (the `shopping` → `Personal` fuzzy mapping), fixed by a new `refineCategories` guard (links leave `Personal` unless Contacts or a profile). Output and compare files are in `sessions/baselines/` (`classify-after-pass2-2026-11-16.json`, `compare-after-pass2-2026-11-16.txt`; gitignored). Not re-run end-to-end after the guard; it was checked on the 14 saved `Personal` entries (11 → `Links`, 3 contacts stay).
+   Known leftovers: 3 YouTube courses flipped `link` → `media`; "Udemy Course" / "Oracle Learn" still in `Links`; a couple of ML tutorials sit in `Tech > AI > Explainers`.
+2. ~~Commit~~ **DONE.** Place mining was already committed (990d323); classifier guardrails + `classifier.refine.test.ts` (generic fixtures, no personal titles) + TASKS.md committed 2026-11-16.
+3. **Review the 88 new places** in Pending (tag `from-note`); fix `visitStatus`, delete extras.
+4. Then: remaining Phase 1 items below, the ~178 bare-`Links` items (needs a decision on new categories for shops/listings), "which AI answered" + "Redo with…" UI, wire `looksSensitiveContent` into `cloudSafe()`, place mining in the app, embeddings for the new items, and replace the stale default `gemini-2.5-flash` in code.
+
+---
+
+## 🚀 Public Launch — planned 2026-11-16
+Goal: Memex as a standalone, downloadable personal product (local AI or cloud AI), with a landing page at memex.jagdeepsinghvirdi.com.
+Repo is PUBLIC: generic fixtures and demo data only, no personal note titles, review files or screenshots of real data.
+**Deferred for now:** all visual redesign (tokens, shell, screen restyle, light mode, reference sites aiceos-bkk.pages.dev and 100xengineers.com/workshop) and the landing page build (needs the new look for screenshots).
+
+### L1 — Settings reorganisation (page is overcrowded)
+- [ ] Split `Settings.tsx` (780 lines) into a shell + one component per tab; keep tab in the URL (`/settings/ai`)
+- [ ] Tabs: **AI** (provider, model, cloud consent; per-task overrides + provider status/tests under "Advanced"), **Keys & Privacy** (API keys, Strict Local Mode moved out of Vault Security, cloud-safe explainer), **Library** (categories, import/export, MarkItDown, re-process, enrichment), **Vault** (auto-lock, change password, reset), **Capture** (bookmarklet, YouTube backfill)
+- [ ] "Setup status" strip at the top (local AI on/off, which cloud providers are connected, cloud allowed?)
+- [ ] Move `BookmarkletSection` out of `Settings.tsx`; update `Settings.test.tsx`
+
+### L2 — OpenAI (ChatGPT API) provider
+- [ ] `ProviderId` + `PROVIDER_IDS` (`settings.ts`), `openaiProvider` in the `ai.ts` registry (`openai` npm package, JSON mode via the existing `withJsonInstruction`), `KEY_PROVIDERS` in `apiKeys.ts`, `OPENAI_API_KEY` env var, `openai_model` setting
+- [ ] Check OpenAI's current docs for the default model id when building; keep it editable like Claude/Gemini
+- [ ] Client: replace the hard-coded claude/gemini ternary in `AiProviderSettings` with a provider config map; add OpenAI to labels, key panel, status rows, test button, per-task dropdowns
+- [ ] `GET /api/ai/providers`, `POST /api/ai/test`, tests (mirror the existing Claude/Gemini cases); update CLAUDE.md routing section
+- [ ] Optional: custom base URL for OpenAI-compatible endpoints (OpenRouter, Groq, LM Studio)
+- [ ] Fix stale default `gemini-2.5-flash` in code (unavailable to new Google accounts)
+
+### L3 — Cloud-only path (no Ollama required)
+- [ ] Cloud embeddings provider (Gemini or OpenAI, 768 dims to match the pgvector column); `aiEmbed()` routes by setting instead of always Ollama; respects `cloudSafe` and Strict Local
+- [ ] Re-embed flow when the embedding model changes (dimension/model recorded; safe backfill job)
+- [ ] Docs: Ollama is optional; recommended low-RAM setup is Gemini or OpenAI keys
+
+### L4 — Install and first run
+- [ ] One-command start: `docker compose up` brings up Postgres + app; migrations run automatically on boot; Ollama as an optional compose profile
+- [ ] First-run wizard: create the single user, choose local or cloud AI, paste keys, set cloud consent, optional demo data
+- [ ] `.env.example` audit (JWT_SECRET generation, KEY_ENCRYPTION_SECRET, ports) and a startup check that refuses weak/default secrets
+- [ ] Health endpoint + readable startup errors (DB down, Ollama down, missing key)
+- [ ] Upgrade path: how a user pulls a new version and migrations apply safely
+- [ ] Tested install notes for Windows, macOS, Linux (Docker Desktop, GPU passthrough for Ollama)
+
+### L5 — Demo mode and trust features
+- [ ] Demo seed: ~40 generic sample items across all types (recipes, media, places, links, notes, specs), no personal data; "Demo mode" banner + one-click clear
+- [ ] Full backup and restore (DB + vault config), documented
+- [ ] "Which AI answered" badge on items + "Redo with…" (already listed in Start here, step 4)
+- [ ] Wire `looksSensitiveContent` into `cloudSafe()` (already listed in Start here, step 4)
+
+### L6 — Repo and launch hygiene
+- [ ] Security pass before wide sharing: CORS, default ports, rate limits, auth defaults, dependency audit, secrets scan of git history
+- [ ] README rewrite (what it is, 2-minute quick start, local vs cloud table, privacy model, FAQ), screenshots/GIF from demo data
+- [ ] LICENSE (decision pending: MIT or other), CONTRIBUTING, issue templates, SECURITY.md, CHANGELOG, version tag + GitHub release
+- [ ] CI green on main; `docker compose` smoke test in CI
+
+### L7 — Landing page (after the redesign)
+- [ ] Static `site/` page sharing the app's design tokens: hero, problem, Capture/Organize/Ask, local-vs-cloud toggle, feature grid, privacy, quick start, footer
+- [ ] Screenshots from the restyled app on demo data; deploy (Vercel or Netlify) and CNAME `memex.jagdeepsinghvirdi.com`
+
+### L8 — Post-launch ideas
+- [ ] MCP server (Claude Desktop, Cursor, ChatGPT can search/save into Memex)
+- [ ] Browser extension (upgrade from bookmarklet); Telegram/email capture
+- [ ] More importers: Obsidian, Notion, Pocket/Raindrop, browser bookmarks, Kindle highlights, Apple Notes
+- [ ] Weekly digest email, shareable collections (read-only link)
+
+### L9 — Visual redesign (DEFERRED, start when ready)
+- [ ] Choose direction from the two reference sites (light/dark, accent, fonts, glow/grid, card style)
+- [ ] Design tokens in Tailwind config + CSS variables; shared shell (sidebar, header, cards, buttons, inputs, badges); then Dashboard, Settings, Item, Category, remaining pages
 
 ---
 
@@ -604,7 +676,7 @@ markitdown --help
 
 ### Phase 0 — Decisions & baseline (no code)
 - [x] Decisions confirmed (see "Decisions (DECIDED 2026-11-11)" above)
-- [x] Read-only baseline: classify existing Tech + Links items with the current classifier, save the output
+- [x] Read-only baseline: classify existing Tech + Links items with the current classifier, save the output <!-- done: 2026-11-15 -->
       to compare after mapping changes (guards against silent re-bucketing)
       *(DONE 2026-11-15: `sessions/baselines/classify-baseline-gemini-2026-11-15.json` — 294 items, 0 failed, 292 by
       `gemini:gemini-3.8-flash`, 2 by `claude:claude-sonnet-4-6` (Gemini unparseable). Run the after-pass with the same
@@ -660,7 +732,21 @@ markitdown --help
 **6. Tests**
 - [x] `classifier.devKnowledge.test.ts` (mapping, pre-pass, collisions), `items.test.ts` (INSERT param shift, priority, reviewed), `ingest.test.ts`, `sourceDetect.test.ts`, `schema.test.ts` (migration count)
 - [x] Client: `IngestPanel` cases (payload includes structured/priority; instagram source detection) + `PriorityPicker`, `LinkCard`, `Item` page, `lib/ingest`
-- [ ] Run the before/after classify diff against the Phase 0 baseline
+- [x] Places mined from notes (2026-11-16): `minePlacesDryRun.ts` (rules-only default, or `--provider gemini,claude`) <!-- done: 2026-11-16 -->
+      then `createPlacesFromMining.ts <review.json> [--commit]`. 88 unreviewed place items created from 21 notes
+      (tag `from-note`, `derived_from` = the note, `visitStatus` placeholder `want-to-visit`); 13 skipped with reasons.
+      Review them in Pending. They have NO embeddings yet: embed when Ollama is free. Review file:
+      `sessions/place-mining/places-dry-run-gemini-2026-11-16.json` (private, gitignored). Not yet in the app UI.
+- [x] Run the before/after classify diff against the Phase 0 baseline <!-- done: 2026-11-16, see Start here step 1 -->
+      <!-- original note follows -->
+      (historical)
+      *(2026-11-16: mapping fix written in `classifier.ts` — prompt tightening + `refineCategories()` guardrails,
+      14 new tests in `classifier.refine.test.ts`, UNCOMMITTED. After-pass #1 (`classify-after-mapping-fix-2026-11-16.json`)
+      removed the targeted misfilings but sent ~33 programming courses to `Links > YouTube/Articles/Docs`; the
+      "topic beats platform for every item" prompt line was added after that and has NOT been re-run. Tomorrow: start
+      Postgres only, `npx tsx src/scripts/classifyBaseline.ts run ../sessions/baselines/<out>.json --provider gemini,claude`,
+      then `compare` against `classify-baseline-gemini-2026-11-15.json`; judge the targeted buckets, not the raw total
+      (~25 moves per run are model noise). Then commit and stop Postgres.)*
 
 **Acceptance:** paste `https://github.com/owner/repo` → lands in `Tech > AI > Repos`, summary says what it is for,
 `structured` + priority saved, source URL set. Paste an Instagram caption → topic category (not `Links>Instagram`),
@@ -685,7 +771,7 @@ markitdown --help
 - [x] Fix intent plumbing on all capture paths (`classifyAndUpdateBatch`, quicksave) as a bonus
       *(partly done 2026-11-12: quicksave, `/text`, `/url`, `/file`, `/voice` previews pass `intent`; still open: the Keep
       multi-entity split `createItem` call in `classifyAndUpdateBatch` omits it) — all done 2026-11-15 in `enrichBatch.ts`)*
-- [ ] Clean stray categories (`Tech>Link`, `Courses>Tech`, `Travel>Links`, 218 bare-`Links` items)
+- [~] Clean stray categories (`Tech>Link`, `Courses>Tech`, `Travel>Links`, 218 bare-`Links` items) — small strays done, ~178 bare-`Links` left
       *(2026-11-15: read-only audit written, `server/src/scripts/auditStrayCategories.sql`, not yet run — needs Postgres up; no Ollama. Cleanup itself still to do.)*
       *(2026-11-15: audit run. Small strays = 6 items, all reviewed; dry-run `server/src/scripts/dryRunStrayCategoryMoves.sql` run, apply script `applyStrayCategoryMoves.sql` written, previewed, then APPLIED 2026-11-15 (6 items fixed; verified from a separate connection). Still open: the bare-`Links` items.
       *(2026-11-15: 21 of the 199 bare-`Links` items moved into hotels/restaurants/cameras/laptops/phones/cookies/stocks
@@ -695,7 +781,7 @@ markitdown --help
       collision), `Tech > Specs`/`Media > Books > Technical` hold furniture/courses, and `Links > Articles/Docs/YouTube/
       Instagram` are source buckets, not topics. Fix the classifier mapping first, verify with the baseline `compare`,
       then re-map the rest.)* The 218 bare-`Links` items (180 reviewed / 38 unreviewed) need a topic mapping.)*
-- [x] Update stale CLAUDE.md claims (content-hash dedupe, Instagram caption scraping) — done 2026-11-15
+- [x] Update stale CLAUDE.md claims (content-hash dedupe, Instagram caption scraping) — done 2026-11-15 <!-- done: 2026-11-15 -->
 - [ ] If `'repo'` entity type is ever wanted: own migration file with only `ALTER TYPE entity_type ADD VALUE IF NOT EXISTS 'repo'`
       (no-txn), run before code that inserts it; update TS `EntityType` + `SemanticGraph.tsx` colours
 
