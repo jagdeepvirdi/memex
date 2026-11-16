@@ -107,7 +107,7 @@ export function ApiKeysPanel({ onChanged }: Props) {
   }
 
   return (
-    <div className="pt-4 border-t border-white/5 space-y-4" data-testid="api-keys-panel">
+    <div className="space-y-4" data-testid="api-keys-panel">
       <div>
         <p className="text-sm text-ink font-medium flex items-center gap-1.5"><KeyRound size={14} aria-hidden="true" /> API keys</p>
         <p className="text-xs text-ink-muted mt-0.5 max-w-xl">

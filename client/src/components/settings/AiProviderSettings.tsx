@@ -3,11 +3,13 @@ import { Check, AlertCircle, Loader2, Cloud, ShieldCheck } from 'lucide-react'
 import { fetchAiProviders, testAiProvider } from '../../lib/api'
 import type { AiProviderId, AiProviderInfo, AiTestResult } from '../../lib/api'
 import { AI_PROVIDER_IDS, AI_PROVIDER_META } from '../../lib/aiProviders'
-import { ApiKeysPanel } from './ApiKeysPanel'
+import { resolveAiSettings } from '../../lib/aiSettings'
 
 interface Props {
   settings: Record<string, any>
   onUpdate: (patch: Record<string, any>) => void | Promise<void>
+  /** Opens the API key screen. When omitted, the "no key yet" hint is shown without a shortcut. */
+  onOpenKeys?: () => void
 }
 
 const PROVIDERS: AiProviderId[] = AI_PROVIDER_IDS
@@ -23,21 +25,14 @@ const TASKS: Array<{ id: string; label: string; hint: string }> = [
   { id: 'nl_filter', label: 'Natural-language filters', hint: 'Turning a search phrase into filters' },
 ]
 
-// Older versions of the UI saved booleans as the strings 'true' / 'false'.
-const truthy = (v: unknown) => v === true || v === 'true'
-const isProvider = (v: unknown): v is AiProviderId => PROVIDERS.includes(v as AiProviderId)
-
 const selectCls =
   'bg-bg border border-white/10 rounded-lg px-3 py-1.5 text-xs text-ink outline-none cursor-pointer focus:border-accent/50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
 
-export function AiProviderSettings({ settings, onUpdate }: Props) {
+export function AiProviderSettings({ settings, onUpdate, onOpenKeys }: Props) {
   const [providers, setProviders] = useState<AiProviderInfo[] | null>(null)
   const [loadFailed, setLoadFailed] = useState(false)
   const [testing, setTesting] = useState<AiProviderId | null>(null)
   const [results, setResults] = useState<Partial<Record<AiProviderId, AiTestResult>>>({})
-
-  // Bumped after a key is saved or removed so "configured" is re-read from the server.
-  const [reloadTick, setReloadTick] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -45,19 +40,10 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
       .then(p => { if (!cancelled) { setProviders(p); setLoadFailed(false) } })
       .catch(() => { if (!cancelled) setLoadFailed(true) })
     return () => { cancelled = true }
-  }, [reloadTick])
+  }, [])
 
-  const strictLocal = truthy(settings.strict_local_mode)
-  const stored: AiProviderId = isProvider(settings.ai_provider)
-    ? settings.ai_provider
-    : truthy(settings.use_claude) ? 'claude' : 'ollama'
-  const provider: AiProviderId = strictLocal ? 'ollama' : stored
-  // Legacy installs only ever had `use_claude`, which also meant consent.
-  const allowCloud = !strictLocal && (settings.allow_cloud !== undefined ? truthy(settings.allow_cloud) : truthy(settings.use_claude))
-  const perTask: Record<string, AiProviderId> =
-    settings.ai_task_providers && typeof settings.ai_task_providers === 'object' && !Array.isArray(settings.ai_task_providers)
-      ? settings.ai_task_providers
-      : {}
+  // Legacy installs only ever had `use_claude`, which also meant consent; resolveAiSettings handles that.
+  const { strictLocal, provider, allowCloud, perTask } = resolveAiSettings(settings)
 
   const info = (id: AiProviderId) => providers?.find(p => p.id === id)
   const unavailable = (id: AiProviderId) => {
@@ -110,13 +96,13 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
           <ShieldCheck size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
           <p>
             Strict Local Mode is on — all AI runs on local Ollama and cloud providers are never called.
-            Turn it off under Vault Security to use a cloud provider.
+            Turn it off under Keys & Privacy to use a cloud provider.
           </p>
         </div>
       )}
 
-      {/* Default provider + model */}
-      <div className="flex items-center justify-between gap-6">
+      {/* Default provider + model (stacked on narrow screens so the explanation keeps its width) */}
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div>
           <p className="text-sm text-ink font-medium">AI Provider</p>
           <p className="text-xs text-ink-muted mt-0.5">Default for classification, insights and Ask. Local Ollama unless you choose otherwise.</p>
@@ -136,7 +122,7 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
         </select>
       </div>
 
-      <div className="flex items-center justify-between gap-6">
+      <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-6">
         <div>
           <p className="text-sm text-ink font-medium">Model</p>
           <p className="text-xs text-ink-muted mt-0.5">
@@ -204,8 +190,30 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
         </p>
       )}
 
+      {!strictLocal && cloudSelected && unavailable(provider) && (
+        <p role="status" className="flex items-start gap-2 text-xs text-yellow-400" data-testid="missing-key-hint">
+          <AlertCircle size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
+          <span>
+            {AI_PROVIDER_META[provider].shortName} has no API key yet, so it can't answer.{' '}
+            {onOpenKeys && (
+              <button type="button" onClick={onOpenKeys} className="underline underline-offset-2 hover:text-yellow-300">
+                Add a key
+              </button>
+            )}
+          </span>
+        </p>
+      )}
+
+      {/* Rarely changed: per-task overrides and connection tests live behind one disclosure. */}
+      <details className="group pt-4 border-t border-white/5" data-testid="ai-advanced">
+        <summary className="cursor-pointer select-none text-sm text-ink font-medium list-none flex items-center gap-2 [&::-webkit-details-marker]:hidden">
+          <span aria-hidden="true" className="text-ink-muted transition-transform group-open:rotate-90">›</span>
+          Advanced
+          <span className="text-xs text-ink-muted font-normal">per-task providers and connection tests</span>
+        </summary>
+        <div className="mt-5 space-y-6">
       {/* Per-task overrides */}
-      <div className="pt-4 border-t border-white/5 space-y-3">
+      <div className="space-y-3">
         <div>
           <p className="text-sm text-ink font-medium">Per-task provider</p>
           <p className="text-xs text-ink-muted mt-0.5">Override the default for individual features.</p>
@@ -234,14 +242,12 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
         ))}
       </div>
 
-      <ApiKeysPanel onChanged={() => setReloadTick(t => t + 1)} />
-
       {/* Provider status + connection tests */}
       <div className="pt-4 border-t border-white/5 space-y-3">
         <div>
           <p className="text-sm text-ink font-medium">Providers</p>
           <p className="text-xs text-ink-muted mt-0.5">
-            Availability of each provider and a connection test. Add or change keys in “API keys” above; keys set in the
+            Availability of each provider and a connection test. Add or change keys under Keys &amp; Privacy; keys set in the
             server's <code className="bg-white/10 px-1 rounded">.env</code> need a server restart.
           </p>
         </div>
@@ -284,6 +290,8 @@ export function AiProviderSettings({ settings, onUpdate }: Props) {
           )
         })}
       </div>
+        </div>
+      </details>
     </div>
   )
 }

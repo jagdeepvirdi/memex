@@ -14,7 +14,6 @@ vi.mock('../../lib/api', () => ({
 }))
 
 import { AiProviderSettings } from './AiProviderSettings'
-import { saveApiKey, removeApiKey } from '../../lib/api'
 
 const PROVIDERS = [
   { id: 'ollama', configured: true, cloud: false, models: ['llama3.2', 'gemma3:4b'] },
@@ -207,14 +206,12 @@ describe('AiProviderSettings — provider status and connection test', () => {
     expect(screen.getByTestId('provider-row-ollama')).toHaveTextContent(/always available/i)
     expect(screen.getByTestId('provider-row-claude')).toHaveTextContent(/key configured/i)
     expect(screen.getByTestId('provider-row-gemini')).toHaveTextContent(/no api key/i)
-    // The provider rows only report status; the key inputs (in the API keys panel) are write-only and never pre-filled.
     expect(screen.getByTestId('provider-row-openai')).toHaveTextContent(/no api key/i)
+    // The rows only report status. Keys are entered on the Keys & Privacy screen, so no key field exists here.
     for (const id of ['ollama', 'claude', 'gemini', 'openai']) {
       expect(within(screen.getByTestId(`provider-row-${id}`)).queryByLabelText(/key/i, { selector: 'input' })).toBeNull()
     }
-    const keyInputs = container.querySelectorAll('input[type="password"]')
-    expect(keyInputs.length).toBe(4)
-    keyInputs.forEach(i => expect((i as HTMLInputElement).value).toBe(''))
+    expect(container.querySelectorAll('input[type="password"]')).toHaveLength(0)
   })
 
   it('cannot test a provider with no key', async () => {
@@ -273,52 +270,49 @@ describe('AiProviderSettings — provider list failure', () => {
   })
 })
 
-describe('AiProviderSettings — API keys refresh provider availability', () => {
-  const keyStatus = (over: Record<string, unknown> = {}) => ({
-    provider: 'gemini', label: 'Google Gemini', configured: true, source: 'stored', last4: '4321', hasStored: true, undecryptable: false, ...over,
-  })
-  const noKeys = ['claude', 'gemini', 'openai', 'youtube'].map(provider => ({
-    provider, label: { claude: 'Anthropic (Claude)', gemini: 'Google Gemini', openai: 'OpenAI (ChatGPT)', youtube: 'YouTube Data API' }[provider], configured: false, source: null, hasStored: false, undecryptable: false,
-  }))
+describe('AiProviderSettings — a provider with no key', () => {
+  const openaiNoKey = { ai_provider: 'openai', allow_cloud: true }
 
-  it('re-reads provider status after a key is saved, so "no API key" flips to configured', async () => {
-    mockFetchApiKeys.mockResolvedValue(noKeys)
-    await setup({})
-    expect(screen.getByTestId('provider-row-gemini')).toHaveTextContent(/no api key/i)
-    expect(mockFetchAiProviders).toHaveBeenCalledTimes(1)
-
-    mockFetchAiProviders.mockResolvedValue(PROVIDERS.map(p => (p.id === 'gemini' ? { ...p, configured: true } : p)))
-    vi.mocked(saveApiKey).mockResolvedValue(keyStatus() as never)
-
-    await waitFor(() => expect(screen.getByLabelText('Google Gemini')).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText('Google Gemini'), { target: { value: 'AIzaSyGeminiKeyValue-4321' } })
-    fireEvent.click(within(screen.getByTestId('api-key-gemini')).getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => expect(mockFetchAiProviders).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(screen.getByTestId('provider-row-gemini')).toHaveTextContent(/key configured/i))
-    expect(screen.getByRole('button', { name: 'Test Gemini' })).toBeEnabled()
+  it('says so, and offers a shortcut to the key screen', async () => {
+    const onOpenKeys = vi.fn()
+    render(<AiProviderSettings settings={openaiNoKey} onUpdate={onUpdate} onOpenKeys={onOpenKeys} />)
+    const hint = await screen.findByTestId('missing-key-hint')
+    expect(hint).toHaveTextContent('OpenAI has no API key yet')
+    fireEvent.click(within(hint).getByRole('button', { name: 'Add a key' }))
+    expect(onOpenKeys).toHaveBeenCalledTimes(1)
   })
 
-  it('re-reads provider status after a saved key is removed', async () => {
-    mockFetchApiKeys.mockResolvedValue(noKeys.map(k => (k.provider === 'claude' ? { ...k, configured: true, source: 'stored', last4: '1234', hasStored: true } : k)))
-    await setup({})
-    mockFetchAiProviders.mockResolvedValue(PROVIDERS.map(p => (p.id === 'claude' ? { ...p, configured: false } : p)))
-    vi.mocked(removeApiKey).mockResolvedValue({ ...noKeys[0], provider: 'claude' } as never)
-
-    fireEvent.click(await screen.findByRole('button', { name: /Remove saved/ }))
-
-    await waitFor(() => expect(mockFetchAiProviders).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(screen.getByTestId('provider-row-claude')).toHaveTextContent(/no api key/i))
+  it('still explains the problem when there is no shortcut to offer', async () => {
+    render(<AiProviderSettings settings={openaiNoKey} onUpdate={onUpdate} />)
+    const hint = await screen.findByTestId('missing-key-hint')
+    expect(hint).toHaveTextContent('OpenAI has no API key yet')
+    expect(within(hint).queryByRole('button')).toBeNull()
   })
 
-  it('does not re-read provider status when saving fails', async () => {
-    mockFetchApiKeys.mockResolvedValue(noKeys)
+  it.each([
+    ['the provider has a key', { ai_provider: 'claude', allow_cloud: true }],
+    ['the provider is local Ollama', { ai_provider: 'ollama' }],
+    ['Strict Local Mode is on', { ...openaiNoKey, strict_local_mode: true }],
+  ])('stays quiet when %s', async (_name, settings) => {
+    await setup(settings)
+    expect(screen.queryByTestId('missing-key-hint')).toBeNull()
+  })
+
+  it('points to Keys & Privacy when Strict Local Mode is on', async () => {
+    await setup({ strict_local_mode: true })
+    expect(screen.getByText(/Strict Local Mode is on/)).toHaveTextContent('Keys & Privacy')
+  })
+})
+
+describe('AiProviderSettings — Advanced section', () => {
+  it('is collapsed by default and holds the per-task providers and connection tests', async () => {
     await setup({})
-    vi.mocked(saveApiKey).mockRejectedValue(new Error('That key is too short.'))
-    await waitFor(() => expect(screen.getByLabelText('Google Gemini')).toBeInTheDocument())
-    fireEvent.change(screen.getByLabelText('Google Gemini'), { target: { value: 'abc' } })
-    fireEvent.click(within(screen.getByTestId('api-key-gemini')).getByRole('button', { name: 'Save' }))
-    expect(await within(screen.getByTestId('api-key-gemini')).findByRole('alert')).toHaveTextContent('too short')
-    expect(mockFetchAiProviders).toHaveBeenCalledTimes(1)
+    const advanced = screen.getByTestId('ai-advanced') as HTMLDetailsElement
+    expect(advanced.open).toBe(false)
+    expect(within(advanced).getByLabelText('Classification provider')).toBeInTheDocument()
+    expect(within(advanced).getByTestId('provider-row-openai')).toBeInTheDocument()
+    // The everyday controls stay outside it.
+    expect(within(advanced).queryByLabelText('AI provider')).toBeNull()
+    expect(within(advanced).queryByLabelText('Allow cloud AI')).toBeNull()
   })
 })

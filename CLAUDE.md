@@ -81,7 +81,7 @@ memex/
 │       │   ├── Category.tsx        # Paginated (Prev/Next)
 │       │   ├── Item.tsx            # Edit + delete + Move to Vault button
 │       │   ├── Vault.tsx
-│       │   ├── Settings.tsx        # Model selector, cloud toggle, strict local mode
+│       │   ├── Settings.tsx        # Shell for /settings/:tab? (ai | privacy | library | vault | capture): left nav, setup-status strip, shared settings state + toast; one component per tab in components/settings/tabs/
 │       │   ├── TableView.tsx       # /items/table — dense table, filters, bulk actions, CSV export
 │       │   ├── MediaView.tsx       # /media — movies + books library
 │       │   ├── PlacesView.tsx      # /places — travel + restaurant table, Maps integration

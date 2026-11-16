@@ -1,0 +1,26 @@
+import { Bookmark, Video } from 'lucide-react'
+import { BookmarkletPanel } from '../BookmarkletPanel'
+import YouTubeBackfillPanel from '../YouTubeBackfillPanel'
+import { SettingsSection } from '../SettingsSection'
+import type { SettingsTabProps } from '../settingsTabs'
+
+type Props = Pick<SettingsTabProps, 'settings'>
+
+/** Ways of getting things into Memex that you set up once: the bookmarklet and the YouTube backfill. */
+export function CaptureTab({ settings }: Props) {
+  return (
+    <div className="flex flex-col gap-10">
+      <SettingsSection icon={<Bookmark size={20} className="text-sky-400" />} title="Bookmarklet">
+        <BookmarkletPanel initialKey={typeof settings.bookmarklet_key === 'string' ? settings.bookmarklet_key : null} />
+      </SettingsSection>
+
+      <SettingsSection
+        icon={<Video size={20} className="text-red-400" />}
+        title="YouTube backfill"
+        description="Fetch full descriptions and transcripts for YouTube links you saved earlier."
+      >
+        <YouTubeBackfillPanel />
+      </SettingsSection>
+    </div>
+  )
+}

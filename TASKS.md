@@ -20,10 +20,15 @@ Repo is PUBLIC: generic fixtures and demo data only, no personal note titles, re
 **Deferred for now:** all visual redesign (tokens, shell, screen restyle, light mode, reference sites aiceos-bkk.pages.dev and 100xengineers.com/workshop) and the landing page build (needs the new look for screenshots).
 
 ### L1 — Settings reorganisation (page is overcrowded)
-- [ ] Split `Settings.tsx` (780 lines) into a shell + one component per tab; keep tab in the URL (`/settings/ai`)
-- [ ] Tabs: **AI** (provider, model, cloud consent; per-task overrides + provider status/tests under "Advanced"), **Keys & Privacy** (API keys, Strict Local Mode moved out of Vault Security, cloud-safe explainer), **Library** (categories, import/export, MarkItDown, re-process, enrichment), **Vault** (auto-lock, change password, reset), **Capture** (bookmarklet, YouTube backfill)
-- [ ] "Setup status" strip at the top (local AI on/off, which cloud providers are connected, cloud allowed?)
-- [ ] Move `BookmarkletSection` out of `Settings.tsx`; update `Settings.test.tsx`
+- [x] Split `Settings.tsx` (780 lines) into a shell + one component per tab; keep tab in the URL (`/settings/ai`) <!-- done: 2026-11-16 -->
+      *(shell is now ~150 lines; route `/settings/:tab?`; unknown tab falls back to AI; tabs live in `components/settings/tabs/`)*
+- [x] Tabs: **AI** (provider, model, cloud consent; per-task overrides + provider status/tests under "Advanced"), **Keys & Privacy** (API keys, Strict Local Mode moved out of Vault Security, cloud-safe explainer), **Library** (categories, import/export, MarkItDown, re-process, enrichment), **Vault** (auto-lock, change password, reset), **Capture** (bookmarklet, YouTube backfill) <!-- done: 2026-11-16 -->
+      *(API keys are no longer embedded in `AiProviderSettings`; when the chosen provider has no key the AI tab shows an "Add a key" shortcut to Keys & Privacy. Shared helpers: `lib/aiSettings.ts` (`resolveAiSettings`, one place for the legacy `use_claude` rules), `settingsTabs.ts`, `SettingsSection.tsx`)*
+- [x] "Setup status" strip at the top (local AI on/off, which cloud providers are connected, cloud allowed?) <!-- done: 2026-11-16 -->
+      *(`SetupStatus.tsx`: "Answering with …", explains a fallback to Ollama (cloud off / no key), Strict Local chip, which cloud keys exist; re-reads provider status on every tab switch)*
+- [x] Move `BookmarkletSection` out of `Settings.tsx`; update `Settings.test.tsx` <!-- done: 2026-11-16 -->
+      *(now `BookmarkletPanel.tsx`, reads the key from the shared settings; `Settings.test.tsx` rewritten per tab; client 751 tests, `tsc` clean. Eyeballed in a real browser at 1280px and 390px against a stubbed API: all five tabs render, no console errors, no horizontal overflow. Rows stack on narrow screens.)*
+- [ ] Not done / noticed: the shared `AppHeader` title wraps and overlaps the avatar at ~390px (existing, not part of L1); the Library category rename/delete buttons only appear on hover (existing behaviour, not reachable by touch); the Capture tab is cut off in the mobile nav until scrolled (no scroll hint)
 
 ### L2 — OpenAI (ChatGPT API) provider
 - [x] `ProviderId` + `PROVIDER_IDS` (`settings.ts`), `openaiProvider` in the `ai.ts` registry (`openai` npm package, JSON mode via the existing `withJsonInstruction`), `KEY_PROVIDERS` in `apiKeys.ts`, `OPENAI_API_KEY` env var, `openai_model` setting <!-- done: 2026-11-16 -->

@@ -137,7 +137,7 @@ export default function App() {
             <Route path="/graph" element={
               <ProtectedRoute><SemanticGraph /></ProtectedRoute>
             } />
-            <Route path="/settings" element={
+            <Route path="/settings/:tab?" element={
               <ProtectedRoute><Settings /></ProtectedRoute>
             } />
             <Route path="/categories/review" element={
