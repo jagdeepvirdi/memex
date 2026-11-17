@@ -91,6 +91,29 @@ describe('estimateReembed — cloud model', () => {
   })
 })
 
+describe('estimateReembed — the same privacy rule as the writer', () => {
+  it('counts an item whose text looks sensitive as staying home, not as sent', async () => {
+    queueEstimate({
+      cloud: true,
+      candidates: [
+        cand({ chars: 400, text: 'Pasta night\n\nBoil, toss, serve.' }),
+        cand({ chars: 500, text: 'Rent\n\nAccount number 1234 5678 9012' }),
+        cand({ chars: 300, text: 'Shop\n\nhttps://shop.example.com/p/1234567890123456' }), // a link id is not a secret
+      ],
+    })
+    const e = await estimateReembed(GEMINI)
+    expect(e.items).toBe(2)
+    expect(e.characters).toBe(700)
+    expect(e.skippedPrivate).toBe(1)
+  })
+
+  it('reads the text an embedding would send, from the database', async () => {
+    queueEstimate({ cloud: true, candidates: [] })
+    await estimateReembed(GEMINI)
+    expect(String(vi.mocked(pool.query).mock.calls[0][0])).toMatch(/LEFT\(i\.title \|\| chr\(10\) \|\| chr\(10\) \|\| i\.content, 6000\) AS text/)
+  })
+})
+
 describe('estimateReembed — local model', () => {
   it('embeds everything, including items that were private under a cloud model, and counts entity names', async () => {
     queueEstimate({ cloud: false, entities: '12', candidates: [cand({ chars: 100 }), cand({ chars: 100, tags: ['private'] })] })

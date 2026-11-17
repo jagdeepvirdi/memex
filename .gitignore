@@ -64,3 +64,6 @@ coverage/
 
 # DevBrain session summaries
 sessions/
+
+# Database backups (your notes: never commit)
+/backups/

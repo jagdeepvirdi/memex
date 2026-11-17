@@ -181,12 +181,12 @@ Back up first (it is one command), then update.
 **Docker**
 
 ```bash
-docker compose exec -T postgres pg_dump -U memex memex > memex-backup.sql     # backup
+npm run backup                                                                 # backup
 git pull
 docker compose build && docker compose up -d                                  # new image; migrations apply on boot
 ```
 
-If the new version fails to start, `docker compose logs app` says why (a failed migration rolls back and changes nothing else). To go back, check out the previous version, rebuild, and restore the backup into a fresh database: `docker compose down -v && docker compose up -d postgres && docker compose exec -T postgres psql -U memex memex < memex-backup.sql`.
+If the new version fails to start, `docker compose logs app` says why (a failed migration rolls back and changes nothing else). To go back, check out the previous version, rebuild, and run `npm run restore -- backups/<file>.sql --yes`.
 
 **From source**
 
@@ -197,6 +197,23 @@ npm run db:migrate          # new migrations are applied only when YOU run this 
 ```
 
 Then restart. The server warns at startup if migrations are pending. If the page looks unchanged after an upgrade, reload it once or twice: the installed web app updates itself in the background (clearing the site's data forces it). Changing `JWT_SECRET` (or `KEY_ENCRYPTION_SECRET`) makes API keys saved in Settings unreadable: enter them again.
+
+## Backup and restore
+
+```bash
+npm run backup                                    # writes backups/memex-backup-<date>.sql (git-ignored)
+npm run restore -- backups/<file>.sql --yes       # REPLACES the database with that file
+```
+
+The file holds everything in the database: items, categories, tags, entities, settings, the encrypted vault (and its check value) and saved API keys. It is plain SQL and not encrypted as a whole, so keep it as private as your notes. Add `--local` to use `pg_dump`/`psql` on your machine and `DATABASE_URL` instead of the Docker postgres service.
+
+**Two things a backup cannot contain, so keep them yourself:** your **vault master password** (it never leaves your browser; without it vault items stay locked) and **`JWT_SECRET`** from `.env` (saved API keys are encrypted with it; without it you re-enter them).
+
+Restore safeguards: nothing happens without `--yes`; a file that is not a complete Memex dump is refused before anything is dropped; a safety copy of the current database is written first (`--no-safety-copy` skips it); it stops at the first error. Stop the app while restoring and start it afterwards (it applies any newer migrations). To rehearse safely, restore into another database: `npm run restore -- <file> --yes --database scratch --create`.
+
+## Sample data
+
+New and curious? Settings > Library > **Sample data** loads about forty made-up notes, recipes, films, books, places and links so you can look around before adding your own. No AI is called. A "Demo mode" tag shows in the header while they are loaded, and one click clears exactly those items (your own notes are never touched).
 
 ---
 

@@ -14,7 +14,7 @@ import {
   rowToItem,
 } from '../db/helpers.js'
 import { classify, mapToCategories } from '../services/classifier.js'
-import { cloudSafe, type CloudSafeItem } from '../services/cloudSafe.js'
+import { cloudSafe, cloudSafeReason, describePrivacyReason, type CloudSafeItem } from '../services/cloudSafe.js'
 import {
   ITEM_LIST_SELECT_SQL,
   applyClassificationResult,
@@ -766,7 +766,17 @@ router.post('/:id/apply-extraction/:extractionId', async (req, res) => {
 
 // ── POST /api/items/:id/re-classify — add a new extraction without applying ───
 
+const reClassifyBody = z.object({ provider: z.enum(['ollama', 'claude', 'gemini', 'openai', 'groq']).optional() })
+
 router.post('/:id/re-classify', async (req, res) => {
+  const body = reClassifyBody.safeParse(req.body ?? {})
+  if (!body.success) {
+    res.status(400).json({ error: 'provider must be one of: ollama, claude, gemini, openai, groq' })
+    return
+  }
+  // An explicit provider ("Redo with...") is a user choice: if it cannot be honoured (no key, no consent, a private item)
+  // the request fails with the reason instead of quietly being answered by another model.
+  const provider = body.data.provider
   try {
     const { rows: itemRows } = await pool.query<{ title: string; content: string } & CloudSafeItem>(
       `SELECT i.title, i.content, ${CLOUD_SAFE_COLS} FROM items i WHERE i.id=$1 AND i.deleted_at IS NULL`,
@@ -779,7 +789,7 @@ router.post('/:id/re-classify', async (req, res) => {
     const { title, content } = itemRows[0]
     const text = [title, content].filter(t => t?.trim()).join('\n\n')
 
-    const result = await classify(text, { cloudSafe: cloudSafe(itemRows[0]) })
+    const result = await classify(text, { cloudSafe: cloudSafe(itemRows[0]), ...(provider ? { provider } : {}) })
     if (!result.title || result.title === 'Untitled') {
       result.title = title || content.split('\n')[0]?.slice(0, 80) || 'Untitled'
     }
@@ -804,6 +814,11 @@ router.post('/:id/re-classify', async (req, res) => {
 
     res.status(201).json(newExt[0])
   } catch (err) {
+    const known = describeActionError(err)
+    if (known) {
+      res.status(known.status).json(actionErrorBody(known))
+      return
+    }
     logger.error(err, 'POST /api/items/:id/re-classify error')
     res.status(500).json({ error: 'Re-classification failed' })
   }
@@ -1126,7 +1141,9 @@ router.get('/:id', async (req, res) => {
   try {
     const item = await fetchItem(client, req.params.id)
     if (!item) return res.status(404).json({ error: 'Item not found' })
-    res.json(item)
+    // Say when this item never leaves the machine, and why (the same rule every cloud call applies).
+    const reason = cloudSafeReason({ type: item.type, encrypted: item.encrypted, categories: item.categories, tags: item.tags, title: item.title, content: item.content })
+    res.json(reason ? { ...item, localOnly: { reason, message: describePrivacyReason(reason) } } : item)
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch item' })
   } finally {

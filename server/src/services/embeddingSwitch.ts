@@ -47,6 +47,8 @@ export interface ReembedEstimate {
 interface CandidateRow {
   type: string
   chars: number
+  /** The text an embedding would send (embedder.buildEmbedText), so the estimate applies the same privacy rule as the writer. */
+  text: string
   categories: string[] | null
   tags: string[] | null
 }
@@ -59,6 +61,7 @@ export async function estimateReembed(target: ActiveEmbedding): Promise<ReembedE
     pool.query<CandidateRow>(
       `SELECT i.type,
               LEAST(length(i.title) + 2 + length(i.content), ${MAX_EMBED_CHARS}) AS chars,
+              LEFT(i.title || chr(10) || chr(10) || i.content, ${MAX_EMBED_CHARS}) AS text,
               (SELECT array_agg(c.name ORDER BY ic.depth) FROM item_categories ic JOIN categories c ON c.id = ic.category_id WHERE ic.item_id = i.id) AS categories,
               (SELECT array_agg(t.name) FROM item_tags it JOIN tags t ON t.id = it.tag_id WHERE it.item_id = i.id) AS tags
        FROM items i
@@ -86,7 +89,7 @@ export async function estimateReembed(target: ActiveEmbedding): Promise<ReembedE
   let characters = 0
   let privateNow = 0
   for (const row of candidates.rows) {
-    if (cloud && !cloudSafe({ type: row.type, encrypted: false, categories: row.categories, tags: row.tags })) {
+    if (cloud && !cloudSafe({ type: row.type, encrypted: false, categories: row.categories, tags: row.tags, content: row.text })) {
       privateNow++
       continue
     }

@@ -21,6 +21,8 @@ vi.mock('../hooks/useAiStatus', () => ({
   useAiStatus: () => mockUseAiStatus(),
 }))
 
+vi.mock('./DemoBanner', () => ({ DemoBanner: () => null }))
+
 import { AppHeader } from './AppHeader'
 
 describe('AppHeader Component', () => {

@@ -1,7 +1,7 @@
 import { pool } from '../db/client.js'
 import logger from '../lib/logger.js'
 import { activeEmbedding, type ActiveEmbedding } from './embeddingConfig.js'
-import { embedItem } from './embedder.js'
+import { embedItem, buildEmbedText } from './embedder.js'
 import { cloudSafe, type CloudSafeItem } from './cloudSafe.js'
 
 // One place decides which embedding model is active and writes vectors. Every vector is stored with the model that
@@ -46,7 +46,8 @@ export async function embedAndStoreItemDetailed(
   signal?: AbortSignal,
 ): Promise<EmbedResult> {
   try {
-    if (active.provider !== 'ollama' && !embeddingAllowed(active, await loadPrivacyInfo(item.id))) {
+    // A cloud model also never sees text that looks sensitive: the gate reads exactly what would be sent.
+    if (active.provider !== 'ollama' && !embeddingAllowed(active, { ...(await loadPrivacyInfo(item.id)), content: buildEmbedText(item.title, item.content) })) {
       await pool.query(`UPDATE items SET embedding_skip = 'private' WHERE id = $1`, [item.id])
       return { outcome: 'skipped' }
     }

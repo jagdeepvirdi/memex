@@ -5,7 +5,8 @@ import logger from '../lib/logger.js'
 // nomic-embed-text has an 8192-token context; ~6000 chars is a safe limit.
 const MAX_EMBED_CHARS = 6000
 
-function buildEmbedText(title: string, content: string): string {
+/** The exact text a document embedding sends (title, then content, capped). The privacy gate reads this same text. */
+export function buildEmbedText(title: string, content: string): string {
   const combined = `${title}\n\n${content}`.trim()
   return combined.slice(0, MAX_EMBED_CHARS)
 }

@@ -70,6 +70,8 @@ vi.mock('../lib/api', () => ({
 }))
 
 import ItemPage from './Item'
+import { reClassifyItem } from '../lib/api'
+import { toast } from 'sonner'
 
 const makeItem = (overrides: Record<string, unknown> = {}) => ({
   id: 'item-123',
@@ -440,5 +442,63 @@ describe('ItemPage — connected entities', () => {
     render(<ItemPage />)
     await screen.findByText('Understanding Sourdough')
     expect(api.fetchItemEntities).not.toHaveBeenCalled()
+  })
+})
+
+// ── Which AI answered, and Redo with... ──────────────────────
+
+describe('ItemPage — which AI answered', () => {
+  it('shows the AI that classified the item', async () => {
+    mockApiFetch.mockResolvedValue(makeItem({ extractionModel: 'gemini:gemini-3.8-flash' }))
+    render(<ItemPage />)
+    expect(await screen.findByTestId('ai-badge')).toHaveTextContent('Classified by Gemini')
+  })
+
+  it('says when an item stays on this machine, and why', async () => {
+    mockApiFetch.mockResolvedValue(makeItem({ localOnly: { reason: 'tag', message: 'It is tagged private, no-cloud or local-only.' } }))
+    render(<ItemPage />)
+    const chip = await screen.findByTestId('local-only-badge')
+    expect(chip).toHaveAttribute('title', 'It is tagged private, no-cloud or local-only.')
+  })
+})
+
+describe('ItemPage — Re-classify with a chosen AI', () => {
+  const open = async (over: Record<string, unknown> = {}) => {
+    mockApiFetch.mockResolvedValue(makeItem(over))
+    render(<ItemPage />)
+    await screen.findByLabelText('Re-classify with')
+  }
+  const NEW_EXTRACTION = { id: 'ext-9', item_id: 'item-123', model: 'gemini:gemini-3.8-flash', type: 'recipe', title: 'T', summary: 's', structured: {}, categories: [], tags: [], confidence: 90, applied: false, created_at: new Date().toISOString() }
+
+  it('uses the normal routing by default', async () => {
+    vi.mocked(reClassifyItem).mockResolvedValue(NEW_EXTRACTION as never)
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: /Re-classify/ }))
+    await waitFor(() => expect(reClassifyItem).toHaveBeenCalledWith('item-123', undefined))
+  })
+
+  it('pins the run to the AI you pick, and adds the result to the history', async () => {
+    vi.mocked(reClassifyItem).mockResolvedValue(NEW_EXTRACTION as never)
+    vi.mocked(await import('../lib/api').then(m => m.fetchAiProviders)).mockResolvedValue([{ id: 'ollama', configured: true, cloud: false, models: [] }, { id: 'gemini', configured: true, cloud: true, models: [] }] as never)
+    await open()
+    await waitFor(() => expect((screen.getByLabelText('Re-classify with') as HTMLSelectElement).textContent).toMatch(/Gemini/))
+    fireEvent.change(screen.getByLabelText('Re-classify with'), { target: { value: 'gemini' } })
+    fireEvent.click(screen.getByRole('button', { name: /Re-classify/ }))
+    await waitFor(() => expect(reClassifyItem).toHaveBeenCalledWith('item-123', 'gemini'))
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+  })
+
+  it('shows the reason the server gives instead of a generic failure', async () => {
+    vi.mocked(reClassifyItem).mockRejectedValue(new Error('Cannot use gemini: this content is marked private and may not leave your machine'))
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: /Re-classify/ }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Cannot use gemini: this content is marked private and may not leave your machine'))
+  })
+
+  it('falls back to a plain message when the error has none', async () => {
+    vi.mocked(reClassifyItem).mockRejectedValue(new Error(''))
+    await open()
+    fireEvent.click(screen.getByRole('button', { name: /Re-classify/ }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Re-classification failed'))
   })
 })

@@ -21,6 +21,8 @@ interface ItemRow {
   intent: ItemIntent | null
   priority: ItemPriority | null
   derived_from?: string | null
+  /** `<provider>:<model>` of the AI that produced the current structured data (null: not AI-classified). */
+  extraction_model?: string | null
   remind_at: Date | null
   public_token: string | null
   share_expires_at: Date | null
@@ -48,6 +50,7 @@ export function rowToItem(row: ItemRow): Item {
     intent: row.intent ?? undefined,
     priority: row.priority ?? undefined,
     derivedFrom: row.derived_from ?? undefined,
+    extractionModel: row.extraction_model ?? undefined,
     remindAt: row.remind_at ?? undefined,
     publicToken: row.public_token ?? undefined,
     shareExpiresAt: row.share_expires_at ?? undefined,
@@ -223,7 +226,7 @@ export const CLOUD_SAFE_COLS = `
 export const ITEM_SELECT_SQL = `
   SELECT
     i.id, i.title, i.type, i.content, i.structured,
-    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence, i.intent, i.priority, i.derived_from, i.remind_at, i.public_token, i.share_expires_at,
+    i.source, i.source_url, i.encrypted, i.reviewed, i.created_at, i.updated_at, i.confidence, i.intent, i.priority, i.derived_from, i.extraction_model, i.remind_at, i.public_token, i.share_expires_at,
     COALESCE(
       (SELECT array_agg(c.name ORDER BY ic2.depth)
        FROM item_categories ic2

@@ -3,6 +3,7 @@ import { Settings, LogOut, Brain, Check, Sparkles, Wifi, WifiOff } from 'lucide-
 import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useAiStatus } from '../hooks/useAiStatus'
+import { DemoBanner } from './DemoBanner'
 
 interface Props {
   /** Left side — search bar (Dashboard) or back-button + title (all other pages) */
@@ -43,6 +44,8 @@ export function AppHeader({ left, actions }: Props) {
             <div className="w-px h-5 bg-white/10" />
           </>
         )}
+
+        <DemoBanner />
 
         {/* AI status pills — hidden on small screens */}
         <div className="hidden lg:flex items-center gap-3 pr-3 border-r border-white/10">

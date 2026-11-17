@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Download, Trash2, Check, Folder, Database, Loader2, Edit2, X, Save, RefreshCw, Wand2 } from 'lucide-react'
+import { FlaskConical, Download, Trash2, Check, Folder, Database, Loader2, Edit2, X, Save, RefreshCw, Wand2 } from 'lucide-react'
 import { apiFetch, fetchCategories, reprocessBulk } from '../../../lib/api'
 import type { Category } from '../../../../../shared/types'
 import { SettingsSection, SettingRow, Divider } from '../SettingsSection'
 import type { SettingsTabProps } from '../settingsTabs'
+import { SampleDataPanel } from '../SampleDataPanel'
 
 type Props = Pick<SettingsTabProps, 'notify'>
 
@@ -140,6 +141,14 @@ export function LibraryTab({ notify }: Props) {
 
   return (
     <div className="flex flex-col gap-10">
+      <SettingsSection
+        icon={<FlaskConical size={20} className="text-accent" />}
+        title="Sample data"
+        description="Look around a full library before adding your own."
+      >
+        <SampleDataPanel notify={notify} />
+      </SettingsSection>
+
       <SettingsSection
         icon={<Folder size={20} className="text-orange-400" />}
         title="Categories"

@@ -11,8 +11,10 @@ import { useVaultStore } from '../store/vaultStore'
 import { encryptVaultItem } from '../lib/crypto'
 import PriorityPicker from '../components/PriorityPicker'
 import ItemAiActions, { DerivedFromLink } from '../components/item/ItemAiActions'
+import { AiBadge, ReClassifyControl } from '../components/item/AiProvenance'
 import ConnectedEntities from '../components/item/ConnectedEntities'
 import GithubMeta from '../components/item/GithubMeta'
+import type { AiProviderId } from '../lib/api'
 import type { Item, ItemExtraction, ItemPriority, LinkSummary, RepoData } from '../../../shared/types'
 
 const DEV_KIND_LABEL: Record<string, string> = {
@@ -97,16 +99,17 @@ export default function ItemPage() {
     }
   }
 
-  const handleReClassify = async () => {
+  const handleReClassify = async (provider?: AiProviderId) => {
     if (!id) return
     setReClassifying(true)
     try {
-      const newExt = await reClassifyItem(id)
+      const newExt = await reClassifyItem(id, provider)
       setExtractions(prev => [newExt, ...prev])
       setShowExtractions(true)
       toast.success('New extraction added — review below and apply if it looks right')
     } catch (err) {
-      toast.error('Re-classification failed')
+      // The server explains why (no key, a private item, the provider is down): show that, not a generic failure.
+      toast.error(err instanceof Error && err.message ? err.message : 'Re-classification failed')
       console.error(err)
     } finally {
       setReClassifying(false)
@@ -451,6 +454,8 @@ export default function ItemPage() {
                   {item.intent}
                 </span>
               )}
+
+              <AiBadge item={item} />
             </div>
           </div>
 
@@ -707,15 +712,7 @@ export default function ItemPage() {
                     </span>
                   )}
                 </button>
-                <button
-                  onClick={handleReClassify}
-                  disabled={reClassifying}
-                  className="flex items-center gap-1.5 text-[10px] text-ink-muted hover:text-accent border border-white/10 hover:border-accent/30 px-2.5 py-1 rounded-lg transition-all disabled:opacity-40"
-                  title="Re-run AI classification and add to history"
-                >
-                  {reClassifying ? <Loader2 size={10} className="animate-spin" /> : <Bot size={10} />}
-                  Re-classify
-                </button>
+                <ReClassifyControl item={item} busy={reClassifying} onRun={handleReClassify} />
               </div>
 
               {showExtractions && (

@@ -38,6 +38,10 @@ export interface Item {
   priority?: ItemPriority | null
   /** Id of the item this one was derived from (e.g. recipe extracted from a video). */
   derivedFrom?: string | null
+  /** `<provider>:<model>` of the AI that produced the current classification, e.g. `gemini:gemini-3.8-flash`. Absent: not AI-classified. */
+  extractionModel?: string
+  /** Set (on a single-item response) when this item is never sent to a cloud AI, and why. */
+  localOnly?: { reason: 'encrypted' | 'password' | 'category' | 'tag' | 'content'; message: string }
   remindAt?: Date | null
   publicToken?: string | null
   shareExpiresAt?: Date | null

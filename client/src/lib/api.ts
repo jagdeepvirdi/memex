@@ -329,8 +329,12 @@ export async function applyExtraction(itemId: string, extractionId: string): Pro
   return apiFetch<Item>(`/items/${itemId}/apply-extraction/${extractionId}`, { method: 'POST' })
 }
 
-export async function reClassifyItem(itemId: string): Promise<ItemExtraction> {
-  return apiFetch<ItemExtraction>(`/items/${itemId}/re-classify`, { method: 'POST' })
+/** `provider` pins this one run to that AI ("Redo with..."); without it the normal routing from Settings is used. */
+export async function reClassifyItem(itemId: string, provider?: AiProviderId): Promise<ItemExtraction> {
+  return apiFetch<ItemExtraction>(`/items/${itemId}/re-classify`, {
+    method: 'POST',
+    ...(provider ? { body: JSON.stringify({ provider }) } : {}),
+  })
 }
 
 export async function reprocessBulk(filter: 'unreviewed' | 'all' = 'unreviewed'): Promise<{ queued: number }> {
@@ -553,4 +557,21 @@ export function startReembed(id: string): Promise<{ jobId: string }> {
 
 export function fetchIngestJob(jobId: string): Promise<IngestJobStatus> {
   return apiFetch<IngestJobStatus>(`/ingest/jobs/${jobId}`)
+}
+
+// ── Sample data (demo mode) ──────────────────────────────────────────────────
+
+/** How many sample items are loaded (0: none). */
+export async function fetchDemoStatus(): Promise<{ items: number }> {
+  return apiFetch<{ items: number }>('/demo')
+}
+
+/** Loads the sample items (no AI is called). Rejects with the server's sentence when they are already loaded. */
+export async function loadDemoData(): Promise<{ items: number }> {
+  return apiFetch<{ items: number }>('/demo', { method: 'POST' })
+}
+
+/** Removes exactly the sample items and what only they used; the user's own notes are never touched. */
+export async function clearDemoData(): Promise<{ items: number; entities: number; tags: number }> {
+  return apiFetch<{ items: number; entities: number; tags: number }>('/demo', { method: 'DELETE' })
 }

@@ -145,6 +145,35 @@ describe('GET /api/items/:id', () => {
     expect(res.status).toBe(200)
     expect(res.body.id).toBe('item-1')
   })
+
+  it('says which AI produced the current classification', async () => {
+    mockClient([{ rows: [{ ...ITEM_ROW, extraction_model: 'gemini:gemini-3.8-flash' }] }])
+    const res = await request(app).get('/api/items/item-1').set('Authorization', AUTH)
+    expect(res.body.extractionModel).toBe('gemini:gemini-3.8-flash')
+  })
+
+  it('leaves extractionModel out for an item no AI classified', async () => {
+    mockClient([{ rows: [{ ...ITEM_ROW, extraction_model: null }] }])
+    const res = await request(app).get('/api/items/item-1').set('Authorization', AUTH)
+    expect(res.body).not.toHaveProperty('extractionModel')
+  })
+
+  it('does not mark an ordinary item as local-only', async () => {
+    mockClient([{ rows: [{ ...ITEM_ROW, categories: ['Food'], tags: [] }] }])
+    const res = await request(app).get('/api/items/item-1').set('Authorization', AUTH)
+    expect(res.body).not.toHaveProperty('localOnly')
+  })
+
+  it.each([
+    ['filed under Personal', { categories: ['Personal'], tags: [] }, 'category', /Passwords or Personal/],
+    ['tagged private', { categories: ['Tech'], tags: ['private'] }, 'tag', /tagged private/],
+    ['encrypted', { categories: [], tags: [], encrypted: true }, 'encrypted', /encrypted/],
+    ['with a long account number in its text', { categories: ['Tech'], tags: [], content: 'Account number 1234 5678 9012' }, 'content', /account details/],
+  ])('says an item %s never leaves the machine, and why', async (_n, over, reason, message) => {
+    mockClient([{ rows: [{ ...ITEM_ROW, ...over }] }])
+    const res = await request(app).get('/api/items/item-1').set('Authorization', AUTH)
+    expect(res.body.localOnly).toEqual({ reason, message: expect.stringMatching(message) })
+  })
 })
 
 // ── POST /api/items ───────────────────────────────────────────────────────────
@@ -416,6 +445,71 @@ describe('POST /api/items/:id/re-classify', () => {
   })
 })
 
+describe('POST /api/items/:id/re-classify — Redo with a chosen AI', () => {
+  const post = (body?: unknown) =>
+    request(app).post('/api/items/item-1/re-classify').set('Authorization', AUTH).send((body ?? {}) as object)
+  const seed = () => vi.mocked(pool.query)
+    .mockResolvedValueOnce({ rows: [{ title: 'T', content: 'C', categories: ['Food'], tags: [] }] } as any)
+    .mockResolvedValueOnce({ rows: [{ id: 'ext-1' }] } as any)
+    .mockResolvedValueOnce({ rows: [{ id: 'ext-1', model: 'gemini:gemini-3.8-flash', applied: false }] } as any)
+
+  it('pins the call to the provider the user chose', async () => {
+    const { classify } = await import('../services/classifier')
+    vi.mocked(classify).mockClear()
+    seed()
+    const res = await post({ provider: 'gemini' })
+    expect(res.status).toBe(201)
+    expect(vi.mocked(classify).mock.calls[0][1]).toEqual({ cloudSafe: true, provider: 'gemini' })
+  })
+
+  it('uses the normal routing when no provider is given (nothing extra is passed)', async () => {
+    const { classify } = await import('../services/classifier')
+    vi.mocked(classify).mockClear()
+    seed()
+    await post()
+    expect(vi.mocked(classify).mock.calls[0][1]).toEqual({ cloudSafe: true })
+  })
+
+  it.each(['skynet', 42, ''])('rejects the provider %j', async (provider) => {
+    const res = await post({ provider })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/provider must be one of/)
+    expect(pool.query).not.toHaveBeenCalled()
+  })
+
+  it('tells the user why when the chosen cloud provider is not allowed (for example a private item)', async () => {
+    const { classify } = await import('../services/classifier')
+    const { AiProviderError } = await import('../services/ai')
+    vi.mocked(classify).mockRejectedValueOnce(new AiProviderError('gemini', 'blocked', 'Cannot use gemini: this content is marked private and may not leave your machine'))
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [{ title: 'T', content: 'C', categories: ['Personal'], tags: [] }] } as any)
+    const res = await post({ provider: 'gemini' })
+    expect(res.status).toBe(409)
+    expect(res.body).toMatchObject({ kind: 'blocked', provider: 'gemini' })
+    expect(res.body.error).toMatch(/private and may not leave your machine/)
+  })
+
+  it('reports a provider outage as 502 with its message, and a rate limit as 429', async () => {
+    const { classify } = await import('../services/classifier')
+    const { AiProviderError } = await import('../services/ai')
+    vi.mocked(pool.query).mockResolvedValue({ rows: [{ title: 'T', content: 'C', categories: [], tags: [] }] } as any)
+    vi.mocked(classify).mockRejectedValueOnce(new AiProviderError('openai', 'unavailable', 'The server is overloaded'))
+    const down = await post({ provider: 'openai' })
+    expect(down.status).toBe(502)
+    expect(down.body.error).toBe('The server is overloaded')
+    vi.mocked(classify).mockRejectedValueOnce(new AiProviderError('openai', 'rate_limit', 'Slow down'))
+    expect((await post({ provider: 'openai' })).status).toBe(429)
+  })
+
+  it('still answers 500 with a plain message for an unexpected failure', async () => {
+    const { classify } = await import('../services/classifier')
+    vi.mocked(pool.query).mockResolvedValue({ rows: [{ title: 'T', content: 'C', categories: [], tags: [] }] } as any)
+    vi.mocked(classify).mockRejectedValueOnce(new Error('boom'))
+    const res = await post({ provider: 'ollama' })
+    expect(res.status).toBe(500)
+    expect(res.body).toEqual({ error: 'Re-classification failed' })
+  })
+})
+
 describe('POST /api/items/:id/re-classify privacy guard', () => {
   const run = async (itemRow: Record<string, unknown>) => {
     const { classify } = await import('../services/classifier')
@@ -435,6 +529,15 @@ describe('POST /api/items/:id/re-classify privacy guard', () => {
   it('keeps a vault/private item on local models', async () => {
     expect(await run({ title: 'T', content: 'C', categories: ['Passwords'], tags: [] })).toEqual({ cloudSafe: false })
     expect(await run({ title: 'T', content: 'C', encrypted: true })).toEqual({ cloudSafe: false })
+  })
+
+  it('keeps a note on local models when its TEXT looks sensitive, whatever its category or tags', async () => {
+    expect(await run({ title: 'Rent', content: 'Account number 1234 5678 9012', categories: ['Tech'], tags: [] })).toEqual({ cloudSafe: false })
+    expect(await run({ title: 'wifi password: hunter2', content: 'router', categories: ['Tech'], tags: [] })).toEqual({ cloudSafe: false })
+  })
+
+  it('does not hold back a note that only has a number inside a link', async () => {
+    expect(await run({ title: 'Shop', content: 'https://shop.example.com/p/1234567890123456', categories: ['Links'], tags: [] })).toEqual({ cloudSafe: true })
   })
 })
 

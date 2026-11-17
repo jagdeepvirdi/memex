@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('../db/client', () => ({ pool: { query: vi.fn() } }))
-vi.mock('./embedder', () => ({ embedItem: vi.fn().mockResolvedValue([0.1, 0.2]) }))
+vi.mock('./embedder', async (orig) => ({ ...(await orig<typeof import('./embedder')>()), embedItem: vi.fn().mockResolvedValue([0.1, 0.2]) }))
 vi.mock('../lib/logger', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }))
 
 import { pool } from '../db/client'
@@ -100,6 +100,35 @@ describe('embedAndStoreItem (cloud model)', () => {
       .mockResolvedValueOnce({ rows: [] } as any)
     expect(await embedAndStoreItem(ITEM, GEMINI)).toBe('embedded')
     expect(vi.mocked(pool.query).mock.calls[1][1]).toEqual([JSON.stringify([0.1, 0.2]), 'gemini:gemini-embedding-001', 'i1'])
+  })
+})
+
+describe('embedAndStoreItem — text that looks sensitive', () => {
+  const ordinary = { rows: [{ type: 'note', encrypted: false, categories: ['Food'], tags: [] }] }
+  const SENSITIVE = { id: 'i1', title: 'Bank', content: 'Account number 1234 5678 9012 for rent' }
+
+  it('is never sent to a cloud model, even though its category and tags are ordinary', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce(ordinary as never).mockResolvedValueOnce({ rows: [] } as never)
+    expect(await embedAndStoreItem(SENSITIVE, GEMINI)).toBe('skipped')
+    expect(embedItem).not.toHaveBeenCalled()
+    expect(vi.mocked(pool.query).mock.calls[1][0]).toMatch(/embedding_skip = 'private'/)
+  })
+
+  it('is still embedded by the local model: nothing leaves the machine', async () => {
+    expect(await embedAndStoreItem(SENSITIVE)).toBe('embedded')
+    expect(embedItem).toHaveBeenCalled()
+  })
+
+  it('does not hold back an ordinary note, or one that only has a number inside a link', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce(ordinary as never).mockResolvedValueOnce({ rows: [] } as never)
+    const link = { id: 'i2', title: 'Shop', content: 'Saved https://shop.example.com/item/1234567890123456 for later' }
+    expect(await embedAndStoreItem(link, GEMINI)).toBe('embedded')
+  })
+
+  it('judges the text that would be sent: sensitive text beyond the embedding cap is not what the model sees', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce(ordinary as never).mockResolvedValueOnce({ rows: [] } as never)
+    const late = { id: 'i3', title: 'Long note', content: `${'word '.repeat(1500)} account number 1234 5678 9012` }
+    expect(await embedAndStoreItem(late, GEMINI)).toBe('embedded')
   })
 })
 
