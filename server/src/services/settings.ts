@@ -50,7 +50,7 @@ const AI_SETTING_KEYS = [
 ]
 
 export const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5-5'
-export const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash'
+export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash'
 // OpenAI retires model ids regularly (gpt-5-mini shuts down 2026-12-11); the model is editable in Settings.
 export const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini'
 

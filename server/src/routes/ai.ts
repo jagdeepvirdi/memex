@@ -15,7 +15,7 @@ const router = Router()
 // Suggestions only — the Settings UI also lets the user type any model id.
 const SUGGESTED_MODELS: Record<'claude' | 'gemini' | 'openai', string[]> = {
   claude: ['claude-sonnet-5-5', 'claude-opus-5-5', 'claude-haiku-5-5'],
-  gemini: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+  gemini: ['gemini-3.8-flash', 'gemini-2.5-pro'],
   openai: ['gpt-5.4-mini', 'gpt-5.2'],
 }
 

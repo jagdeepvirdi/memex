@@ -179,7 +179,7 @@ Routing logic (`aiChat(prompt, system, format, options, signal, { task, provider
 - A cloud provider is used only if ALL hold: `strict_local_mode` off, `allow_cloud` on, API key set, `cloudSafe !== false`. Otherwise the call stays on Ollama (`ai_model`, default `llama3.2`).
 - An explicit `provider` that can't be honoured is refused with `AiProviderError` (`kind: 'blocked'`), never silently downgraded.
 - Provider failures map to one `AiProviderError` (`rate_limit | timeout | auth | blocked | bad_response | unavailable`). Background calls fall back to Ollama (logged); user-initiated/explicit calls surface the error.
-- Cloud model ids: `claude_model` / `gemini_model` / `openai_model` settings → `CLAUDE_MODEL` / `GEMINI_MODEL` / `OPENAI_MODEL` env → defaults `claude-sonnet-5-5` / `gemini-2.5-flash` / `gpt-5.4-mini` (OpenAI retires ids regularly — check the default is current).
+- Cloud model ids: `claude_model` / `gemini_model` / `openai_model` settings → `CLAUDE_MODEL` / `GEMINI_MODEL` / `OPENAI_MODEL` env → defaults `claude-sonnet-5-5` / `gemini-3.8-flash` / `gpt-5.4-mini` (OpenAI retires ids regularly — check the default is current).
 - OpenAI (`openaiProvider` in `ai.ts`, `openai` npm package, Chat Completions): sends `max_completion_tokens`; for reasoning models (`o*`, `gpt-5*`) it omits `temperature` and raises a small token cap to at least 1024, because hidden reasoning tokens count against the cap and an empty reply would otherwise come back. JSON calls use `response_format: json_object`. Saving an OpenAI key needs migration 024 (widens the `api_keys.provider` CHECK); without it `PUT /api/ai/keys/openai` returns 503 telling the user to run `npm run migrate`. Embeddings still always go through Ollama.
 - `items.extraction_model` records `<provider>:<model>` of the provider that actually answered.
 - Privacy guard `services/cloudSafe.ts`: encrypted/`password` items, top-level `Passwords`/`Personal` categories and `private`/`no-cloud`/`local-only` tags never leave Ollama. Calls that bundle several items (insights, digest, RAG) are pinned local if any item is private.
@@ -402,7 +402,7 @@ OLLAMA_EMBED_MODEL=nomic-embed-text
 ANTHROPIC_API_KEY=
 CLAUDE_MODEL=claude-sonnet-5-5
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
+GEMINI_MODEL=gemini-3.8-flash
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.4-mini
 

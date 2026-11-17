@@ -47,7 +47,7 @@ Repo is PUBLIC: generic fixtures and demo data only, no personal note titles, re
       *(server 1113 tests, client 706 tests, both `tsc` clean; migration 024 applied to the local DB and checked against the real constraint)*
 - [ ] **Live check with a real OpenAI key** (Settings > API keys > Test OpenAI). Everything is verified against mocks only; no key was available. Try both a reasoning model (`gpt-5.4-mini`) and a non-reasoning one.
 - [ ] Optional: custom base URL for OpenAI-compatible endpoints (OpenRouter, Groq, LM Studio)
-- [ ] Fix stale default `gemini-2.5-flash` in code (unavailable to new Google accounts)
+- [x] Fix stale default `gemini-2.5-flash` in code → `gemini-3.8-flash` <!-- done: 2026-11-17 -->
 
 ### L3 — Cloud-only path (no Ollama required)
 **Planned 2026-11-16 (not started).** Goal: a user with no Ollama gets semantic search, Ask, related items and duplicate detection from Gemini or OpenAI embeddings, without silent corruption and without sending private items out.
