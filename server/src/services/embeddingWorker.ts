@@ -1,5 +1,5 @@
 import { pool } from '../db/client.js';
-import { embedItem } from './embedder.js';
+import { embedAndStoreItem } from './embeddingService.js';
 import logger from '../lib/logger.js'
 
 let isRunning = false;
@@ -18,23 +18,15 @@ export async function startEmbeddingWorker() {
     try {
       // Find items without embeddings (limit to 10 at a time to avoid heavy load)
       const { rows } = await pool.query(
-        'SELECT id, title, content FROM items WHERE embedding IS NULL AND deleted_at IS NULL LIMIT 10'
+        'SELECT id, title, content FROM items WHERE embedding IS NULL AND embedding_skip IS NULL AND deleted_at IS NULL LIMIT 10'
       );
 
       if (rows.length > 0) {
         logger.info(`Generating missing embeddings for ${rows.length} items`)
         
         for (const row of rows) {
-          try {
-            const vector = await embedItem(row.title, row.content);
-            await pool.query('UPDATE items SET embedding = $1 WHERE id = $2', [
-              JSON.stringify(vector),
-              row.id
-            ]);
-            logger.info({ id: row.id }, 'Embedding generated')
-          } catch (err) {
-            logger.error(err, `Failed to embed ${row.id}`)
-          }
+          const outcome = await embedAndStoreItem(row);
+          if (outcome === 'embedded') logger.info({ id: row.id }, 'Embedding generated')
         }
       }
     } catch (err) {

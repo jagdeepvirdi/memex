@@ -1,5 +1,6 @@
 import { PoolClient } from 'pg'
 import { embedQuery } from './embedder.js'
+import { activeEmbeddingId } from './embeddingService.js'
 import type { Entity, EntityType, ItemType, StructuredData, MediaData, BookData, PlaceData, StockData } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 import { repoSlugFromStructured } from './githubRepo.js'
@@ -39,11 +40,11 @@ export async function getOrCreateEntity(
   // ON CONFLICT: two items created concurrently (bulk import) may both miss the SELECT above; the loser
   // must get the winner's row, not a unique violation that would abort the surrounding transaction.
   const { rows: newRows } = await client.query(
-    `INSERT INTO entities (name, type, embedding)
-     VALUES ($1, $2, $3)
+    `INSERT INTO entities (name, type, embedding, embedding_model)
+     VALUES ($1, $2, $3, $4)
      ON CONFLICT (name, type) DO UPDATE SET updated_at = NOW()
      RETURNING *`,
-    [normalized, type, embedding ? JSON.stringify(embedding) : null]
+    [normalized, type, embedding ? JSON.stringify(embedding) : null, embedding ? activeEmbeddingId() : null]
   );
 
   return newRows[0];

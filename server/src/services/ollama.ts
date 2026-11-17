@@ -1,6 +1,6 @@
+import { OLLAMA_EMBED_MODEL as EMBED_MODEL } from '../lib/embeddingModel.js'
 const OLLAMA_BASE = process.env.OLLAMA_URL ?? 'http://localhost:11434'
 const CHAT_MODEL = process.env.OLLAMA_CHAT_MODEL ?? 'llama3.2'
-const EMBED_MODEL = process.env.OLLAMA_EMBED_MODEL ?? 'nomic-embed-text'
 
 // Safety bounds for chat calls; callers may override num_predict via `options` or pass their own signal.
 const NUM_PREDICT = Number(process.env.OLLAMA_NUM_PREDICT ?? 2048)

@@ -1,0 +1,117 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest'
+
+vi.mock('../db/client', () => ({ pool: { query: vi.fn() } }))
+vi.mock('./embedder', () => ({ embedItem: vi.fn().mockResolvedValue([0.1, 0.2]) }))
+vi.mock('../lib/logger', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }))
+
+import { pool } from '../db/client'
+import { embedItem } from './embedder'
+import {
+  activeEmbedding, activeEmbeddingId, embeddingAllowed, embedAndStoreItem, clearEmbeddingSkip,
+  type ActiveEmbedding,
+} from './embeddingService'
+
+const ITEM = { id: 'i1', title: 'Pad thai', content: 'Noodles' }
+const GEMINI: ActiveEmbedding = { provider: 'gemini', model: 'gemini-embedding-001', id: 'gemini:gemini-embedding-001' }
+
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(embedItem).mockResolvedValue([0.1, 0.2])
+  vi.mocked(pool.query).mockResolvedValue({ rows: [] } as any)
+})
+
+describe('activeEmbedding', () => {
+  it('is the local nomic model by default', () => {
+    expect(activeEmbedding()).toMatchObject({ provider: 'ollama', model: 'nomic-embed-text' })
+    expect(activeEmbeddingId()).toBe('ollama:nomic-embed-text')
+  })
+})
+
+describe('embeddingAllowed', () => {
+  it('lets a local model embed anything, even private items', () => {
+    expect(embeddingAllowed(activeEmbedding(), { encrypted: true })).toBe(true)
+    expect(embeddingAllowed(activeEmbedding(), { tags: ['private'] })).toBe(true)
+  })
+
+  it.each([
+    ['an encrypted item', { encrypted: true }],
+    ['a password item', { type: 'password' }],
+    ['a Passwords category', { categories: ['Passwords'] }],
+    ['a Personal category', { categories: ['Personal', 'Numbers'] }],
+    ['a private tag', { tags: ['Private'] }],
+    ['a local-only tag', { tags: ['local-only'] }],
+  ])('keeps %s away from a cloud model', (_name, item) => {
+    expect(embeddingAllowed(GEMINI, item)).toBe(false)
+  })
+
+  it('lets an ordinary item go to a cloud model', () => {
+    expect(embeddingAllowed(GEMINI, { type: 'recipe', categories: ['Food'], tags: ['dinner'] })).toBe(true)
+  })
+})
+
+describe('embedAndStoreItem (local model)', () => {
+  it('stores the vector with the model that made it and clears any skip marker', async () => {
+    expect(await embedAndStoreItem(ITEM)).toBe('embedded')
+    expect(embedItem).toHaveBeenCalledWith('Pad thai', 'Noodles')
+    const [sql, params] = vi.mocked(pool.query).mock.calls[0]
+    expect(sql).toMatch(/SET embedding = \$1, embedding_model = \$2, embedding_skip = NULL/)
+    expect(params).toEqual([JSON.stringify([0.1, 0.2]), 'ollama:nomic-embed-text', 'i1'])
+  })
+
+  it('makes exactly one query (no privacy lookup is needed for a local model)', async () => {
+    await embedAndStoreItem(ITEM)
+    expect(pool.query).toHaveBeenCalledTimes(1)
+  })
+
+  it('never throws: a failed embed returns "failed" and writes nothing, so the worker retries later', async () => {
+    vi.mocked(embedItem).mockRejectedValueOnce(new Error('ollama down'))
+    expect(await embedAndStoreItem(ITEM)).toBe('failed')
+    expect(pool.query).not.toHaveBeenCalled()
+  })
+
+  it('never throws when the database write fails', async () => {
+    vi.mocked(pool.query).mockRejectedValueOnce(new Error('db down'))
+    expect(await embedAndStoreItem(ITEM)).toBe('failed')
+  })
+})
+
+describe('embedAndStoreItem (cloud model)', () => {
+  it('marks a private item skipped, clears any old vector, and never calls the embedding model', async () => {
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [{ type: 'note', encrypted: false, categories: ['Food'], tags: ['private'] }] } as any)
+      .mockResolvedValueOnce({ rows: [] } as any)
+    expect(await embedAndStoreItem(ITEM, GEMINI)).toBe('skipped')
+    expect(embedItem).not.toHaveBeenCalled()
+    const [sql, params] = vi.mocked(pool.query).mock.calls[1]
+    expect(sql).toMatch(/embedding = NULL, embedding_model = NULL, embedding_skip = 'private'/)
+    expect(params).toEqual(['i1'])
+  })
+
+  it('treats an item it cannot read as private', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any).mockResolvedValueOnce({ rows: [] } as any)
+    expect(await embedAndStoreItem(ITEM, GEMINI)).toBe('skipped')
+    expect(embedItem).not.toHaveBeenCalled()
+  })
+
+  it('embeds an ordinary item and records the cloud model id', async () => {
+    vi.mocked(pool.query)
+      .mockResolvedValueOnce({ rows: [{ type: 'recipe', encrypted: false, categories: ['Food'], tags: [] }] } as any)
+      .mockResolvedValueOnce({ rows: [] } as any)
+    expect(await embedAndStoreItem(ITEM, GEMINI)).toBe('embedded')
+    expect(vi.mocked(pool.query).mock.calls[1][1]).toEqual([JSON.stringify([0.1, 0.2]), 'gemini:gemini-embedding-001', 'i1'])
+  })
+})
+
+describe('clearEmbeddingSkip', () => {
+  it('only touches an item that has no vector', async () => {
+    await clearEmbeddingSkip('i1')
+    const [sql, params] = vi.mocked(pool.query).mock.calls[0]
+    expect(sql).toMatch(/SET embedding_skip = NULL WHERE id = \$1 AND embedding IS NULL/)
+    expect(params).toEqual(['i1'])
+  })
+
+  it('swallows a database error', async () => {
+    vi.mocked(pool.query).mockRejectedValueOnce(new Error('db down'))
+    await expect(clearEmbeddingSkip('i1')).resolves.toBeUndefined()
+  })
+})

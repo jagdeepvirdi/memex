@@ -406,6 +406,8 @@ export interface AskRequest {
 export interface AskResponse {
   answer: string
   sources: Item[]
+  /** false when the notes were found by keyword only (no usable embeddings), so recall may be weaker. */
+  semantic?: boolean
 }
 
 // ── Rediscovery ───────────────────────────────────────────────────────────────

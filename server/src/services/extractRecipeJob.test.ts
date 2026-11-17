@@ -104,7 +104,7 @@ describe('runExtractRecipeJob — a recipe is found', () => {
   it('stores the embedding when it works', async () => {
     await runExtractRecipeJob(INPUT)
     await vi.waitFor(() => expect(vi.mocked(pool.query).mock.calls.some(c => /UPDATE items SET embedding/.test(String(c[0])))).toBe(true))
-    expect(vi.mocked(pool.query).mock.calls.find(c => /SET embedding/.test(String(c[0])))![1]).toEqual([JSON.stringify([0.1, 0.2]), 'rec-1'])
+    expect(vi.mocked(pool.query).mock.calls.find(c => /SET embedding/.test(String(c[0])))![1]).toEqual([JSON.stringify([0.1, 0.2]), 'ollama:nomic-embed-text', 'rec-1'])
   })
 })
 

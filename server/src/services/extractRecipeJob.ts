@@ -12,7 +12,7 @@ import { registerJobAbort, unregisterJob } from './jobControl.js'
 import { AI_JOB_TIMEOUT_MS } from './actionJobs.js'
 import { createItem } from '../db/helpers.js'
 import { mapToCategories } from './classifier.js'
-import { embedItem } from './embedder.js'
+import { embedAndStoreItem } from './embeddingService.js'
 import { findYoutubeUrl } from './youtubeUrl.js'
 import logger from '../lib/logger.js'
 import type { AiCallOptions } from './ai.js'
@@ -110,9 +110,7 @@ export async function runExtractRecipeJob(input: ExtractRecipeJobInput): Promise
       client.release()
     }
 
-    embedItem(recipeTitle, recipeContent)
-      .then(vector => pool.query('UPDATE items SET embedding = $1 WHERE id = $2', [JSON.stringify(vector), recipeId]))
-      .catch(err => logger.error(err, `Embedding failed for ${recipeId}`))
+    void embedAndStoreItem({ id: recipeId, title: recipeTitle, content: recipeContent })
 
     await completeJob(jobId, {
       itemId, found: true, recipeId, confidence: result.confidence, model: result.model,

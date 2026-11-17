@@ -1,4 +1,5 @@
 import { pool } from '../db/client.js'
+import { activeEmbeddingId } from './embeddingService.js'
 import type { ItemType } from '../../../shared/types.js'
 import { normalizeSourceUrl, sameSourceUrl, isBareLinkTo } from './urlNormalize.js'
 
@@ -80,10 +81,11 @@ export async function findSimilarItems(
        FROM items
        WHERE deleted_at IS NULL
          AND embedding IS NOT NULL
+         AND embedding_model = $4
          AND (1 - (embedding <=> $1::vector)) > $2
        ORDER BY similarity DESC
        LIMIT $3`,
-      [vectorStr, SIMILARITY_THRESHOLD, limit],
+      [vectorStr, SIMILARITY_THRESHOLD, limit, activeEmbeddingId()],
     )
 
     return rows

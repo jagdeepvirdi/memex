@@ -24,7 +24,7 @@ import {
   reprocessBulkItems,
   type ItemRow,
 } from '../services/itemService.js'
-import { embedItem } from '../services/embedder.js'
+import { embedAndStoreItem, clearEmbeddingSkip, activeEmbeddingId } from '../services/embeddingService.js'
 import { extractAndLinkEntities } from '../services/entityService.js'
 import { generateDigest } from '../services/digestService.js'
 import { scrapeUrl } from '../services/scraper.js'
@@ -198,14 +198,7 @@ router.post('/', async (req, res) => {
     const item = await fetchItem(client, itemId)
 
     if (item) {
-      embedItem(item.title, item.content)
-        .then((vector) =>
-          pool.query('UPDATE items SET embedding = $1 WHERE id = $2', [
-            JSON.stringify(vector),
-            itemId,
-          ]),
-        )
-        .catch((err) => logger.error(err, `Embedding failed for ${itemId}`))
+      void embedAndStoreItem(item)
     }
 
     res.status(201).json(item)
@@ -611,15 +604,18 @@ router.get('/export/obsidian', async (_req, res) => {
 
 router.get('/:id/related', async (req, res) => {
   try {
-    const { rows: itemRows } = await pool.query('SELECT embedding FROM items WHERE id = $1 AND deleted_at IS NULL', [req.params.id])
+    // Only vectors from the active embedding model are comparable; a vector from another model gives no related items.
+    const activeModel = activeEmbeddingId()
+    const { rows: itemRows } = await pool.query('SELECT embedding, embedding_model FROM items WHERE id = $1 AND deleted_at IS NULL', [req.params.id])
     if (itemRows.length === 0 || !itemRows[0].embedding) return res.json([])
+    if (itemRows[0].embedding_model && itemRows[0].embedding_model !== activeModel) return res.json([])
     const embedding = itemRows[0].embedding
     const sql = buildItemQuery({
-      where: 'i.id != $1 AND i.deleted_at IS NULL AND i.embedding IS NOT NULL',
+      where: 'i.id != $1 AND i.deleted_at IS NULL AND i.embedding IS NOT NULL AND i.embedding_model = $3',
       orderBy: 'i.embedding <=> $2::vector',
       limit: '5'
     })
-    const { rows } = await pool.query<ItemRow>(sql, [req.params.id, JSON.stringify(embedding)])
+    const { rows } = await pool.query<ItemRow>(sql, [req.params.id, JSON.stringify(embedding), activeModel])
     res.json(rows.map(rowToItem))
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch related items' })
@@ -1206,14 +1202,10 @@ router.put('/:id', async (req, res) => {
     const item = await fetchItem(client, req.params.id)
 
     if (content !== undefined && item) {
-      embedItem(item.title, item.content)
-        .then((vector) =>
-          pool.query('UPDATE items SET embedding = $1 WHERE id = $2', [
-            JSON.stringify(vector),
-            req.params.id,
-          ]),
-        )
-        .catch((err) => logger.error(err, `Re-embed failed for ${req.params.id}`))
+      void embedAndStoreItem(item)
+    } else if ((tags !== undefined || categories !== undefined) && item) {
+      // Tags/categories can decide whether an item may be sent to a cloud embedding model: let a skipped item be re-checked.
+      void clearEmbeddingSkip(item.id)
     }
 
     res.json(item)

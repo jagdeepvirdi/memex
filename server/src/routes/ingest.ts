@@ -13,7 +13,8 @@ import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } fro
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
 import { transcribeAudio, checkWhisperInstalled, isAudioMime } from '../services/whisperService.js';
 import { findSimilarItems, findItemsBySourceUrl, mergeSimilar } from '../services/duplicateService.js';
-import { embedQuery, embedItem } from '../services/embedder.js';
+import { embedQuery } from '../services/embedder.js';
+import { embedAndStoreItem } from '../services/embeddingService.js';
 import { pool } from '../db/client.js';
 import { setItemTags, createItem } from '../db/helpers.js';
 import { extractAndLinkEntities } from '../services/entityService.js';
@@ -568,9 +569,7 @@ router.post('/quicksave', ingestLimiter, async (req, res) => {
     }
 
     // Async: embed in background
-    embedItem(savedItem.title, savedItem.content)
-      .then(v => pool.query('UPDATE items SET embedding=$1 WHERE id=$2', [JSON.stringify(v), savedItem.id]))
-      .catch(() => {});
+    void embedAndStoreItem(savedItem);
 
     res.json({
       item: { id: savedItem.id, title: savedItem.title, type: savedItem.type },

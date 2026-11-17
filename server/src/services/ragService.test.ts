@@ -35,7 +35,8 @@ describe('askKnowledge', () => {
   })
 
   it('short-circuits with a canned answer and no LLM call when nothing matches', async () => {
-    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)
+    // semantic search finds nothing, then the keyword fallback finds nothing either
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any).mockResolvedValueOnce({ rows: [] } as any)
     const r = await askKnowledge('something obscure')
     expect(r.sources).toEqual([])
     expect(r.answer).toMatch(/couldn't find|could not find/i)

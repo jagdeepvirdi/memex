@@ -70,7 +70,7 @@ describe('getOrCreateEntity — identifiers', () => {
     client.query.mockResolvedValueOnce({ rows: [] }).mockResolvedValueOnce({ rows: [{ id: 'e9' }] })
     await getOrCreateEntity(client, 'a/b', 'other', { embed: false })
     expect(embedQuery).not.toHaveBeenCalled()
-    expect(client.query.mock.calls[1][1]).toEqual(['a/b', 'other', null])
+    expect(client.query.mock.calls[1][1]).toEqual(['a/b', 'other', null, null]) // no vector, so no embedding_model either
   })
 
   it('inserts with ON CONFLICT so a concurrent create cannot abort the transaction', async () => {

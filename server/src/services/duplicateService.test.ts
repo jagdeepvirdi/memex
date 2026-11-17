@@ -23,6 +23,14 @@ describe('findSimilarItems', () => {
     expect(r[0].similarity).toBe(0.95)
   })
 
+  it('compares only against vectors made by the active embedding model', async () => {
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)
+    await findSimilarItems([0.1, 0.2])
+    const [sql, params] = vi.mocked(pool.query).mock.calls[0]
+    expect(String(sql)).toMatch(/embedding_model = \$4/)
+    expect((params as unknown[])[3]).toBe('ollama:nomic-embed-text')
+  })
+
   it('passes the similarity threshold and limit to the query', async () => {
     vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)
     await findSimilarItems([0.1, 0.2], 5)

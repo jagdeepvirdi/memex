@@ -110,6 +110,8 @@ memex/
 │   │   ├── classifier.ts      # Auto-classification — JSON mode, enum trick, confidence, multi-entity
 │   │   ├── summarizer.ts      # URL/video summarization via Ollama
 │   │   ├── embedder.ts        # nomic-embed-text embeddings
+│   │   ├── embeddingService.ts  # single vector writer + active model + privacy gate
+│   │   ├── retrievalService.ts  # hybrid search/Ask retrieval, keyword fallback
 │   │   ├── recipeParser.ts    # Recipe extraction → structured schema
 │   │   ├── keepImporter.ts    # Google Keep Takeout ZIP parser
 │   │   ├── scraper.ts         # Jina URL fetcher
@@ -184,6 +186,13 @@ Routing logic (`aiChat(prompt, system, format, options, signal, { task, provider
 - `items.extraction_model` records `<provider>:<model>` of the provider that actually answered.
 - Privacy guard `services/cloudSafe.ts`: encrypted/`password` items, top-level `Passwords`/`Personal` categories and `private`/`no-cloud`/`local-only` tags never leave Ollama. Calls that bundle several items (insights, digest, RAG) are pinned local if any item is private.
 - `GET /api/ai/providers` lists providers + `configured` flags + models (never keys); `POST /api/ai/test {provider}` does one tiny round-trip.
+
+### Embedding bookkeeping (migration 025)
+- Every stored vector records the model that made it: `items.embedding_model` / `entities.embedding_model` hold `'<provider>:<model>'` (existing rows were backfilled as `ollama:nomic-embed-text`). `items.embedding_skip = 'private'` marks an item deliberately not embedded (only used once a cloud embedding model is active).
+- `services/embeddingService.ts` is the **only** writer of `items.embedding` (`embedAndStoreItem`, never throws; `clearEmbeddingSkip` re-opens a skipped item when its tags/categories change). `activeEmbedding()` is the one place that names the active model (today always local Ollama). A cloud embedding model may only see items that pass `cloudSafe()`; otherwise the item is skipped, never retried by the worker.
+- Every similarity query (search, Ask, related items, graph, duplicate check, `resolveEntities`) filters to the active model, because two models' 768-dim vectors compare without any error and give meaningless scores.
+- `services/retrievalService.ts` runs search + Ask retrieval: 70% vector + 30% full-text, unembedded or other-model items score 0 for the semantic part (a NULL rank used to sort FIRST in DESC order), and when the query cannot be embedded it falls back to keyword matching. `POST /api/search` and `/api/ask` return `semantic: false` for keyword-only results.
+- `retrievalService.realdb.test.ts` is opt-in (`MEMEX_REALDB_TEST=1`): it checks the ranking SQL against the real Postgres inside a rolled-back transaction.
 
 ## AI Classification (100% local, zero cost)
 Classification uses JSON mode + temperature 0 + enum trick for reliability:

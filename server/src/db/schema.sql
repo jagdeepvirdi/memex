@@ -1,4 +1,4 @@
--- Memex — canonical schema reference (reflects all 24 migrations)
+-- Memex — canonical schema reference (reflects all 25 migrations)
 -- This file is documentation only. The live DB is built by running migrations in order:
 --   npm run migrate
 -- Do not run this file directly against the DB.
@@ -46,6 +46,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS categories_child_uniq
 --   016: intent
 --   018: priority
 --   020: priority CHECK constraint
+--   025: embedding_model, embedding_skip
 --   022: derived_from
 CREATE TABLE IF NOT EXISTS items (
   id               UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -57,7 +58,9 @@ CREATE TABLE IF NOT EXISTS items (
   source           item_source NOT NULL DEFAULT 'manual',
   source_url       TEXT,
   content_hash     TEXT,                       -- MD5 for deduplication on Keep import
-  embedding        vector(768),                -- nomic-embed-text (768 dims)
+  embedding        vector(768),                -- 768 dims; which model made it is in embedding_model
+  embedding_model  TEXT,                       -- 025: '<provider>:<model>' behind `embedding`
+  embedding_skip   TEXT,                       -- 025: why no vector was made ('private' = must not leave this machine)
   encrypted        BOOLEAN     NOT NULL DEFAULT FALSE,
   reviewed         BOOLEAN     NOT NULL DEFAULT FALSE,  -- 005: user confirmed AI classification
   confidence       FLOAT,                      -- 008: AI self-assessed extraction quality 0-100
@@ -142,6 +145,7 @@ CREATE TABLE IF NOT EXISTS entities (
   name        TEXT        NOT NULL,
   type        entity_type NOT NULL DEFAULT 'other',
   embedding   vector(768),
+  embedding_model TEXT,                  -- 025
   metadata    JSONB       NOT NULL DEFAULT '{}',
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()

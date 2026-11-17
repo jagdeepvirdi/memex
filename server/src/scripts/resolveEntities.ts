@@ -8,9 +8,9 @@ async function resolve() {
     // Find similar pairs (0.92 cosine similarity threshold)
     const mergePairsSql = `
       WITH indexed_entities AS (
-        SELECT id, name, type, embedding 
+        SELECT id, name, type, embedding, embedding_model
         FROM entities 
-        WHERE embedding IS NOT NULL
+        WHERE embedding IS NOT NULL AND embedding_model IS NOT NULL
       )
       SELECT 
         a.id as id1, b.id as id2, 
@@ -18,6 +18,7 @@ async function resolve() {
         (1 - (a.embedding <=> b.embedding)) as score
       FROM indexed_entities a
       JOIN indexed_entities b ON a.id < b.id AND a.type = b.type
+        AND a.embedding_model = b.embedding_model  -- vectors from different models are not comparable
       WHERE (1 - (a.embedding <=> b.embedding)) > 0.92
     `
     const { rows: pairs } = await client.query(mergePairsSql)
