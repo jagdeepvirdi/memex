@@ -6,7 +6,7 @@ We love your contributions! Whether it's fixing a bug, adding a new AI classifie
 
 1. **Clone the repo:**
    ```bash
-   git clone https://github.com/yourusername/memex.git
+   git clone https://github.com/jagdeepvirdi/memex.git
    cd memex
    ```
 2. **Follow the Quick Start** in [README.md](README.md) to get Docker, Ollama, and the dev servers running.

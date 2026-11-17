@@ -6,6 +6,7 @@ import jwt from 'jsonwebtoken'
 import express from 'express'
 import helmet from 'helmet'
 import cors from 'cors'
+import { corsDelegate, parseAllowedOrigins } from './lib/corsPolicy.js'
 import { pool } from './db/client.js'
 import type { Request, Response, NextFunction } from 'express'
 
@@ -68,10 +69,9 @@ app.use(helmet({
     },
   },
 }))
-// CORS is intentionally open: Memex is a local-first, single-user tool that runs
-// on the user's own machine (localhost). If you ever deploy it to a shared server,
-// restrict this to specific origins, e.g. cors({ origin: 'https://your-host' }).
-app.use(cors({ exposedHeaders: [REFRESH_HEADER] }))
+// CORS: only the bookmarklet's one route is open to every site; everything else answers cross-origin only to localhost and to
+// MEMEX_CORS_ORIGINS (see lib/corsPolicy.ts). The web app itself is same-origin, so it never needs this.
+app.use(cors(corsDelegate(parseAllowedOrigins(process.env.MEMEX_CORS_ORIGINS), [REFRESH_HEADER])))
 app.use(express.json({ limit: '50mb' }))
 
 // ── Auth Middleware ──────────────────────────────────────────────────────────
@@ -184,8 +184,11 @@ ${err.message}
     process.exit(1)
   }
 
-  app.listen(PORT, () => {
-    logger.info(`Memex server listening on http://localhost:${PORT}`)
+  // Loopback by default: a source install is a single-user tool and should not be reachable from the network. The Docker
+  // image sets HOST=0.0.0.0 (the container's own interface; the compose file publishes it on 127.0.0.1 only).
+  const HOST = process.env.HOST || '127.0.0.1'
+  app.listen(Number(PORT), HOST, () => {
+    logger.info(`Memex server listening on http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}`)
 
     // Start background workers. The active embedding model must be known before the worker embeds anything.
     loadEmbeddingConfig()

@@ -4,6 +4,32 @@ All notable changes to Memex are documented here.
 
 ---
 
+## [Unreleased]
+
+### Added
+- **Five AI providers.** Ollama (local, default) plus Claude, Gemini, OpenAI and Groq, each opt-in (a key, a provider choice, cloud consent), with per-task overrides. Keys can be saved in Settings (encrypted, write-only).
+- **Choose your embedding model** (Ollama, Gemini or OpenAI) with a read-only estimate, a resumable re-embed job, per-model similarity thresholds, calibration, and a safe entity merge.
+- **One-command Docker install** (`docker compose up -d`), startup checks with readable errors, `GET /api/health/status`, opt-in auto-migrate (on in Docker), and a first-run AI setup screen. Login no longer needs Ollama.
+- **Privacy guard on text.** `cloudSafe()` now also keeps text that looks like account details on your machine, for classification, Ask, insights, digest and embeddings.
+- **Which AI answered.** A badge on every item, a "Stays on this machine" chip with the reason, and "Re-classify" with a provider picker.
+- **Sample data.** About forty made-up items with a "Demo mode" tag and a one-click clear that never touches your own notes.
+- **Backup and restore.** `npm run backup` / `npm run restore -- <file> --yes`, with a refusal of unrelated or truncated files and a safety copy first.
+- `SECURITY.md`, issue and PR templates, and a CI job that builds the Docker image and runs `scripts/smoke-test.sh`.
+
+### Security
+- **Loopback by default.** The server listens on `127.0.0.1`; Docker publishes the app and Postgres on `127.0.0.1` only (`MEMEX_BIND` changes it). Postgres was previously reachable from the network with a default password.
+- **CORS tightened.** Only the bookmarklet's single route accepts any website; everything else allows localhost and `MEMEX_CORS_ORIGINS`.
+- **Account rules.** New accounts need a 10+ character password (at most 72 bytes), a valid email and string inputs; bcrypt cost raised from 10 to 12. Existing accounts are unaffected.
+- **Dependencies.** Fixed one critical and five high advisories on the server (`proxy-addr`, `body-parser`, `form-data`, `ip-address`, `multer`, `adm-zip`) and the Tiptap/ProseMirror paste XSS on the client. Open: `zod` and `react-router-dom` (both need a major version).
+- Secrets scan of the whole git history: no keys, `.env` files or backups were ever committed.
+
+### Fixed
+- Saving a note no longer fails when the embedding service is unreachable (the "you may already have this" hint is skipped instead).
+- Creating the first account now lands on the welcome flow instead of the Dashboard.
+- The public health endpoint no longer shows the database address.
+
+---
+
 ## [1.0.0] — 2026-06-09
 
 First public release. Everything below was built for this version.

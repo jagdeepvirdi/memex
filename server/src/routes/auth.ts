@@ -68,11 +68,27 @@ router.get('/status', async (_req, res) => {
   }
 })
 
-router.post('/setup', authLimiter, async (req, res) => {
-  const { email, password } = req.body
+/** Shortest password accepted when the account is created (existing accounts are not affected). */
+export const MIN_PASSWORD_LENGTH = 10
+/** bcrypt only reads the first 72 bytes, so a longer password would be silently cut: refuse it instead. */
+export const MAX_PASSWORD_BYTES = 72
+const BCRYPT_COST = 12
 
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required' })
+/** A sentence for the first problem with a new account's email/password, or null. */
+export function describeAccountProblem(email: unknown, password: unknown): string | null {
+  if (typeof email !== 'string' || typeof password !== 'string' || !email || !password) return 'Email and password are required'
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254) return 'Enter a valid email address'
+  if (password.length < MIN_PASSWORD_LENGTH) return `Use a password of at least ${MIN_PASSWORD_LENGTH} characters`
+  if (Buffer.byteLength(password, 'utf8') > MAX_PASSWORD_BYTES) return `Use a password of at most ${MAX_PASSWORD_BYTES} bytes (long or non-Latin passwords count more than one byte per character)`
+  return null
+}
+
+router.post('/setup', authLimiter, async (req, res) => {
+  const { email, password } = req.body ?? {}
+
+  const problem = describeAccountProblem(email, password)
+  if (problem) {
+    return res.status(400).json({ error: problem })
   }
 
   try {
@@ -81,7 +97,7 @@ router.post('/setup', authLimiter, async (req, res) => {
       return res.status(403).json({ error: 'Setup already complete' })
     }
 
-    const hash = await bcrypt.hash(password, 10)
+    const hash = await bcrypt.hash(password, BCRYPT_COST)
     const { rows } = await pool.query(
       'INSERT INTO users (email, password_hash) VALUES ($1, $2) RETURNING id, email',
       [email, hash]

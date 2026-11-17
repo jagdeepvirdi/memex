@@ -2,6 +2,22 @@
 
 A self-hosted knowledge management app that ingests, auto-classifies, and organizes everything you save — notes, recipes, movies, books, places, links, files, voice memos, and more. Runs on your machine with local AI (Ollama) by default. Gemini, OpenAI, Claude or Groq are optional and used only with your key, your choice and your consent.
 
+## Try it in two minutes
+
+You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) and nothing else.
+
+```bash
+git clone https://github.com/jagdeepvirdi/memex.git && cd memex
+cp .env.example .env        # open it and set JWT_SECRET (the command that makes one is in the file)
+docker compose up -d        # Postgres + the app; the first build takes a few minutes
+```
+
+Open [http://localhost:3002](http://localhost:3002), create your account (10+ characters), and on the first screen pick local AI or a cloud key. Then **Settings > Library > Load sample data** gives you about forty made-up items to look around in, and one click removes them again. No AI is needed for that.
+
+Everything is reachable from this computer only by default. More detail, local AI and cloud-only setups are under [Quick Start](#quick-start).
+
+---
+
 ## What it does
 
 - **Import from Google Keep** — upload a Takeout ZIP; every note saves instantly and is classified in the background with a live sidebar ETA
@@ -135,6 +151,15 @@ What to expect:
 | Image understanding | Ollama vision model | not available |
 
 You can choose a provider per task (Settings → AI → Advanced), for example Gemini for **Ask** and Ollama for everything else.
+
+### Privacy model
+
+- **Your notes live in your own Postgres.** No account with us, no telemetry.
+- **Local AI by default.** With Ollama nothing is sent anywhere. A cloud AI (Gemini, OpenAI, Claude, Groq) is used only after you add a key, choose it, and turn on cloud consent, and never in Strict Local Mode.
+- **A guard sits in front of every cloud call.** These never leave your machine: vault and password items, anything filed under Passwords or Personal, anything tagged `private`, `no-cloud` or `local-only`, and text that looks like account details (card or account numbers, CVV, Aadhaar, "PIN: ...", a home address). It is a heuristic, not a promise: if something must never leave, tag it `private` or put it in the vault.
+- **You can see what happened.** Each item shows which AI classified it ("Classified by Gemini" or "Classified locally") and, when it never goes to the cloud, why. "Re-classify" lets you redo one item with a different AI; if that choice is not allowed (no key, a private item) it says why instead of quietly using another model.
+- **The vault is encrypted in your browser.** The server stores ciphertext only; the master password cannot be recovered.
+- **Reachable from this computer only** by default (the server and Docker bind to `127.0.0.1`). See [SECURITY.md](SECURITY.md) for what is and is not protected, and how to report a problem.
 
 ### Changing the embedding model later
 
@@ -437,6 +462,33 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
 1. `tsc --noEmit` — type-check both packages
 2. `npm test` — full test suite
 3. `npm run coverage` — coverage with threshold gate
+4. `scripts/smoke-test.sh` — builds the Docker image, starts it, and checks first-run setup, login, sample data, CORS and that the ports are loopback-only (run it yourself with `bash scripts/smoke-test.sh`)
+
+---
+
+## FAQ
+
+**Do I need Ollama?** No. It is the default and keeps everything on your machine, but a cloud-only install works (see [Path B](#path-b-cloud-only-no-ollama)).
+
+**Is my data sent to Google, OpenAI, Anthropic or Groq?** Only if you add that provider's key, choose it in Settings, and turn on cloud consent. Even then the privacy guard keeps private items home, and "Review change" shows what a re-embed would send before it does.
+
+**Can I use it from my phone or another computer?** Not directly: it is bound to this machine on purpose. Put a reverse proxy with HTTPS in front, set `MEMEX_BIND` (and `MEMEX_CORS_ORIGINS` if the page lives on another origin), and install the web app (PWA). The login protects the API; the proxy protects the traffic.
+
+**I forgot my vault master password.** It cannot be recovered; that is what makes the vault private. Vault items stay locked. You can reset the vault (Settings > Vault), which deletes its items.
+
+**I forgot my login password.** There is no email reset (there is no email). Stop the app and create a new account by clearing the `users` table (`docker compose exec postgres psql -U memex -c "DELETE FROM users"`), then sign up again; your notes are kept.
+
+**How do I back up, or move to a new computer?** `npm run backup`, copy the file, then `npm run restore -- <file> --yes` on the new machine. Keep your `.env` `JWT_SECRET` and your vault master password too (see [Backup and restore](#backup-and-restore)).
+
+**Search says "keyword only".** The active embedding model cannot be reached (Ollama is off, or a cloud key is missing), so Memex falls back to matching words. Fix the model in Settings > AI > Search & embeddings.
+
+**Saving a note fails with "Failed to classify text".** The AI is not reachable: start Ollama, or pick a cloud provider and switch embeddings to the cloud first (the order matters; see Path B).
+
+**The page looks old after an update.** Reload once or twice: the installed web app updates itself in the background.
+
+**Does it work on macOS and Linux?** It uses plain Docker features and the compose file has the Linux host mapping, but only Windows has been run so far. See [Platform notes](#platform-notes) and tell us what you find.
+
+**Can I contribute?** Yes: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately (see [SECURITY.md](SECURITY.md)).
 
 ---
 
@@ -448,4 +500,4 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
 
 ---
 
-*Runs on your machine. No subscriptions. No telemetry. Nothing leaves it unless you turn on a cloud provider.*
+MIT licensed (see [LICENSE](LICENSE)). *Runs on your machine. No subscriptions. No telemetry. Nothing leaves it unless you turn on a cloud provider.*

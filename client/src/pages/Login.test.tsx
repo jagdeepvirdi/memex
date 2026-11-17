@@ -320,3 +320,26 @@ describe('LoginPage — returning to the previous page', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/vault')
   })
 })
+
+describe('LoginPage — password rules', () => {
+  it('tells a new user the minimum length, and that the vault has its own password', async () => {
+    mockApiFetch.mockImplementation(async (path: string) => (path === '/auth/status' ? { needsSetup: true } : { status: 'ok' }))
+    render(<LoginPage />)
+    expect(await screen.findByText(/At least 10 characters/)).toBeInTheDocument()
+    expect(screen.getByText(/vault has its own master password/)).toBeInTheDocument()
+    const input = screen.getByPlaceholderText('Password')
+    expect(input).toHaveAttribute('minlength', '10')
+    expect(input).toHaveAttribute('autocomplete', 'new-password')
+  })
+
+  it('imposes nothing on an existing account signing in', async () => {
+    mockApiFetch.mockImplementation(async (path: string) => (path === '/auth/status' ? { needsSetup: false } : { status: 'ok' }))
+    render(<LoginPage />)
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledWith('/auth/status'))
+    const input = screen.getByPlaceholderText('Password')
+    expect(input).not.toHaveAttribute('minlength')
+    expect(input).toHaveAttribute('autocomplete', 'current-password')
+    expect(screen.queryByText(/At least 10 characters/)).not.toBeInTheDocument()
+  })
+})
+

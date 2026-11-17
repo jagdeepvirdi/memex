@@ -4,7 +4,7 @@ services:
     # Host port 5436 avoids conflicts with existing PostgreSQL instances on
     # 5432 (native), 5433/5434 (FlowForge Docker), 5435 (DevBrain Docker)
     ports:
-      - "5436:5432"
+      - "127.0.0.1:${MEMEX_DB_PORT:-5436}:5432"
     environment:
       POSTGRES_DB: memex
       POSTGRES_USER: memex
@@ -28,7 +28,8 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "${MEMEX_PORT:-3002}:3002"
+      # Loopback only by default. To reach Memex from other devices use a reverse proxy with HTTPS, or set MEMEX_BIND=0.0.0.0.
+      - "${MEMEX_BIND:-127.0.0.1}:${MEMEX_PORT:-3002}:3002"
     environment:
       DATABASE_URL: postgresql://memex:memex@postgres:5432/memex
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the .env file first - .env.example shows how to generate one}

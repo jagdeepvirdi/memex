@@ -23,6 +23,7 @@ RUN cd client && npm run build && cd ../server && npm run build
 FROM node:22-alpine AS run
 ENV NODE_ENV=production \
     PORT=3002 \
+    HOST=0.0.0.0 \
     MEMEX_AUTO_MIGRATE=true \
     MEMEX_CLIENT_DIR=/app/client/dist
 WORKDIR /app/server

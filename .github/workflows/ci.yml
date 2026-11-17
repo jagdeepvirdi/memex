@@ -69,3 +69,17 @@ jobs:
 
       - name: Run tests
         run: npm test
+
+  docker-smoke:
+    name: Docker — build, start, first-run checks
+    runs-on: ubuntu-latest
+    needs: [server, client]
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image, start Postgres + app, run the checks
+        # scripts/smoke-test.sh uses its own compose project and spare ports, a random JWT_SECRET, and removes
+        # everything it created on exit. See the script for the list of checks.
+        run: bash scripts/smoke-test.sh
