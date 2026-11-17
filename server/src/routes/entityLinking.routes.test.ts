@@ -28,6 +28,7 @@ vi.mock('../services/summarizer', () => ({
 }))
 vi.mock('../services/embedder', () => ({
   embedQuery: vi.fn().mockResolvedValue([0.1]),
+  embedForDuplicateCheck: vi.fn().mockResolvedValue([0.1]),
   embedItem: vi.fn().mockResolvedValue([0.1]),
 }))
 vi.mock('../services/duplicateService', async orig => ({

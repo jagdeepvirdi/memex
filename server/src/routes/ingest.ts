@@ -13,7 +13,7 @@ import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } fro
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
 import { transcribeAudio, checkWhisperInstalled, isAudioMime } from '../services/whisperService.js';
 import { findSimilarItems, findItemsBySourceUrl, mergeSimilar } from '../services/duplicateService.js';
-import { embedQuery } from '../services/embedder.js';
+import { embedForDuplicateCheck } from '../services/embedder.js';
 import { embedAndStoreItem } from '../services/embeddingService.js';
 import { pool } from '../db/client.js';
 import { setItemTags, createItem } from '../db/helpers.js';
@@ -61,7 +61,7 @@ router.post('/url', ingestLimiter, async (req, res) => {
 
     const [preview, embedding] = await Promise.all([
       summarizeAndClassify(scraped),
-      embedQuery(scraped.content.slice(0, 2000)),
+      embedForDuplicateCheck(scraped.content.slice(0, 2000)),
     ]);
 
     // Same page saved before (any URL spelling) is listed first, then near-duplicate content.
@@ -375,7 +375,7 @@ router.post('/file', ingestLimiter, upload.single('file'), async (req, res) => {
 
       const [classification, embedding] = await Promise.all([
         classify(description),
-        embedQuery(description.slice(0, 2000)),
+        embedForDuplicateCheck(description.slice(0, 2000)),
       ]);
 
       if (!classification.title || classification.title === 'Untitled') {
@@ -421,7 +421,7 @@ router.post('/file', ingestLimiter, upload.single('file'), async (req, res) => {
 
     const [classification, embedding] = await Promise.all([
       classify(markdown.slice(0, 3000)),
-      embedQuery(markdown.slice(0, 2000)),
+      embedForDuplicateCheck(markdown.slice(0, 2000)),
     ]);
 
     if (!classification.title || classification.title === 'Untitled') {
@@ -481,7 +481,7 @@ router.post('/voice', ingestLimiter, audioUpload.single('file'), async (req, res
 
     const [classification, embedding] = await Promise.all([
       classify(transcript),
-      embedQuery(transcript.slice(0, 2000)),
+      embedForDuplicateCheck(transcript.slice(0, 2000)),
     ]);
 
     if (!classification.title || classification.title === 'Untitled') {
@@ -536,7 +536,7 @@ router.post('/quicksave', ingestLimiter, async (req, res) => {
 
     const [preview, embedding] = await Promise.all([
       summarizeAndClassify(scraped),
-      embedQuery(scraped.content.slice(0, 2000)),
+      embedForDuplicateCheck(scraped.content.slice(0, 2000)),
     ]);
 
     const similarItems = await findSimilarItems(embedding);
@@ -593,7 +593,7 @@ router.post('/text', ingestLimiter, async (req, res) => {
 
     const [classification, embedding] = await Promise.all([
       classify(text, { sourceUrl }),
-      embedQuery(text.slice(0, 2000)),
+      embedForDuplicateCheck(text.slice(0, 2000)),
     ]);
 
     const [sameUrl, similar] = await Promise.all([
