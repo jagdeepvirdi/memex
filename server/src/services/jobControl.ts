@@ -5,7 +5,7 @@
 // memory on purpose: after a server restart there is no runner left to stop, and cancelling such an orphaned
 // job just clears its row (see the cancel route).
 
-import { AI_JOB_KINDS } from './actionJobs.js'
+import { AI_JOB_KINDS, REEMBED_JOB_KIND } from './actionJobs.js'
 
 const running = new Map<string, AbortController>()
 
@@ -29,9 +29,9 @@ export function cancelRunningJob(jobId: string): boolean {
   return true
 }
 
-/** Only the AI jobs can be stopped; imports and backfills have their own lifecycle. */
+/** Only the AI jobs and the re-embed job can be stopped; imports and backfills have their own lifecycle. */
 export function isCancellableJobKind(kind: unknown): boolean {
-  return typeof kind === 'string' && (AI_JOB_KINDS as readonly string[]).includes(kind)
+  return typeof kind === 'string' && ((AI_JOB_KINDS as readonly string[]).includes(kind) || kind === REEMBED_JOB_KIND)
 }
 
 /** For tests and diagnostics. */

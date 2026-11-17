@@ -15,7 +15,7 @@ import {
   Key
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchSearch } from '../../lib/api';
+import { fetchSearchResult } from '../../lib/api';
 import type { Item } from '../../../../shared/types';
 
 interface SearchModalProps {
@@ -26,6 +26,8 @@ export default function SearchModal({ onClose }: SearchModalProps) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
+  // false when the server could only match keywords (the embedding model is unavailable or nothing is embedded yet)
+  const [semantic, setSemantic] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -85,8 +87,9 @@ export default function SearchModal({ onClose }: SearchModalProps) {
     const timeout = setTimeout(async () => {
       setLoading(true);
       try {
-        const items = await fetchSearch(query);
-        setResults(items);
+        const found = await fetchSearchResult(query);
+        setResults(found.items);
+        setSemantic(found.semantic);
         setSelectedIndex(0);
       } catch (err) {
         console.error('Search error:', err);
@@ -151,6 +154,11 @@ export default function SearchModal({ onClose }: SearchModalProps) {
           aria-label="Search results"
           className="flex-1 overflow-y-auto max-h-[60vh]"
         >
+          {query.trim() && !semantic && (
+            <p role="status" className="mx-4 mt-3 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+              Showing keyword matches only: semantic search is unavailable right now. Check Settings &rsaquo; AI &rsaquo; Search &amp; embeddings.
+            </p>
+          )}
           {!query.trim() ? (
             <div className="p-12 text-center space-y-2">
               <p className="text-ink font-display text-lg">Start typing to search...</p>

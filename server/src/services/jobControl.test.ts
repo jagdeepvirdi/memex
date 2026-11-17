@@ -54,9 +54,10 @@ describe('job registry', () => {
 })
 
 describe('isCancellableJobKind', () => {
-  it('allows the AI jobs only', () => {
+  it('allows the AI jobs and the re-embed job only', () => {
     expect(isCancellableJobKind('explain')).toBe(true)
     expect(isCancellableJobKind('extract-recipe')).toBe(true)
+    expect(isCancellableJobKind('reembed')).toBe(true)
   })
   it.each(['paste-import', 'youtube-backfill', 'keep', '', null, undefined, 42])('refuses %s', kind => {
     expect(isCancellableJobKind(kind)).toBe(false)

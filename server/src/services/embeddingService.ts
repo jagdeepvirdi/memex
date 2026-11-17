@@ -17,6 +17,12 @@ export function embeddingAllowed(active: ActiveEmbedding, item: CloudSafeItem): 
 
 export type EmbedOutcome = 'embedded' | 'skipped' | 'failed'
 
+export interface EmbedResult {
+  outcome: EmbedOutcome
+  /** Why it failed (outcome 'failed' only), so a batch job can stop on a blocked provider or a bad key. */
+  error?: unknown
+}
+
 /** Reads what the privacy guard needs. Only called when the active model is a cloud one. */
 async function loadPrivacyInfo(itemId: string): Promise<CloudSafeItem> {
   const { rows } = await pool.query<{ type: string; encrypted: boolean; categories: string[] | null; tags: string[] | null }>(
@@ -30,40 +36,44 @@ async function loadPrivacyInfo(itemId: string): Promise<CloudSafeItem> {
 }
 
 /**
- * The single writer of `items.embedding`. Never throws: a failed embed leaves the vector empty and the background
- * worker retries it; a private item under a cloud model is marked `embedding_skip = 'private'` and never retried.
+ * The single writer of `items.embedding`. Never throws: a failed embed leaves the item as it was and returns the
+ * error; a private item under a cloud model is marked `embedding_skip = 'private'` and never sent. Any older vector
+ * is kept (it belongs to another model, so searches ignore it), which is what makes switching back instant.
  */
-export async function embedAndStoreItem(
+export async function embedAndStoreItemDetailed(
   item: { id: string; title: string; content: string },
   active: ActiveEmbedding = activeEmbedding(),
-): Promise<EmbedOutcome> {
+  signal?: AbortSignal,
+): Promise<EmbedResult> {
   try {
     if (active.provider !== 'ollama' && !embeddingAllowed(active, await loadPrivacyInfo(item.id))) {
-      await pool.query(
-        `UPDATE items SET embedding = NULL, embedding_model = NULL, embedding_skip = 'private' WHERE id = $1`,
-        [item.id],
-      )
-      return 'skipped'
+      await pool.query(`UPDATE items SET embedding_skip = 'private' WHERE id = $1`, [item.id])
+      return { outcome: 'skipped' }
     }
-    const vector = await embedItem(item.title, item.content)
+    const vector = await embedItem(item.title, item.content, signal)
     await pool.query(
       'UPDATE items SET embedding = $1, embedding_model = $2, embedding_skip = NULL WHERE id = $3',
       [JSON.stringify(vector), active.id, item.id],
     )
-    return 'embedded'
+    return { outcome: 'embedded' }
   } catch (err) {
-    logger.error(err, `Embedding failed for ${item.id}`)
-    return 'failed'
+    if (!signal?.aborted) logger.error(err, `Embedding failed for ${item.id}`)
+    return { outcome: 'failed', error: err }
   }
 }
 
-/**
- * Tags or categories changed on an item that has no vector: it may no longer be private, so let the worker look again.
- * Items that already have a vector are untouched.
- */
+/** Same as the detailed form, for callers that only care what happened. */
+export async function embedAndStoreItem(
+  item: { id: string; title: string; content: string },
+  active: ActiveEmbedding = activeEmbedding(),
+): Promise<EmbedOutcome> {
+  return (await embedAndStoreItemDetailed(item, active)).outcome
+}
+
+/** Tags or categories changed on a skipped item: it may no longer be private, so let it be looked at again. */
 export async function clearEmbeddingSkip(itemId: string): Promise<void> {
   try {
-    await pool.query('UPDATE items SET embedding_skip = NULL WHERE id = $1 AND embedding IS NULL', [itemId])
+    await pool.query('UPDATE items SET embedding_skip = NULL WHERE id = $1 AND embedding_skip IS NOT NULL', [itemId])
   } catch (err) {
     logger.error(err, `Clearing embedding skip failed for ${itemId}`)
   }

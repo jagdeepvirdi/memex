@@ -52,7 +52,7 @@ describe('embeddingAllowed', () => {
 describe('embedAndStoreItem (local model)', () => {
   it('stores the vector with the model that made it and clears any skip marker', async () => {
     expect(await embedAndStoreItem(ITEM)).toBe('embedded')
-    expect(embedItem).toHaveBeenCalledWith('Pad thai', 'Noodles')
+    expect(embedItem).toHaveBeenCalledWith('Pad thai', 'Noodles', undefined)
     const [sql, params] = vi.mocked(pool.query).mock.calls[0]
     expect(sql).toMatch(/SET embedding = \$1, embedding_model = \$2, embedding_skip = NULL/)
     expect(params).toEqual([JSON.stringify([0.1, 0.2]), 'ollama:nomic-embed-text', 'i1'])
@@ -76,14 +76,15 @@ describe('embedAndStoreItem (local model)', () => {
 })
 
 describe('embedAndStoreItem (cloud model)', () => {
-  it('marks a private item skipped, clears any old vector, and never calls the embedding model', async () => {
+  it('marks a private item skipped, keeps any older vector, and never calls the embedding model', async () => {
     vi.mocked(pool.query)
       .mockResolvedValueOnce({ rows: [{ type: 'note', encrypted: false, categories: ['Food'], tags: ['private'] }] } as any)
       .mockResolvedValueOnce({ rows: [] } as any)
     expect(await embedAndStoreItem(ITEM, GEMINI)).toBe('skipped')
     expect(embedItem).not.toHaveBeenCalled()
     const [sql, params] = vi.mocked(pool.query).mock.calls[1]
-    expect(sql).toMatch(/embedding = NULL, embedding_model = NULL, embedding_skip = 'private'/)
+    expect(sql).toMatch(/SET embedding_skip = 'private' WHERE id = \$1/)
+    expect(sql).not.toMatch(/embedding = NULL/) // the old vector belongs to another model: kept, so switching back is instant
     expect(params).toEqual(['i1'])
   })
 
@@ -103,10 +104,10 @@ describe('embedAndStoreItem (cloud model)', () => {
 })
 
 describe('clearEmbeddingSkip', () => {
-  it('only touches an item that has no vector', async () => {
+  it('only touches an item that is marked skipped', async () => {
     await clearEmbeddingSkip('i1')
     const [sql, params] = vi.mocked(pool.query).mock.calls[0]
-    expect(sql).toMatch(/SET embedding_skip = NULL WHERE id = \$1 AND embedding IS NULL/)
+    expect(sql).toMatch(/SET embedding_skip = NULL WHERE id = \$1 AND embedding_skip IS NOT NULL/)
     expect(params).toEqual(['i1'])
   })
 

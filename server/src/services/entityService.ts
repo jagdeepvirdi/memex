@@ -1,6 +1,6 @@
 import { PoolClient } from 'pg'
 import { embedQuery } from './embedder.js'
-import { activeEmbeddingId } from './embeddingService.js'
+import { activeEmbedding, activeEmbeddingId } from './embeddingConfig.js'
 import type { Entity, EntityType, ItemType, StructuredData, MediaData, BookData, PlaceData, StockData } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 import { repoSlugFromStructured } from './githubRepo.js'
@@ -28,8 +28,10 @@ export async function getOrCreateEntity(
   // 2. Not found, create it with embedding for later resolution. Identifiers (repo slugs, handles,
   // channel names) pass embed:false: they are exact, and a NULL embedding keeps resolveEntities.ts from
   // fuzzy-merging e.g. "anthropics/claude-code" into a similarly-named repo.
+  // A cloud embedding model never sees entity names: an entity does not know whether the item it came from was private,
+  // and names are only used for fuzzy merging, which is same-model and local-only anyway.
   let embedding: number[] | null = null;
-  if (opts.embed !== false) {
+  if (opts.embed !== false && activeEmbedding().provider === 'ollama') {
     try {
       embedding = await embedQuery(normalized);
     } catch (err) {

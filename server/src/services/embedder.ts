@@ -9,9 +9,9 @@ function buildEmbedText(title: string, content: string): string {
   return combined.slice(0, MAX_EMBED_CHARS)
 }
 
-export async function embedItem(title: string, content: string): Promise<number[]> {
+export async function embedItem(title: string, content: string, signal?: AbortSignal): Promise<number[]> {
   const text = buildEmbedText(title, content)
-  return aiEmbed(text, { kind: 'document' })
+  return aiEmbed(text, { kind: 'document', signal })
 }
 
 export async function embedQuery(query: string): Promise<number[]> {

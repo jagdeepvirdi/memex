@@ -12,6 +12,8 @@ interface Message {
   type: 'user' | 'ai'
   content: string
   sources?: Item[]
+  /** The notes were found by keyword only (semantic search unavailable), so relevant ones may be missing. */
+  keywordOnly?: boolean
 }
 
 export default function AskMemexPage() {
@@ -47,14 +49,15 @@ export default function AskMemexPage() {
         id: (Date.now() + 1).toString(),
         type: 'ai',
         content: res.answer,
-        sources: res.sources
+        sources: res.sources,
+        keywordOnly: res.semantic === false,
       }
       setMessages(prev => [...prev, aiMessage])
     } catch (err) {
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
-        content: "I'm sorry, I encountered an error while searching your knowledge. Please make sure Ollama is running."
+        content: "I'm sorry, I encountered an error while searching your knowledge. Please check that your AI provider is available (Settings › AI)."
       }
       setMessages(prev => [...prev, errorMsg])
     } finally {
@@ -126,6 +129,13 @@ export default function AskMemexPage() {
                 }`}>
                    <p className="whitespace-pre-wrap">{msg.content}</p>
                 </div>
+
+                {msg.keywordOnly && (
+                  <p role="status" className="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+                    These notes were found by keyword only: semantic search is unavailable right now, so relevant notes may be missing.
+                    Check Settings › AI › Search &amp; embeddings.
+                  </p>
+                )}
 
                 {msg.sources && msg.sources.length > 0 && (
                   <div className="flex flex-col gap-2">

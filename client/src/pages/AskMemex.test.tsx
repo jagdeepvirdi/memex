@@ -104,6 +104,32 @@ describe('AskMemexPage — form submission', () => {
     expect(mockAskKnowledge).not.toHaveBeenCalled()
   })
 
+  it('says so when the notes were found by keyword only', async () => {
+    mockAskKnowledge.mockResolvedValue({ answer: 'Found it.', sources: [], semantic: false })
+    render(<AskMemexPage />)
+    fireEvent.change(screen.getByPlaceholderText('Ask anything about your data...'), { target: { value: 'A question?' } })
+    fireEvent.submit(document.querySelector('form')!)
+    expect(await screen.findByText(/found by keyword only/i)).toBeInTheDocument()
+  })
+
+  it('shows no keyword-only notice for a normal semantic answer', async () => {
+    mockAskKnowledge.mockResolvedValue({ answer: 'Found it.', sources: [], semantic: true })
+    render(<AskMemexPage />)
+    fireEvent.change(screen.getByPlaceholderText('Ask anything about your data...'), { target: { value: 'A question?' } })
+    fireEvent.submit(document.querySelector('form')!)
+    await screen.findByText('Found it.')
+    expect(screen.queryByText(/found by keyword only/i)).not.toBeInTheDocument()
+  })
+
+  it('does not blame Ollama when asking fails', async () => {
+    mockAskKnowledge.mockRejectedValue(new Error('boom'))
+    render(<AskMemexPage />)
+    fireEvent.change(screen.getByPlaceholderText('Ask anything about your data...'), { target: { value: 'A question?' } })
+    fireEvent.submit(document.querySelector('form')!)
+    expect(await screen.findByText(/check that your AI provider is available/i)).toBeInTheDocument()
+    expect(screen.queryByText(/Ollama is running/i)).not.toBeInTheDocument()
+  })
+
   it('shows an error message in chat when askKnowledge fails', async () => {
     mockAskKnowledge.mockRejectedValue(new Error('Ollama offline'))
     render(<AskMemexPage />)

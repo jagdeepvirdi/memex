@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, AlertCircle, Loader2, Cpu, HardDrive } from 'lucide-react'
+import { Check, AlertCircle, Loader2, Cpu, HardDrive, Search } from 'lucide-react'
 import { apiFetch } from '../../../lib/api'
 import { AiProviderSettings } from '../AiProviderSettings'
-import { SettingsSection, SettingRow } from '../SettingsSection'
+import { EmbeddingSettings } from '../EmbeddingSettings'
+import { SettingsSection } from '../SettingsSection'
 import { settingsTabPath } from '../settingsTabs'
 import type { SettingsTabProps } from '../settingsTabs'
 
@@ -40,14 +41,18 @@ export function AiTab({ settings, onUpdate }: Props) {
       </SettingsSection>
 
       <SettingsSection
+        icon={<Search size={20} className="text-violet-400" />}
+        title="Search & embeddings"
+        description="Embeddings let search, Ask and related items find notes by meaning. Local Ollama is the default; a cloud model needs its key and your consent, and private items never leave this machine."
+      >
+        <EmbeddingSettings />
+      </SettingsSection>
+
+      <SettingsSection
         icon={<HardDrive size={20} className="text-teal-400" />}
         title="Local AI (Ollama)"
-        description="Semantic search and related items always use local embeddings."
+        description="Runs on your machine. Used for answers and, by default, for embeddings."
       >
-        <SettingRow title="Embedding model" description="Used for semantic search and related items.">
-          <span className="text-xs text-ink-muted font-mono bg-white/5 px-2 py-1 rounded">nomic-embed-text</span>
-        </SettingRow>
-
         <div className="flex items-center gap-4">
           <button
             onClick={handleTestOllama}

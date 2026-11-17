@@ -95,7 +95,7 @@ describe('runExtractRecipeJob — a recipe is found', () => {
   it('embeds the new recipe in the background and does not wait for it, or fail on it', async () => {
     vi.mocked(embedItem).mockRejectedValue(new Error('ollama down'))
     await expect(runExtractRecipeJob(INPUT)).resolves.toBeUndefined()
-    expect(embedItem).toHaveBeenCalledWith('Aglio e Olio', 'rendered')
+    expect(embedItem).toHaveBeenCalledWith('Aglio e Olio', 'rendered', undefined)
     expect(completeJob).toHaveBeenCalledTimes(1)
     await new Promise(r => setTimeout(r, 0))
     expect(logger.error).toHaveBeenCalled() // logged, not thrown

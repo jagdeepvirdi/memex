@@ -216,12 +216,22 @@ export async function fetchItems(options: { type?: string, category?: string, ta
   return apiFetch<{ items: Item[], total: number }>(`/items?${params.toString()}`)
 }
 
-export async function fetchSearch(query: string, options: { type?: string, category?: string, tag?: string } = {}): Promise<Item[]> {
-  const data = await apiFetch<{ items: Item[] }>('/search', {
+export interface SearchResult {
+  items: Item[]
+  /** false when the results are keyword matches only (no usable embeddings), so recall may be weaker. */
+  semantic: boolean
+}
+
+export async function fetchSearchResult(query: string, options: { type?: string, category?: string, tag?: string } = {}): Promise<SearchResult> {
+  const data = await apiFetch<{ items: Item[]; semantic?: boolean }>('/search', {
     method: 'POST',
     body: JSON.stringify({ query, ...options }),
   })
-  return data.items
+  return { items: data.items, semantic: data.semantic !== false }
+}
+
+export async function fetchSearch(query: string, options: { type?: string, category?: string, tag?: string } = {}): Promise<Item[]> {
+  return (await fetchSearchResult(query, options)).items
 }
 
 export async function fetchCategories(): Promise<any[]> {
@@ -440,10 +450,15 @@ export interface IngestJobStatus {
     failed?: Array<{ itemId: string; title: string; error: string }>
     /** Explain jobs: which item, and where the work has got to. */
     itemId?: string
-    stage?: 'reading' | 'summarising' | 'writing' | 'checking' | 'extracting'
+    stage?: 'reading' | 'summarising' | 'writing' | 'checking' | 'extracting' | 'items' | 'entities'
     part?: number
     parts?: number
     model?: string
+    /** Re-embed jobs: which model, and what has happened so far. */
+    target?: string
+    embedded?: number
+    skippedPrivate?: number
+    failures?: number
     /** Extract recipe jobs, once completed: whether a recipe was found, and the new item or the reason it was not. */
     found?: boolean
     reason?: string
@@ -469,6 +484,66 @@ export function startPasteImport(text: string): Promise<PasteImportResponse> {
  */
 export function cancelIngestJob(jobId: string): Promise<{ status: 'cancelling' | 'cancelled' }> {
   return apiFetch<{ status: 'cancelling' | 'cancelled' }>(`/ingest/jobs/${jobId}/cancel`, { method: 'POST' })
+}
+
+// ── Embedding model (Settings > AI) ───────────────────────────────────────────
+
+export type EmbeddingProviderId = 'ollama' | 'gemini' | 'openai'
+
+export interface EmbeddingStatus {
+  provider: EmbeddingProviderId
+  model: string
+  /** '<provider>:<model>' */
+  id: string
+  cloud: boolean
+  configured: boolean
+  /** Whether new vectors can be made right now; if not, `blockedReason` says why. */
+  usable: boolean
+  blockedReason: string | null
+  counts: { embedded: number; needsReembed: number; skippedPrivate: number; pending: number; total: number }
+  /** A re-embed that is running right now, so the page can follow it after a reload. */
+  job: { id: string; progress: number; completed: number; total: number } | null
+}
+
+export interface ReembedEstimate {
+  target: { provider: EmbeddingProviderId; model: string; id: string }
+  cloud: boolean
+  items: number
+  characters: number
+  approxTokens: number
+  skippedPrivate: number
+  alreadyDone: number
+  entities: number
+  blockedReason: string | null
+}
+
+export function fetchEmbeddingStatus(): Promise<EmbeddingStatus> {
+  return apiFetch<EmbeddingStatus>('/ai/embedding')
+}
+
+/** What switching to (or re-embedding with) this model would do. Read-only: nothing is sent anywhere. */
+export function fetchReembedEstimate(provider?: EmbeddingProviderId, model?: string): Promise<ReembedEstimate> {
+  const params = new URLSearchParams()
+  if (provider) params.set('provider', provider)
+  if (provider && model?.trim()) params.set('model', model.trim())
+  const qs = params.toString()
+  return apiFetch<ReembedEstimate>(`/ai/embedding/estimate${qs ? `?${qs}` : ''}`)
+}
+
+/** Makes this the active embedding model. Sends nothing and starts no job. */
+export function setEmbeddingModel(provider: EmbeddingProviderId, model?: string): Promise<EmbeddingStatus> {
+  return apiFetch<EmbeddingStatus>('/ai/embedding', {
+    method: 'PUT',
+    body: JSON.stringify({ provider, ...(model?.trim() ? { model: model.trim() } : {}) }),
+  })
+}
+
+/** Starts the re-embed job for the active model. `id` is the model the user confirmed. */
+export function startReembed(id: string): Promise<{ jobId: string }> {
+  return apiFetch<{ jobId: string }>('/ai/embedding/reembed', {
+    method: 'POST',
+    body: JSON.stringify({ confirm: true, id }),
+  })
 }
 
 export function fetchIngestJob(jobId: string): Promise<IngestJobStatus> {

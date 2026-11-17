@@ -35,7 +35,16 @@ const SettingsBody = z.object({
   openai_model: modelName.optional(),
 }).passthrough();
 
+// The embedding model decides which vectors search can see, and switching it sends library text to a provider, so it
+// only changes through PUT /api/ai/embedding (validated, consent-checked, followed by an explicit re-embed).
+const EMBEDDING_KEYS = ['embedding_provider', 'embedding_model'] as const
+
 router.put('/', async (req, res) => {
+  const blocked = EMBEDDING_KEYS.find(k => req.body && typeof req.body === 'object' && k in req.body);
+  if (blocked) {
+    res.status(400).json({ error: `${blocked} cannot be set here. Use PUT /api/ai/embedding.` });
+    return;
+  }
   const parsed = SettingsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Invalid settings', details: parsed.error.issues.map(i => `${i.path.join('.')}: ${i.message}`) });

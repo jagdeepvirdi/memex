@@ -8,7 +8,12 @@ import {
 } from '../services/apiKeys.js'
 import { checkYoutubeKey } from '../services/youtubeApi.js'
 import { listOllamaModels } from '../services/ollama.js'
-import { getEmbeddingStatus } from '../services/embeddingStatus.js'
+import { v4 as uuidv4 } from 'uuid'
+import { getEmbeddingStatus, embeddingBlockedReason } from '../services/embeddingStatus.js'
+import { estimateReembed, switchEmbeddingModel, reembedRunning, EmbeddingSwitchError } from '../services/embeddingSwitch.js'
+import { activeEmbedding, buildEmbedding, EMBEDDING_PROVIDERS } from '../services/embeddingConfig.js'
+import { runReembedJob, REEMBED_JOB_KIND } from '../services/reembedJob.js'
+import { createJob } from '../services/ingestJobs.js'
 import logger from '../lib/logger.js'
 
 const router = Router()
@@ -65,6 +70,76 @@ router.get('/embedding', async (_req, res) => {
   } catch (err) {
     logger.error(err, 'GET /api/ai/embedding error')
     res.status(500).json({ error: 'Failed to read embedding status' })
+  }
+})
+
+const EmbeddingTarget = z.object({
+  provider: z.enum(EMBEDDING_PROVIDERS as unknown as [string, ...string[]]),
+  model: z.string().trim().min(1).max(100).optional(),
+})
+
+const embeddingWriteLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: Number(process.env.AI_EMBEDDING_RATE_LIMIT_MAX ?? 10),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  message: { error: 'Too many embedding changes. Slow down.' },
+})
+
+// GET /api/ai/embedding/estimate?provider=&model= → what switching to (or re-embedding with) that model would do.
+// Read-only: nothing is sent anywhere. Without a provider it estimates the model that is active now.
+router.get('/embedding/estimate', async (req, res) => {
+  const parsed = req.query.provider === undefined ? null : EmbeddingTarget.safeParse(req.query)
+  if (parsed && !parsed.success) return res.status(400).json({ error: 'Invalid embedding provider or model' })
+  try {
+    const target = parsed?.success ? buildEmbedding(parsed.data.provider as 'ollama' | 'gemini' | 'openai', parsed.data.model) : activeEmbedding()
+    res.json(await estimateReembed(target))
+  } catch (err) {
+    logger.error(err, 'GET /api/ai/embedding/estimate error')
+    res.status(500).json({ error: 'Failed to estimate the re-embed' })
+  }
+})
+
+// PUT /api/ai/embedding { provider, model? } → makes that the active embedding model. Sends nothing and starts no job;
+// until the library is re-embedded, search uses the vectors it has for the new model and keywords for the rest.
+router.put('/embedding', embeddingWriteLimiter, async (req, res) => {
+  const parsed = EmbeddingTarget.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ error: 'Invalid embedding provider or model' })
+  try {
+    await switchEmbeddingModel(parsed.data.provider as 'ollama' | 'gemini' | 'openai', parsed.data.model)
+    res.json(await getEmbeddingStatus())
+  } catch (err) {
+    if (err instanceof EmbeddingSwitchError) return res.status(err.status).json({ error: err.message })
+    logger.error(err, 'PUT /api/ai/embedding error')
+    res.status(500).json({ error: 'Failed to switch the embedding model' })
+  }
+})
+
+// POST /api/ai/embedding/reembed { confirm: true, id } → 202 { jobId }. Embeds every item that has no vector from the
+// ACTIVE model (private items stay home under a cloud model). `id` is the model the user saw in the estimate: if the
+// active model changed since, nothing starts. Poll GET /api/ingest/jobs/:id; cancel with POST /api/ingest/jobs/:id/cancel.
+const ReembedBody = z.object({ confirm: z.literal(true), id: z.string().min(1).max(200) })
+
+router.post('/embedding/reembed', embeddingWriteLimiter, async (req, res) => {
+  const parsed = ReembedBody.safeParse(req.body ?? {})
+  if (!parsed.success) return res.status(400).json({ error: 'Re-embedding must be confirmed ({"confirm": true, "id": "<provider>:<model>"})' })
+  try {
+    const target = activeEmbedding()
+    if (parsed.data.id !== target.id) {
+      return res.status(409).json({ error: 'The embedding model changed. Reload and estimate again.' })
+    }
+    const blocked = await embeddingBlockedReason(target)
+    if (blocked) return res.status(409).json({ error: blocked })
+    if (await reembedRunning()) return res.status(409).json({ error: 'A re-embed is already running.' })
+
+    const jobId = uuidv4()
+    await createJob(jobId, 1, REEMBED_JOB_KIND)
+    // Runs in this process and reports on the job row; it never throws (failures are stored on the row).
+    void runReembedJob({ jobId, target })
+    res.status(202).json({ jobId })
+  } catch (err) {
+    logger.error(err, 'POST /api/ai/embedding/reembed error')
+    res.status(500).json({ error: 'Failed to start the re-embed' })
   }
 })
 

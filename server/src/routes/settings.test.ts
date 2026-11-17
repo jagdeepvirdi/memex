@@ -48,6 +48,17 @@ describe('PUT /api/settings', () => {
   })
 })
 
+describe('PUT /api/settings — embedding model', () => {
+  it.each(['embedding_provider', 'embedding_model'])('refuses %s: it only changes through PUT /api/ai/embedding', async (key) => {
+    const client = (await vi.mocked(pool.connect)()) as any
+    client.query.mockClear()
+    const res = await request(app).put('/api/settings').set('Authorization', AUTH).send({ ai_model: 'llama3.2', [key]: 'gemini' })
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/PUT \/api\/ai\/embedding/)
+    expect(client.query).not.toHaveBeenCalled() // nothing was written, not even the other keys
+  })
+})
+
 describe('PUT /api/settings — AI provider validation', () => {
   const put = (body: unknown) =>
     request(app).put('/api/settings').set('Authorization', AUTH).send(body as object)

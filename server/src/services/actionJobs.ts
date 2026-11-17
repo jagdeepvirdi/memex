@@ -10,6 +10,13 @@ export const EXTRACT_RECIPE_JOB_KIND = 'extract-recipe'
 export const AI_JOB_KINDS = [EXPLAIN_JOB_KIND, EXTRACT_RECIPE_JOB_KIND] as const
 export type AiJobKind = (typeof AI_JOB_KINDS)[number]
 
+/**
+ * Re-embedding the library with another embedding model. Cancellable like the AI jobs above, but deliberately NOT in
+ * AI_JOB_KINDS: it can run for much longer than their 20 minute / 15 minute limits, it is resumable, and it does not
+ * compete with them for a local chat model. It has its own "one at a time" rule.
+ */
+export const REEMBED_JOB_KIND = 'reembed'
+
 /** A job still "processing" after this long is treated as dead (the server restarted mid-job). */
 export const AI_JOB_STALE_MINUTES = 20
 /** Hard stop for one job. */

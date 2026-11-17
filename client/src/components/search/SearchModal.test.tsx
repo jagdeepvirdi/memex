@@ -9,8 +9,9 @@ vi.mock('react-router-dom', () => ({
 }))
 
 const mockFetchSearch = vi.fn()
+let mockSemantic = true
 vi.mock('../../lib/api', () => ({
-  fetchSearch: (q: string) => mockFetchSearch(q),
+  fetchSearchResult: async (q: string) => ({ items: await mockFetchSearch(q), semantic: mockSemantic }),
 }))
 
 import SearchModal from './SearchModal'
@@ -24,6 +25,7 @@ describe('SearchModal Component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    mockSemantic = true
     mockFetchSearch.mockResolvedValue(mockItems)
   })
 
@@ -105,6 +107,21 @@ describe('SearchModal Component', () => {
 
     expect(mockNavigate).toHaveBeenCalledWith('/item/item2')
     expect(mockOnClose).toHaveBeenCalled()
+  })
+
+  it('tells the user when results are keyword matches only', async () => {
+    mockSemantic = false
+    render(<SearchModal onClose={mockOnClose} />)
+    fireEvent.change(screen.getByPlaceholderText('Search items, notes, recipes...'), { target: { value: 'coffee' } })
+    expect(await screen.findByText(/keyword matches only/i)).toBeInTheDocument()
+    expect(screen.getByText('Coffee Recipe')).toBeInTheDocument()
+  })
+
+  it('shows no notice when search is semantic', async () => {
+    render(<SearchModal onClose={mockOnClose} />)
+    fireEvent.change(screen.getByPlaceholderText('Search items, notes, recipes...'), { target: { value: 'coffee' } })
+    await screen.findByText('Coffee Recipe')
+    expect(screen.queryByText(/keyword matches only/i)).not.toBeInTheDocument()
   })
 
   it('supports Escape key to close modal', () => {

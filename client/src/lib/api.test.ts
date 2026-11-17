@@ -32,6 +32,7 @@ import {
   remapCategory, fetchItemExtractions, applyExtraction, reClassifyItem,
   reprocessBulk, fetchDueReminders, fetchSharedItem, fetchDigest,
   nlFilter, setReminder, fetchSearch, fetchCategories, fetchTags,
+  fetchSearchResult, fetchEmbeddingStatus, fetchReembedEstimate, setEmbeddingModel, startReembed,
 } from './api'
 
 function mockFetch(status: number, body: unknown) {
@@ -609,6 +610,72 @@ describe('fetchSearch', () => {
     mockFetch(200, { items: [] })
     await fetchSearch('curry', { type: 'recipe' })
     expect(JSON.parse((fetch as ReturnType<typeof vi.fn>).mock.calls[0][1].body)).toMatchObject({ type: 'recipe' })
+  })
+})
+
+describe('fetchSearchResult', () => {
+  it('returns the items and whether the search was semantic', async () => {
+    mockFetch(200, { items: [{ id: 'a' }], semantic: false })
+    expect(await fetchSearchResult('curry')).toEqual({ items: [{ id: 'a' }], semantic: false })
+  })
+
+  it('treats a response without the flag (an older server) as semantic', async () => {
+    mockFetch(200, { items: [] })
+    expect((await fetchSearchResult('curry')).semantic).toBe(true)
+  })
+
+  it('fetchSearch still returns just the items', async () => {
+    mockFetch(200, { items: [{ id: 'a' }], semantic: false })
+    expect(await fetchSearch('curry')).toEqual([{ id: 'a' }])
+  })
+})
+
+// ── embedding model ───────────────────────────────────────────────────────────
+
+describe('embedding model API', () => {
+  const call = () => (fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+
+  it('fetchEmbeddingStatus GETs /api/ai/embedding', async () => {
+    mockFetch(200, { id: 'ollama:nomic-embed-text' })
+    expect(await fetchEmbeddingStatus()).toEqual({ id: 'ollama:nomic-embed-text' })
+    expect(call()[0]).toBe('/api/ai/embedding')
+  })
+
+  it('fetchReembedEstimate asks about the active model when no provider is given', async () => {
+    mockFetch(200, {})
+    await fetchReembedEstimate()
+    expect(call()[0]).toBe('/api/ai/embedding/estimate')
+  })
+
+  it('fetchReembedEstimate passes the provider and a trimmed model', async () => {
+    mockFetch(200, {})
+    await fetchReembedEstimate('gemini', '  gemini-embedding-2 ')
+    expect(call()[0]).toBe('/api/ai/embedding/estimate?provider=gemini&model=gemini-embedding-2')
+  })
+
+  it('fetchReembedEstimate leaves the model out when it is blank', async () => {
+    mockFetch(200, {})
+    await fetchReembedEstimate('openai', '  ')
+    expect(call()[0]).toBe('/api/ai/embedding/estimate?provider=openai')
+  })
+
+  it('setEmbeddingModel PUTs the provider, and the model only when given', async () => {
+    mockFetch(200, {})
+    await setEmbeddingModel('gemini', ' gemini-embedding-001 ')
+    expect(call()[0]).toBe('/api/ai/embedding')
+    expect(call()[1].method).toBe('PUT')
+    expect(JSON.parse(call()[1].body)).toEqual({ provider: 'gemini', model: 'gemini-embedding-001' })
+    mockFetch(200, {})
+    await setEmbeddingModel('ollama')
+    expect(JSON.parse(call()[1].body)).toEqual({ provider: 'ollama' })
+  })
+
+  it('startReembed POSTs an explicit confirmation with the model id', async () => {
+    mockFetch(202, { jobId: 'j1' })
+    expect(await startReembed('gemini:gemini-embedding-001')).toEqual({ jobId: 'j1' })
+    expect(call()[0]).toBe('/api/ai/embedding/reembed')
+    expect(call()[1].method).toBe('POST')
+    expect(JSON.parse(call()[1].body)).toEqual({ confirm: true, id: 'gemini:gemini-embedding-001' })
   })
 })
 
