@@ -26,44 +26,18 @@ Memex is a personal knowledge management web app that ingests, auto-classifies, 
 - **File Ingestion**: MarkItDown (Python, optional) — converts PDF/Word/PPT/Excel/images to Markdown
 
 ## Docker Compose Setup
-Everything runs locally:
-```yaml
-services:
-  postgres:
-    image: pgvector/pgvector:pg16
-    ports: ["5432:5432"]
-    environment:
-      POSTGRES_DB: memex
-      POSTGRES_PASSWORD: memex
-    volumes:
-      - pg_data:/var/lib/postgresql/data
+`docker-compose.yml` runs only Postgres (`pgvector/pgvector:pg16`, host port **5436**, database/user/password `memex`). Ollama is NOT in compose: it runs natively on port 11434 (GPU works out of the box) and is **optional** — a cloud-only install does not need it (verified end to end 2026-11-17 on a fresh database with Ollama unreachable; see README "Path B"). The server and client run with `npm run dev`, or `memex.sh` / `memex.ps1`.
 
-  ollama:
-    image: ollama/ollama
-    ports: ["11434:11434"]
-    volumes:
-      - ollama_data:/root/.ollama
-    # Add GPU passthrough here if you have NVIDIA GPU — much faster
+**Migrations are not run by `npm run dev` or by the server on start.** `memex.sh` / `memex.ps1` run them on every start; otherwise run `npm run db:migrate` (root) or `npm run migrate` (in `server/`). The `.env` file lives at the project root.
 
-  app:
-    build: ./server
-    ports: ["3001:3001"]
-    depends_on: [postgres, ollama]
-    environment:
-      DATABASE_URL: postgresql://memex:memex@postgres:5432/memex
-      OLLAMA_URL: http://ollama:11434
-
-volumes:
-  pg_data:
-  ollama_data:
-```
-
-## Ollama Model Setup (one-time after first docker compose up)
+## Ollama Model Setup (local AI only, one-time)
 ```bash
-# Pull models once — cached forever in docker volume
-docker exec -it memex-ollama-1 ollama pull llama3.2
-docker exec -it memex-ollama-1 ollama pull nomic-embed-text
+ollama pull llama3.2
+ollama pull nomic-embed-text
 ```
+
+## Cloud-only first run (verified order)
+Account (`POST /api/auth/setup`) → add a key (Settings > Keys & Privacy) → choose the provider + consent (`ai_provider`, `allow_cloud`) → **switch the embedding model** (`PUT /api/ai/embedding {provider:'gemini'}`) → only then save notes. Embeddings default to Ollama and `POST /api/ingest/text` (and the other capture routes) embed synchronously, so with Ollama absent every save fails with `500 "Failed to classify text"` until the embedding model is switched, even when chat already uses a cloud provider. The first-run wizard (L4) must do the switch for the cloud path. Verified on a fresh DB: classification via Gemini, `embedded=1 skippedPrivate=1` for a normal and a `private`-tagged note, `semantic: true` search, a correct cited Ask answer.
 
 ## Project Structure
 ```
@@ -136,12 +110,13 @@ memex/
 │       └── migrations/
 │           ├── 001_initial.sql
 │           ├── 002_seed_categories.sql
-│           ├── 003_...
-│           ├── 004_...
-│           ├── 005_...
+│           ├── 003 ... 005           # soft delete, reviewed, ...
 │           ├── 006_settings.sql      # settings key-value table
 │           ├── 007_entity_graph.sql  # entities + item_entities tables
-│           └── 008_confidence.sql    # confidence FLOAT column on items
+│           ├── 008 ... 023           # confidence, extractions, vault, jobs, priority, derived_from, api_keys ...
+│           ├── 024_api_keys_openai.sql   # api_keys CHECK allows an OpenAI key
+│           ├── 025_embedding_model.sql   # items.embedding_model / embedding_skip, entities.embedding_model
+│           └── 026_api_keys_groq.sql     # api_keys CHECK allows a Groq key (user runs `npm run migrate`)
 └── shared/
     └── types.ts
 ```

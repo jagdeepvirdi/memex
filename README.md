@@ -1,6 +1,6 @@
 # Memex — Personal Knowledge OS
 
-A self-hosted knowledge management app that ingests, auto-classifies, and organizes everything you save — notes, recipes, movies, books, places, links, files, voice memos, and more. Powered entirely by local AI (Ollama). Zero cloud costs. Runs on your machine.
+A self-hosted knowledge management app that ingests, auto-classifies, and organizes everything you save — notes, recipes, movies, books, places, links, files, voice memos, and more. Runs on your machine with local AI (Ollama) by default. Gemini, OpenAI, Claude or Groq are optional and used only with your key, your choice and your consent.
 
 ## What it does
 
@@ -24,7 +24,7 @@ A self-hosted knowledge management app that ingests, auto-classifies, and organi
 - **Data provenance** — every AI extraction is logged; roll back or apply any past extraction to an item
 - **PWA** — installable, works offline with cached API responses; share-target support
 
-**Monthly cost: $0.** Everything runs on your own hardware.
+**Monthly cost: $0 with local AI.** Cloud providers are optional and billed by them, not by Memex.
 
 ---
 
@@ -41,9 +41,9 @@ A self-hosted knowledge management app that ingests, auto-classifies, and organi
 | Database | PostgreSQL + pgvector (Docker) |
 | Logging | pino (structured, silent in tests) |
 | AI — chat | Ollama (`llama3.2` or `gemma3:4b`) |
-| AI — embeddings | Ollama (`nomic-embed-text`) |
+| AI — embeddings | Ollama (`nomic-embed-text`, default) or Gemini / OpenAI (cloud, opt-in) |
 | AI — vision | Ollama vision model (auto-detected: `llama3.2-vision` → `llava`) |
-| AI — optional | Anthropic Claude API (opt-in via Settings, never automatic) |
+| AI — optional cloud | Gemini, OpenAI, Claude, Groq (opt-in: a key, a provider choice and cloud consent; blocked by Strict Local Mode) |
 | File ingestion | MarkItDown (Python, optional) |
 | Voice transcription | OpenAI Whisper CLI (Python, optional) |
 | Auth | bcrypt + JWT + express-rate-limit |
@@ -52,72 +52,113 @@ A self-hosted knowledge management app that ingests, auto-classifies, and organi
 
 ## Quick Start
 
+Memex stores everything in Postgres (Docker) on your machine. The AI can be **local** (Ollama: nothing leaves your computer) or **cloud** (Gemini, OpenAI, Claude or Groq: only with your key and consent), or a mix. The first three steps are the same either way; then pick path A or B.
+
 ### Prerequisites
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-- Node.js 22+
-- npm 10+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Postgres runs in a container)
+- Node.js 22+ and npm 10+
+- Path A only: [Ollama](https://ollama.com/download), installed natively (it is **not** part of `docker-compose.yml`)
 
-### 1. Start services
+### 1. Configure and start the database
+
+From the project root:
 
 ```bash
-docker compose up -d
+cp .env.example .env        # the file lives at the PROJECT ROOT; set JWT_SECRET (the command is in the file)
+docker compose up -d postgres   # Postgres + pgvector, host port 5436
 ```
 
-Starts PostgreSQL (with pgvector) and Ollama.
-
-### 2. Pull AI models (one-time)
+### 2. Install and migrate
 
 ```bash
-docker exec -it memex-ollama-1 ollama pull llama3.2
-docker exec -it memex-ollama-1 ollama pull nomic-embed-text
+npm run install:all
+npm run db:migrate          # creates the tables (safe to run again)
 ```
 
-### 3. Install dependencies and run
+`npm run dev` does **not** migrate for you; the lifecycle scripts below (`memex.sh` / `memex.ps1`) do, on every start.
+
+### 3. Run
 
 ```bash
-npm install      # installs root + client + server
-npm run dev      # starts client (port 5175) and server (port 3002)
+npm run dev      # client on http://localhost:5175, server on http://localhost:3002
 ```
 
 Open [http://localhost:5175](http://localhost:5175) and create your account.
 
-### 4. Run migrations
-
-Migrations run automatically when the server starts. To run them manually:
+### Path A: local AI (default)
 
 ```bash
-cd server && npm run migrate
+ollama pull llama3.2
+ollama pull nomic-embed-text
 ```
 
-### 5. (Optional) File ingestion via MarkItDown
+That is all: Memex uses Ollama for classification, answers and embeddings out of the box. Optional extras are at the end of this section.
 
-Supports PDF, Word, PowerPoint, Excel, CSV, and image uploads:
+### Path B: cloud-only (no Ollama)
+
+You do not need Ollama. **Do the steps in this order**, in the app:
+
+1. **Settings → Keys & Privacy**: paste an API key (for example Gemini from [aistudio.google.com](https://aistudio.google.com)). Keys are stored encrypted and never shown again.
+2. **Settings → AI → Provider & model**: choose that provider and turn on **Allow cloud AI** (your consent).
+3. **Settings → AI → Search & embeddings**: choose **Gemini (cloud)** (or OpenAI), press **Review change**, then **Switch**. Claude and Groq can answer questions but have no embeddings API, so use Gemini or OpenAI here.
+4. Now save a note, search, and use **Ask**.
+
+> **Do step 3 before you save anything.** Embeddings default to Ollama, and saving a note embeds it right away. Until you switch, saving fails with "Failed to classify text" even though your answers already come from the cloud.
+
+What to expect:
+
+- **Privacy still holds.** Items in the *Passwords* or *Personal* categories, items tagged `private`, `no-cloud` or `local-only`, and vault items are never sent to a cloud provider (they are skipped, and search finds them by keyword). **Strict Local Mode** blocks every cloud call; semantic search then falls back to keywords and says so.
+- **You see the cost before anything is sent.** "Review change" shows how many items will be embedded and roughly how many tokens (a few hundred notes is tens of thousands of tokens). Nothing is sent until you confirm.
+- **Images, voice and file conversion are separate.** Image understanding still needs an Ollama vision model; voice (Whisper) and file conversion (MarkItDown) are local Python tools, independent of which AI you choose.
+- **Tested how:** verified end to end on a fresh database with Ollama unreachable, using Gemini (account, classification, embeddings, search, Ask; a note tagged `private` was never embedded). OpenAI embeddings and Claude, OpenAI and Groq chat are implemented and unit-tested but have not yet been run against the live APIs.
+
+### Local or cloud: what runs where
+
+| | Local (Ollama) | Cloud (opt-in) |
+|---|---|---|
+| Classification, answers, digest, insights | `llama3.2` / `gemma3:4b` | Gemini, OpenAI, Claude or Groq |
+| Embeddings (search, Ask, related items) | `nomic-embed-text` | Gemini or OpenAI |
+| Needs a key and consent | no | yes |
+| Private items (see above) | always handled here | never sent |
+| Image understanding | Ollama vision model | not available |
+
+You can choose a provider per task (Settings → AI → Advanced), for example Gemini for **Ask** and Ollama for everything else.
+
+### Changing the embedding model later
+
+Search, Ask and related items can only compare vectors made by the **same** model, so changing the model means re-embedding your library. In **Settings → AI → Search & embeddings**:
+
+1. **Review change** shows what would happen and sends nothing.
+2. **Switch and re-embed** switches and starts a background job you can cancel; it resumes where it left off.
+3. Old vectors are kept, so switching back is instant. Until the job finishes, items without a vector from the new model are found by keyword.
+
+Each model has its own similarity thresholds (what counts as a duplicate, or a related note in the graph). Gemini's start as estimates; tune them to your library with `server/src/scripts/calibrateEmbedding.ts` (see the comments at the top of the file). Switching models saves the reference it needs automatically.
+
+### Optional extras
+
+**File ingestion (MarkItDown)** — PDF, Word, PowerPoint, Excel, CSV and image uploads:
 
 ```bash
 pip install 'markitdown[all]'
 ```
 
-Restart the server. **Settings → Intelligence Engine** shows a green "Installed" badge.
+Restart the server. **Settings → Library** shows the status.
 
-### 6. (Optional) Voice transcription via Whisper
-
-Supports in-browser recording and audio file upload (MP3/WAV/M4A/OGG/WebM/FLAC):
+**Voice transcription (Whisper)** — in-browser recording and audio upload (MP3/WAV/M4A/OGG/WebM/FLAC):
 
 ```bash
 pip install openai-whisper
 ```
 
-Restart the server. **Settings → Intelligence Engine** shows the Whisper status. The `WHISPER_MODEL` env var selects model size (default: `base`).
+Restart the server. The `WHISPER_MODEL` env var selects the model size (default: `base`).
 
-### 7. (Optional) Vision AI for images
-
-Auto-detected from installed Ollama models. Pull one:
+**Vision AI for images** — auto-detected from installed Ollama models:
 
 ```bash
-docker exec -it memex-ollama-1 ollama pull llama3.2-vision:11b
-# or lighter alternative:
-docker exec -it memex-ollama-1 ollama pull llava:7b
+ollama pull llama3.2-vision:11b
+# or a lighter alternative:
+ollama pull llava:7b
 ```
 
 ---
@@ -150,33 +191,27 @@ Both scripts: start Postgres, run migrations, then launch server (and client in 
 
 ## Environment Variables
 
-Create `server/.env`:
+Everything lives in one file at the **project root**: copy `.env.example` to `.env`. It documents every variable; the essentials are:
 
 ```env
-DATABASE_URL=postgresql://memex:memex@localhost:5432/memex
-OLLAMA_URL=http://localhost:11434
+DATABASE_URL=postgresql://memex:memex@localhost:5436/memex   # host port 5436 (see docker-compose.yml)
 PORT=3002
-JWT_SECRET=<random 32-char string>
+JWT_SECRET=<random 32+ characters>      # signs your login; also encrypts saved API keys unless KEY_ENCRYPTION_SECRET is set
 
-# Ollama model overrides (optional)
+# Local AI (Path A). Not needed for a cloud-only install.
+OLLAMA_URL=http://localhost:11434
 OLLAMA_CHAT_MODEL=llama3.2
 OLLAMA_EMBED_MODEL=nomic-embed-text
 
-# Claude API (only used when enabled in Settings)
+# Cloud AI (optional). A key only makes a provider AVAILABLE: it is used only if you also pick it in Settings and
+# turn on cloud consent, and never in Strict Local Mode. Keys can also be pasted in Settings instead of here.
 ANTHROPIC_API_KEY=
-CLAUDE_MODEL=claude-3-5-sonnet-20240620
-
-# Whisper model size (optional, default: base)
-WHISPER_MODEL=base
-
-# Auth rate limiting (optional, default: 10 per 15 min)
-AUTH_RATE_LIMIT_MAX=10
-
-# Log level (optional, default: info; use silent to suppress)
-LOG_LEVEL=info
+GEMINI_API_KEY=
+OPENAI_API_KEY=
+GROQ_API_KEY=
 ```
 
-AI provider and model switch at runtime via **Settings** — no restart needed.
+The AI provider, models, cloud consent and embedding model switch at runtime in **Settings**, with no restart. If `JWT_SECRET` (or `KEY_ENCRYPTION_SECRET`) changes, API keys saved in Settings can no longer be read and must be entered again.
 
 ---
 
@@ -205,7 +240,7 @@ AI provider and model switch at runtime via **Settings** — no restart needed.
 | `/items/pending` | Notes awaiting AI enrichment |
 | `/items/enriched` | AI-classified notes ready for review |
 | `/vault` | Encrypted password vault |
-| `/settings` | Model selector, Claude API toggle, bookmarklet, Obsidian export, strict local mode |
+| `/settings` | AI provider and models, API keys, search & embeddings, privacy (Strict Local Mode), library tools, vault, bookmarklet |
 | `/share/:token` | Public read-only view of a shared item (no login required) |
 | `/welcome` | First-run onboarding flow |
 
@@ -234,10 +269,10 @@ Classification uses Ollama JSON mode + temperature 0 + a canonical category list
 
 Local RAG pipeline:
 
-1. Question is embedded with `nomic-embed-text`
+1. The question is embedded with the active embedding model (local `nomic-embed-text` by default)
 2. Top 10 relevant notes retrieved via hybrid search (70% semantic + 30% full-text)
-3. Ollama synthesizes a cited answer from your notes only
-4. Sources shown alongside the answer
+3. Your chosen AI (Ollama by default) synthesizes a cited answer from your notes only
+4. Sources shown alongside the answer. If semantic search is unavailable (for example Strict Local Mode with cloud embeddings), Ask falls back to keyword matching and says so
 
 ---
 
@@ -307,10 +342,10 @@ Bulk Keep imports: notes save instantly; background queue classifies at 3 concur
 ## Running Tests
 
 ```bash
-# Server (236 tests)
+# Server
 cd server && npm test
 
-# Client (428 tests)
+# Client
 cd client && npm test
 
 # Or both from the root
@@ -346,4 +381,4 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
 
 ---
 
-*Runs 100% on your machine. No subscriptions. No telemetry.*
+*Runs on your machine. No subscriptions. No telemetry. Nothing leaves it unless you turn on a cloud provider.*

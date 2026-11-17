@@ -7,7 +7,7 @@ Quick reference for starting, stopping, and managing local Memex services.
 ## Prerequisites
 
 - **Docker Desktop** running (Postgres container)
-- **Ollama** running natively on port `11434`
+- **Ollama** running natively on port `11434` (only for local AI; a cloud-only install does not need it, see the README)
 - **Node.js 22+** and **npm 10+** installed
 - Run from the **project root** (`D:\Project\Memex`)
 
@@ -129,15 +129,19 @@ npm run dev
 
 ---
 
-## One-time model setup (after first `docker compose up`)
+## One-time model setup (local AI only)
+
+Ollama runs natively (it is not in `docker-compose.yml`):
 
 ```powershell
-docker exec -it memex-ollama-1 ollama pull llama3.2
-docker exec -it memex-ollama-1 ollama pull nomic-embed-text
+ollama pull llama3.2
+ollama pull nomic-embed-text
 
 # Optional: vision AI
-docker exec -it memex-ollama-1 ollama pull llama3.2-vision:11b
+ollama pull llama3.2-vision:11b
 ```
+
+Cloud-only install: skip this section and follow "Path B" in the README.
 
 ---
 
