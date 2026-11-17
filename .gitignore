@@ -70,3 +70,6 @@ sessions/
 
 # Browser-test scratch output
 /.playwright-mcp/
+
+# Personal to-do list (kept local)
+/USER-TODO.md
