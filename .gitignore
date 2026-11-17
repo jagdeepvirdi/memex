@@ -67,3 +67,6 @@ sessions/
 
 # Database backups (your notes: never commit)
 /backups/
+
+# Browser-test scratch output
+/.playwright-mcp/

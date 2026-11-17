@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Memex: your notes, organized on your own machine</title>
+  <meta name="description" content="Memex files the notes, links, recipes and files you save, and answers questions about them. The AI runs on your computer; a cloud AI is optional and off by default. Free and open source." />
+  <meta name="color-scheme" content="dark" />
+  <meta name="theme-color" content="#0D0D0D" />
+  <meta property="og:title" content="Memex: your notes, organized on your own machine" />
+  <meta property="og:description" content="Save anything. Memex files it and answers questions about it. The AI runs on your computer." />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230D0D0D'/%3E%3Cpath d='M7 24V8h3.4l5.6 9 5.6-9H25v16h-3.2V13.6l-5.2 8.2h-1.2l-5.2-8.2V24z' fill='%23F59E0B'/%3E%3C/svg%3E" />
+  <link rel="preload" href="fonts/playfair-display-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="preload" href="fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <div class="wrap bar">
+      <a class="mark" href="#top" aria-label="Memex, back to the top">Memex</a>
+      <nav aria-label="Main">
+        <a href="#how">How it works</a>
+        <a href="#where">Local or cloud</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/jagdeepvirdi/memex">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" id="top">
+      <div class="hero-text">
+        <h1>Everything you save, organized on your own machine.</h1>
+        <p class="lead">Memex reads the notes, links, recipes and files you throw at it, files them, and answers questions about them. The AI runs on your computer. A cloud AI is something you switch on yourself, one key at a time.</p>
+        <p class="actions">
+          <a class="btn primary" href="#install">Install with Docker</a>
+          <a class="btn" href="https://github.com/jagdeepvirdi/memex">View the source</a>
+        </p>
+        <p class="fine">Free, MIT licensed, no account, no telemetry.</p>
+      </div>
+
+      <figure class="ledger" aria-labelledby="ledger-title">
+        <figcaption id="ledger-title">Where does each note go?</figcaption>
+
+        <div class="switch" role="group" aria-label="Which AI reads your notes">
+          <button type="button" class="opt" data-mode="local" aria-pressed="true">On this computer</button>
+          <button type="button" class="opt" data-mode="cloud" aria-pressed="false">Gemini (cloud)</button>
+        </div>
+
+        <ul class="notes" id="notes">
+          <li data-guard="">
+            <span class="note-title">Garlic and olive oil pasta</span>
+            <span class="note-kind">recipe</span>
+            <span class="verdict"></span>
+          </li>
+          <li data-guard="">
+            <span class="note-title">Kyoto in spring: temples and gardens</span>
+            <span class="note-kind">place</span>
+            <span class="verdict"></span>
+          </li>
+          <li data-guard="Its text looks like account details.">
+            <span class="note-title">Landlord bank details, account number 0012 3456 7890</span>
+            <span class="note-kind">note</span>
+            <span class="verdict"></span>
+          </li>
+          <li data-guard="A PIN next to its value.">
+            <span class="note-title">Router admin, PIN: 4821</span>
+            <span class="note-kind">note</span>
+            <span class="verdict"></span>
+          </li>
+          <li data-guard="Tagged private.">
+            <span class="note-title">Gift ideas for the family</span>
+            <span class="note-kind">note</span>
+            <span class="verdict"></span>
+          </li>
+          <li data-guard="Encrypted in your browser.">
+            <span class="note-title">Wi-Fi password</span>
+            <span class="note-kind">vault</span>
+            <span class="verdict"></span>
+          </li>
+          <li data-guard="">
+            <span class="note-title">Weekly review checklist</span>
+            <span class="note-kind">note</span>
+            <span class="verdict"></span>
+          </li>
+        </ul>
+
+        <p class="tally" id="tally" aria-live="polite"></p>
+        <p class="caption">Sample notes, and the same rules the app applies before every cloud call. They are a safety net, not a guarantee: tag anything that must never leave as private, or keep it in the vault.</p>
+      </figure>
+    </section>
+
+    <section class="band wrap" id="how" aria-labelledby="how-h">
+      <h2 id="how-h">Save it now, find it later</h2>
+      <dl class="rows">
+        <div class="row">
+          <dt>Capture</dt>
+          <dd>Paste a link, drop a PDF or a photo, record a voice memo, import Google Keep, or press the bookmarklet in your browser. Saving is instant; the AI does its work in the background and shows how long it will take.</dd>
+        </div>
+        <div class="row">
+          <dt>Organize</dt>
+          <dd>Every item gets a type, categories, tags and a short summary. Movies and books get a shelf with ratings, places get a map link, and the people, authors and cities in your notes become connected entries you can browse. Each item says which AI classified it, and you can redo it with another.</dd>
+        </div>
+        <div class="row">
+          <dt>Ask</dt>
+          <dd>Ask in plain words, such as "which Thai place did I want to try near the harbour?", and get an answer with the notes it came from. Search finds meaning, not just matching words.</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="band wrap" id="where" aria-labelledby="where-h">
+      <h2 id="where-h">Local by default, cloud when you decide</h2>
+      <p class="intro">Out of the box Memex uses Ollama on your computer, so nothing is sent anywhere. If you would rather not run a model, you can add a Gemini, OpenAI, Claude or Groq key instead. You can even pick a different one for each job, such as Gemini for Ask and your own computer for everything else.</p>
+      <div class="table-wrap">
+        <table>
+          <caption class="sr">Local and cloud AI compared</caption>
+          <thead>
+            <tr><th scope="col"></th><th scope="col">On your computer</th><th scope="col">In the cloud</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Reads and classifies your notes</th><td>Ollama (llama3.2, gemma3)</td><td>Gemini, OpenAI, Claude or Groq</td></tr>
+            <tr><th scope="row">Powers search and Ask</th><td>nomic-embed-text</td><td>Gemini or OpenAI embeddings</td></tr>
+            <tr><th scope="row">Needs a key and your consent</th><td>No</td><td>Yes, and it is off until you turn it on</td></tr>
+            <tr><th scope="row">Private items</th><td>Handled here</td><td>Never sent</td></tr>
+            <tr><th scope="row">Cost</th><td>Free, uses your hardware</td><td>Billed by the provider, not by Memex</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="band wrap" id="features" aria-labelledby="features-h">
+      <h2 id="features-h">The rest of what is in the box</h2>
+      <ul class="plain two">
+        <li><strong>Weekly digest.</strong> A short summary of what you saved, an "on this day" memory, and a connection between two notes you had not linked.</li>
+        <li><strong>Rediscovery.</strong> Forgotten notes come back to the dashboard instead of sinking.</li>
+        <li><strong>Reminders.</strong> Attach a date to any item and get a browser notification when it is due.</li>
+        <li><strong>Password vault.</strong> Encrypted in your browser with a master password that never leaves it.</li>
+        <li><strong>Sharing.</strong> A public link for one item that expires in a week and can be revoked.</li>
+        <li><strong>Obsidian export.</strong> Your whole library as Markdown files, whenever you want to leave.</li>
+        <li><strong>Backup and restore.</strong> One command each. Restore refuses a file that is not a complete backup.</li>
+        <li><strong>Sample data.</strong> Forty made-up items to look around in, removed with one click.</li>
+        <li><strong>History you can undo.</strong> Every AI classification is kept, so you can roll one back.</li>
+        <li><strong>Installable.</strong> Works as an app on your desktop or phone, with cached pages offline.</li>
+      </ul>
+    </section>
+
+    <section class="band wrap" id="privacy" aria-labelledby="privacy-h">
+      <h2 id="privacy-h">What stays on your machine, and what does not</h2>
+      <div class="split">
+        <div>
+          <h3>What Memex does</h3>
+          <ul class="plain">
+            <li>Keeps your notes in a Postgres database you run yourself.</li>
+            <li>Listens on your own computer only, by default. Nothing is exposed to your network.</li>
+            <li>Sends nothing to a cloud AI unless you add a key, choose it and consent, and never in Strict Local Mode.</li>
+            <li>Holds back vault items, items filed under Passwords or Personal, items tagged private, and text that looks like account details.</li>
+            <li>Encrypts the vault in your browser. The server only ever sees ciphertext.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>What it does not</h3>
+          <ul class="plain">
+            <li>It does not encrypt the rest of your database or your backups. Use disk encryption and keep backups private.</li>
+            <li>It has one account and is not built for sharing a server with other people.</li>
+            <li>A cloud AI you enable does see what you send it. The guard above reduces that; it cannot promise it.</li>
+            <li>It cannot recover a lost vault password. That is what makes the vault private.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="more"><a href="https://github.com/jagdeepvirdi/memex/blob/main/SECURITY.md">Read the full security notes</a></p>
+    </section>
+
+    <section class="band wrap" id="install" aria-labelledby="install-h">
+      <h2 id="install-h">Install it in a few minutes</h2>
+      <p class="intro">You need <a href="https://www.docker.com/products/docker-desktop/">Docker</a> and nothing else. The first build takes a few minutes.</p>
+      <div class="code">
+        <button type="button" class="copy" id="copy" aria-label="Copy the install commands">Copy</button>
+        <pre id="cmds"><code>git clone https://github.com/jagdeepvirdi/memex.git &amp;&amp; cd memex
+cp .env.example .env     # set JWT_SECRET: the file shows how to make one
+docker compose up -d</code></pre>
+      </div>
+      <p class="steps-after">Then open <code>http://localhost:3002</code>, create your account, and choose local AI or paste a cloud key. Settings has a button that loads sample data so you can look around first.</p>
+      <p class="fine">Tested on Windows with Docker Desktop. macOS and Linux use standard Docker features but have not been tried yet; if you try one, please tell us what you find.</p>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-in">
+      <p>Memex is MIT licensed. This page loads no scripts, fonts or trackers from anyone else.</p>
+      <nav aria-label="Project">
+        <a href="https://github.com/jagdeepvirdi/memex">Source</a>
+        <a href="https://github.com/jagdeepvirdi/memex/blob/main/README.md">Documentation</a>
+        <a href="https://github.com/jagdeepvirdi/memex/blob/main/SECURITY.md">Security</a>
+        <a href="https://github.com/jagdeepvirdi/memex/blob/main/CHANGELOG.md">Changelog</a>
+        <a href="https://github.com/jagdeepvirdi/memex/issues">Report a problem</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script src="site.js" defer></script>
+</body>
+</html>

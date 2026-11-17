@@ -147,8 +147,10 @@ Repo is PUBLIC: generic fixtures and demo data only, no personal note titles, re
       *(`scripts/smoke-test.sh` builds the image and starts postgres + app in its own compose project on spare ports, then runs 18 checks (migrations on boot, health shows no connection details, setup/login/second-account refusal, weak password refused, API/vault need a login, sample data load/clear, CORS blocks a random site but not the bookmarklet, both ports loopback-only). **Run locally: 18/18 passed in ~2 min.** Added as the `docker-smoke` job in `ci.yml`. Not done: seeing that job go green on GitHub (needs a push), and a macOS/Linux run.)*
 
 ### L7 — Landing page (after the redesign)
-- [ ] Static `site/` page sharing the app's design tokens: hero, problem, Capture/Organize/Ask, local-vs-cloud toggle, feature grid, privacy, quick start, footer
+- [x] Static `site/` page sharing the app's design tokens: hero, problem, Capture/Organize/Ask, local-vs-cloud toggle, feature grid, privacy, quick start, footer <!-- done 2026-11-17, UNCOMMITTED -->
+      *(`site/index.html`, `style.css`, `site.js`: no build step, no framework. App tokens (dark, amber, Playfair/DM Sans/JetBrains Mono). The hero is a live "where does each note go?" ledger: flip the AI between this computer and Gemini and see which sample notes are sent and which are held back, with the reason (the same rules as `cloudSafe`). Fonts are self-hosted (`site/fonts`, OFL), nothing loads from a third party (checked in the browser's network list, zero console messages), keyboard focus, skip link, reduced motion respected, checked at 1360 and 390 px wide. Preview: `cd site && python -m http.server 4173`.)*
 - [ ] Screenshots from the restyled app on demo data; deploy (Vercel or Netlify) and CNAME `memex.jagdeepsinghvirdi.com`
+      *(Not done: screenshots wait for the L9 redesign (the page uses no screenshots today); deploy and the DNS record are the user's call. **Found for L9:** the app itself loads Playfair/DM Sans/JetBrains Mono from Google Fonts (`client/index.html`), which tells Google every time a user opens a "nothing leaves your machine" app: self-host them the way `site/fonts` does.)*
 
 ### L8 — Post-launch ideas
 - [ ] MCP server (Claude Desktop, Cursor, ChatGPT can search/save into Memex)
