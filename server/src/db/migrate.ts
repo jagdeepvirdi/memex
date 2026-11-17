@@ -1,87 +1,29 @@
 import { config } from 'dotenv'
 import { resolve, dirname } from 'path'
 import { fileURLToPath } from 'url'
-import { readdir, readFile } from 'fs/promises'
 import pg from 'pg'
+import { runMigrations } from './migrator.js'
+
+// `npm run migrate`: applies pending migrations. The logic lives in migrator.ts (shared with the server's opt-in
+// MEMEX_AUTO_MIGRATE); this is only the command-line wrapper.
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 config({ path: resolve(__dirname, '../../../.env') })
 
 const { Pool } = pg
 
-async function migrate() {
+async function main() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-  const client = await pool.connect()
-
   try {
-    // Migrations tracking table (created outside a transaction so it persists on failure)
-    await client.query(`
-      CREATE TABLE IF NOT EXISTS _migrations (
-        id         SERIAL      PRIMARY KEY,
-        name       TEXT        NOT NULL UNIQUE,
-        applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `)
-
-    const { rows } = await client.query<{ name: string }>(
-      'SELECT name FROM _migrations ORDER BY id',
-    )
-    const applied = new Set(rows.map((r) => r.name))
-
-    const migrationsDir = resolve(__dirname, 'migrations')
-    const files = (await readdir(migrationsDir))
-      .filter((f) => f.endsWith('.sql'))
-      .sort()
-
-    let count = 0
-    for (const file of files) {
-      if (applied.has(file)) {
-        console.log(`  skip  ${file}`)
-        continue
-      }
-
-      const sql = await readFile(resolve(migrationsDir, file), 'utf8')
-
-      // ALTER TYPE ... ADD VALUE cannot run inside a transaction in PostgreSQL.
-      // Detect these and run them outside a transaction block.
-      const noTxn = /ALTER\s+TYPE\s+\S+\s+ADD\s+VALUE/i.test(sql)
-
-      if (noTxn) {
-        try {
-          await client.query(sql)
-          await client.query('INSERT INTO _migrations (name) VALUES ($1)', [file])
-          console.log(`  ✓     ${file}  (no-txn)`)
-          count++
-        } catch (err) {
-          throw new Error(`Migration ${file} failed: ${String(err)}`)
-        }
-      } else {
-        await client.query('BEGIN')
-        try {
-          await client.query(sql)
-          await client.query('INSERT INTO _migrations (name) VALUES ($1)', [file])
-          await client.query('COMMIT')
-          console.log(`  ✓     ${file}`)
-          count++
-        } catch (err) {
-          await client.query('ROLLBACK')
-          throw new Error(`Migration ${file} failed: ${String(err)}`)
-        }
-      }
-    }
-
-    if (count === 0) {
-      console.log('  Nothing to migrate — schema is up to date.')
-    } else {
-      console.log(`\nApplied ${count} migration(s).`)
-    }
+    const applied = await runMigrations(pool, { log: (line) => console.log(line) })
+    if (applied.length === 0) console.log('  Nothing to migrate — schema is up to date.')
+    else console.log(`\nApplied ${applied.length} migration(s).`)
   } finally {
-    client.release()
     await pool.end()
   }
 }
 
-migrate().catch((err) => {
+main().catch((err) => {
   console.error('\nMigration error:', err)
   process.exit(1)
 })

@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/coverage
+.git
+.github
+.memex
+.env
+.env.*
+!.env.example
+sessions
+docs/screenshots
+*.log
+.playwright-mcp
+prompt.txt

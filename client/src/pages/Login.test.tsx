@@ -80,7 +80,7 @@ describe('LoginPage — setup mode toggle', () => {
     mockApiFetch.mockResolvedValue({ status: 'ok' })
     render(<LoginPage />)
     fireEvent.click(screen.getByText(/new installation/i))
-    expect(screen.getByText(/Local AI Verification/i)).toBeInTheDocument()
+    expect(screen.getByText(/Local AI \(optional\)/i)).toBeInTheDocument()
   })
 
   it('shows Already have an account toggle in setup mode', () => {
@@ -94,6 +94,114 @@ describe('LoginPage — setup mode toggle', () => {
     fireEvent.click(screen.getByText(/new installation/i))
     fireEvent.click(screen.getByText(/already have an account/i))
     expect(screen.getByText('Sign In')).toBeInTheDocument()
+  })
+})
+
+describe('LoginPage — a new account lands on /welcome, not the dashboard', () => {
+  // The real store flips isAuthenticated when login() runs. The default mock never does, which hid a race: the
+  // "already signed in" effect navigated to the previous page after setup and beat navigate('/welcome').
+  it('does not let the signed-in redirect override /welcome after setup', async () => {
+    mockApiFetch.mockImplementation(async (path: string) => {
+      if (path === '/auth/status') return { needsSetup: true }
+      if (path === '/health/ollama') return { status: 'ok' }
+      return { user: { id: 'u1', email: 'a@b.com' }, token: 'tok' }
+    })
+    mockLogin.mockImplementation(() => { mockIsAuthenticated = true })
+    const { rerender } = render(<LoginPage />)
+    await screen.findByText('Setup Workspace')
+    fireEvent.change(screen.getByPlaceholderText('Email Address'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByText('Initialize Memex'))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/welcome'))
+    rerender(<LoginPage />) // the store has changed: this is where the old code navigated to "/"
+    expect(mockLogin).toHaveBeenCalled()
+    expect(mockNavigate).not.toHaveBeenCalledWith('/')
+    expect(mockNavigate.mock.calls.every((c) => c[0] === '/welcome')).toBe(true)
+  })
+
+  it('a normal sign-in still returns to the page the user came from', async () => {
+    mockLocationState = { from: { pathname: '/vault' } }
+    mockLogin.mockImplementation(() => { mockIsAuthenticated = true })
+    const { rerender } = render(<LoginPage />)
+    fireEvent.change(screen.getByPlaceholderText('Email Address'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByText('Enter Workspace'))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/vault'))
+    rerender(<LoginPage />)
+    expect(mockNavigate).toHaveBeenCalledWith('/vault')
+    expect(mockNavigate).not.toHaveBeenCalledWith('/welcome')
+  })
+
+  it('a failed setup does not log anyone in or navigate anywhere', async () => {
+    mockApiFetch.mockImplementation(async (path: string) => {
+      if (path === '/auth/status') return { needsSetup: true }
+      if (path === '/auth/setup') throw new Error('Setup already complete')
+      return { status: 'ok' }
+    })
+    render(<LoginPage />)
+    await screen.findByText('Setup Workspace')
+    fireEvent.change(screen.getByPlaceholderText('Email Address'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByText('Initialize Memex'))
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledWith('/auth/setup', expect.anything()))
+    expect(mockLogin).not.toHaveBeenCalled()
+    expect(mockNavigate).not.toHaveBeenCalled()
+  })
+})
+
+describe('LoginPage — first-run setup without Ollama', () => {
+  const offline = (needsSetup: boolean) =>
+    mockApiFetch.mockImplementation(async (path: string) => {
+      if (path === '/auth/status') return { needsSetup }
+      if (path === '/health/ollama') throw new Error('network down')
+      return { user: { id: 'u1', email: 'a@b.com' }, token: 'tok' }
+    })
+
+  it('opens setup by itself on a fresh install (no account yet)', async () => {
+    offline(true)
+    render(<LoginPage />)
+    expect(await screen.findByText('Setup Workspace')).toBeInTheDocument()
+    expect(screen.queryByText('Sign In')).not.toBeInTheDocument()
+  })
+
+  it('stays on sign-in when an account already exists', async () => {
+    offline(false)
+    render(<LoginPage />)
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalledWith('/auth/status'))
+    expect(screen.getByText('Sign In')).toBeInTheDocument()
+  })
+
+  it('stays on sign-in when the status check fails (the toggle still works)', async () => {
+    mockApiFetch.mockRejectedValue(new Error('offline'))
+    render(<LoginPage />)
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalled())
+    expect(screen.getByText('Sign In')).toBeInTheDocument()
+  })
+
+  it('lets you create the account even though Ollama is not running (a cloud-only install)', async () => {
+    offline(true)
+    render(<LoginPage />)
+    await screen.findByText('Setup Workspace')
+    await waitFor(() => expect(screen.getByText(/Ollama not detected/i)).toBeInTheDocument())
+    expect(screen.getByText('Initialize Memex').closest('button')).not.toBeDisabled()
+    fireEvent.change(screen.getByPlaceholderText('Email Address'), { target: { value: 'user@example.com' } })
+    fireEvent.change(screen.getByPlaceholderText('Password'), { target: { value: 'secret' } })
+    fireEvent.click(screen.getByText('Initialize Memex'))
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith('/welcome'))
+    expect(mockApiFetch).toHaveBeenCalledWith('/auth/setup', expect.objectContaining({ method: 'POST' }))
+  })
+
+  it('says Ollama is optional instead of showing an error, and offers the local-AI steps', async () => {
+    offline(true)
+    render(<LoginPage />)
+    expect(await screen.findByText(/Want to use local AI instead/i)).toBeInTheDocument()
+    expect(screen.getByText(/cloud provider/i)).toBeInTheDocument()
+  })
+
+  it('still reports when Ollama is there', async () => {
+    mockApiFetch.mockImplementation(async (path: string) => (path === '/auth/status' ? { needsSetup: true } : { status: 'ok' }))
+    render(<LoginPage />)
+    expect(await screen.findByText(/Ollama detected/i)).toBeInTheDocument()
   })
 })
 
@@ -193,7 +301,7 @@ describe('LoginPage — returning to the previous page', () => {
 
   it('sends a new account to /welcome regardless of the previous page', async () => {
     mockLocationState = { from: { pathname: '/item/42' } }
-    // Setup mode is gated on the Ollama health check, then posts to /auth/setup.
+    // Setup posts to /auth/setup; Ollama is only informational.
     mockApiFetch.mockImplementation(async (path: string) =>
       path === '/health/ollama' ? { status: 'ok' } : { user: { id: 'u1', email: 'a@b.com' }, token: 'tok' })
     render(<LoginPage />)

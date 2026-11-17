@@ -52,39 +52,48 @@ A self-hosted knowledge management app that ingests, auto-classifies, and organi
 
 ## Quick Start
 
-Memex stores everything in Postgres (Docker) on your machine. The AI can be **local** (Ollama: nothing leaves your computer) or **cloud** (Gemini, OpenAI, Claude or Groq: only with your key and consent), or a mix. The first three steps are the same either way; then pick path A or B.
+Memex stores everything in Postgres on your machine. The AI can be **local** (Ollama: nothing leaves your computer) or **cloud** (Gemini, OpenAI, Claude or Groq: only with your key and consent), or a mix. You choose on the first screen after creating your account.
 
-### Prerequisites
+### Option 1: Docker, one command (recommended)
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Postgres runs in a container)
-- Node.js 22+ and npm 10+
-- Path A only: [Ollama](https://ollama.com/download), installed natively (it is **not** part of `docker-compose.yml`)
-
-### 1. Configure and start the database
-
-From the project root:
+You need [Docker Desktop](https://www.docker.com/products/docker-desktop/) (or Docker Engine with the compose plugin). Nothing else.
 
 ```bash
-cp .env.example .env        # the file lives at the PROJECT ROOT; set JWT_SECRET (the command is in the file)
-docker compose up -d postgres   # Postgres + pgvector, host port 5436
+cp .env.example .env       # then set JWT_SECRET in .env (the command that generates one is in the file)
+docker compose up -d       # Postgres + the app; the first run builds the image (a few minutes)
 ```
 
-### 2. Install and migrate
+Open [http://localhost:3002](http://localhost:3002), create your account, and follow the AI setup screen.
+
+- **Migrations apply by themselves** when the app starts (`MEMEX_AUTO_MIGRATE=true` in the image). If one fails it is rolled back and the app refuses to start, with the reason in `docker compose logs app`.
+- **A weak `JWT_SECRET` is refused.** The same secret signs your login and encrypts the API keys you save, so the app will not start with an example value or one shorter than 32 characters. Compose itself stops, with a message, if `JWT_SECRET` is missing.
+- **Local AI**: install [Ollama](https://ollama.com/download) natively and run `ollama pull llama3.2` and `ollama pull nomic-embed-text`; the container reaches it at `host.docker.internal`. Prefer everything in Docker? `docker compose --profile ollama up -d`, set `OLLAMA_URL_DOCKER=http://ollama:11434` in `.env`, then `docker compose exec ollama ollama pull llama3.2` (CPU only unless you add GPU passthrough).
+- **Cloud-only**: skip Ollama entirely (see "Path B" below).
+- **Stop / start**: `docker compose down` keeps your data (the `pg_data` volume); `docker compose up -d` brings it back. `docker compose down -v` deletes the data.
+- **Check it**: `http://localhost:3002/api/health` (alive?) and `http://localhost:3002/api/health/status` (database, pending migrations, Ollama).
+
+### Option 2: from source (development)
+
+You need Node.js 22+, npm 10+ and Docker (for Postgres).
 
 ```bash
+cp .env.example .env              # the file lives at the PROJECT ROOT; set JWT_SECRET
+docker compose up -d postgres     # Postgres + pgvector on host port 5436 (just the database)
 npm run install:all
-npm run db:migrate          # creates the tables (safe to run again)
+npm run db:migrate                # creates the tables (safe to run again)
+npm run dev                       # client on http://localhost:5175, server on http://localhost:3002
 ```
 
-`npm run dev` does **not** migrate for you; the lifecycle scripts below (`memex.sh` / `memex.ps1`) do, on every start.
+`npm run dev` does **not** migrate for you; the lifecycle scripts below (`memex.sh` / `memex.ps1`) do, on every start. Use `docker compose up -d postgres`, not a bare `docker compose up -d`, in development: the bare command would also start the app container on the same port as your dev server.
 
-### 3. Run
+If something is wrong at startup, Memex says what and how to fix it instead of failing later:
 
-```bash
-npm run dev      # client on http://localhost:5175, server on http://localhost:3002
-```
-
-Open [http://localhost:5175](http://localhost:5175) and create your account.
+| You see | Meaning | Do |
+|---|---|---|
+| `Cannot reach the database at ...` | Postgres is not running or `DATABASE_URL` is wrong | `docker compose up -d postgres`; check the port (5436) in `.env` |
+| `Memex will not start with a weak secret` | `JWT_SECRET` (or `KEY_ENCRYPTION_SECRET`) is missing, an example value, or too short | generate one with the command in `.env.example` |
+| `N database migration(s) are pending` (a warning) | you pulled new code but have not migrated | `npm run db:migrate` |
+| `A database migration failed, so Memex will not start` | a migration was rolled back | read the message; restore your backup if needed |
 
 ### Path A: local AI (default)
 
@@ -95,9 +104,11 @@ ollama pull nomic-embed-text
 
 That is all: Memex uses Ollama for classification, answers and embeddings out of the box. Optional extras are at the end of this section.
 
+On the first-run screen choose **On my computer (Ollama)**.
+
 ### Path B: cloud-only (no Ollama)
 
-You do not need Ollama. **Do the steps in this order**, in the app:
+You do not need Ollama, and you can create your account without it. The first-run screen (**In the cloud**) does the steps below for you, in the right order: it saves your key, asks for your consent, tests the connection, then switches search to the cloud. To do it by hand later, **use this order**, in the app:
 
 1. **Settings → Keys & Privacy**: paste an API key (for example Gemini from [aistudio.google.com](https://aistudio.google.com)). Keys are stored encrypted and never shown again.
 2. **Settings → AI → Provider & model**: choose that provider and turn on **Allow cloud AI** (your consent).
@@ -160,6 +171,45 @@ ollama pull llama3.2-vision:11b
 # or a lighter alternative:
 ollama pull llava:7b
 ```
+
+---
+
+## Upgrading
+
+Back up first (it is one command), then update.
+
+**Docker**
+
+```bash
+docker compose exec -T postgres pg_dump -U memex memex > memex-backup.sql     # backup
+git pull
+docker compose build && docker compose up -d                                  # new image; migrations apply on boot
+```
+
+If the new version fails to start, `docker compose logs app` says why (a failed migration rolls back and changes nothing else). To go back, check out the previous version, rebuild, and restore the backup into a fresh database: `docker compose down -v && docker compose up -d postgres && docker compose exec -T postgres psql -U memex memex < memex-backup.sql`.
+
+**From source**
+
+```bash
+git pull
+npm run install:all
+npm run db:migrate          # new migrations are applied only when YOU run this (or use memex.sh / memex.ps1)
+```
+
+Then restart. The server warns at startup if migrations are pending. If the page looks unchanged after an upgrade, reload it once or twice: the installed web app updates itself in the background (clearing the site's data forces it). Changing `JWT_SECRET` (or `KEY_ENCRYPTION_SECRET`) makes API keys saved in Settings unreadable: enter them again.
+
+---
+
+## Platform notes
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Docker one-command start | **tested** (Docker Desktop) | not tested yet | not tested yet |
+| What you need | Docker Desktop (WSL2 backend), Node 22 for development, PowerShell 7 for `memex.ps1` | Docker Desktop, Node 22 for development | Docker Engine + compose plugin, Node 22 for development |
+| Reaching native Ollama from the container | `host.docker.internal` works out of the box | same | works through the `host-gateway` mapping in `docker-compose.yml` (untested) |
+| GPU for Ollama | automatic with native Ollama (NVIDIA/AMD) | automatic with native Ollama (Apple silicon); Docker cannot pass the GPU through, so use native Ollama | native Ollama uses the GPU; for Ollama in Docker you need the NVIDIA container toolkit and a GPU reservation (not included) |
+
+Only the Windows column has been run. The macOS and Linux paths use standard Docker features and should work, but they have not been tried: please report anything that does not.
 
 ---
 

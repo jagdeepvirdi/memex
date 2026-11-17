@@ -6,7 +6,7 @@ Quick reference for starting, stopping, and managing local Memex services.
 
 ## Prerequisites
 
-- **Docker Desktop** running (Postgres container)
+- **Docker Desktop** running (Postgres container; also the whole app if you use `docker compose up -d`, see the README)
 - **Ollama** running natively on port `11434` (only for local AI; a cloud-only install does not need it, see the README)
 - **Node.js 22+** and **npm 10+** installed
 - Run from the **project root** (`D:\Project\Memex`)

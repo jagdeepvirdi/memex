@@ -16,6 +16,32 @@ describe('Auth Routes', () => {
     vi.clearAllMocks();
   });
 
+  describe('GET /api/auth/status', () => {
+    it('is public and says a fresh install needs setup', async () => {
+      (pool.query as any).mockResolvedValueOnce({ rows: [{ count: '0' }] });
+      const res = await request(app).get('/api/auth/status');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ needsSetup: true });
+    });
+
+    it('says an installation with an account does not', async () => {
+      (pool.query as any).mockResolvedValueOnce({ rows: [{ count: '1' }] });
+      expect((await request(app).get('/api/auth/status')).body).toEqual({ needsSetup: false });
+    });
+
+    it('answers 500 with a plain message when the database cannot be read', async () => {
+      (pool.query as any).mockRejectedValueOnce(new Error('db down'));
+      const res = await request(app).get('/api/auth/status');
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Could not check the installation' });
+    });
+
+    it('reveals nothing but the boolean', async () => {
+      (pool.query as any).mockResolvedValueOnce({ rows: [{ count: '3' }] });
+      expect(Object.keys((await request(app).get('/api/auth/status')).body)).toEqual(['needsSetup']);
+    });
+  });
+
   describe('POST /api/auth/login', () => {
     it('should return 401 for invalid credentials', async () => {
       (pool.query as any).mockResolvedValueOnce({ rows: [] }); // User not found

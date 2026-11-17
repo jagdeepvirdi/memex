@@ -53,6 +53,21 @@ router.post('/login', authLimiter, async (req, res) => {
  * POST /api/auth/setup
  * Only works if no users exist. Creates the first user.
  */
+/**
+ * GET /api/auth/status
+ * Public. Whether this is a fresh install (no account yet), so the first screen can offer setup instead of a login that
+ * cannot succeed. Reveals nothing but a boolean.
+ */
+router.get('/status', async (_req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT COUNT(*) FROM users')
+    res.json({ needsSetup: parseInt(rows[0].count, 10) === 0 })
+  } catch (err) {
+    logger.error(err, 'Auth status error')
+    res.status(500).json({ error: 'Could not check the installation' })
+  }
+})
+
 router.post('/setup', authLimiter, async (req, res) => {
   const { email, password } = req.body
 

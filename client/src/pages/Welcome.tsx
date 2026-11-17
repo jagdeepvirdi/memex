@@ -5,11 +5,13 @@ import { Sparkles, Brain, ArrowRight, CheckCircle2, Rocket, Palette } from 'luci
 import { toast } from 'sonner';
 import { apiFetch, fetchInsights } from '../lib/api';
 import type { Insight } from '../../../shared/types';
+import { AiSetupStep } from '../components/setup/AiSetupStep';
 
 type Persona = 'productivity' | 'creative';
 
 export default function WelcomePage() {
-  const [step, setStep] = useState(1);
+  // Step 0 is the AI setup (local or cloud); the rest is the original welcome flow.
+  const [step, setStep] = useState(0);
   const [persona, setPersona] = useState<Persona | null>(null);
   const [insights, setInsights] = useState<Insight[]>([]);
   const [loadingInsights, setLoadingInsights] = useState(false);
@@ -50,6 +52,17 @@ export default function WelcomePage() {
 
       <div className="w-full max-w-2xl relative z-10">
         <AnimatePresence mode="wait">
+          {step === 0 && (
+            <motion.div
+              key="step0"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+            >
+              <AiSetupStep onDone={() => setStep(1)} />
+            </motion.div>
+          )}
+
           {step === 1 && (
             <motion.div
               key="step1"

@@ -407,6 +407,24 @@ describe('activeProvider / activeModelLabel / listProviders', () => {
   })
 })
 
+describe('an invalid key is an auth error whichever way the provider reports it', () => {
+  const GOOGLE_400 = '{"error":{"code":400,"message":"API key not valid. Please pass a valid API key.","status":"INVALID_ARGUMENT","details":[{"reason":"API_KEY_INVALID"}]}}'
+
+  it('maps Google\'s HTTP 400 API_KEY_INVALID to auth, so the UI can say "check your key"', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'gemini' }))
+    mockGenerate.mockRejectedValue(Object.assign(new Error(GOOGLE_400), { status: 400 }))
+    await expect(aiChat('hi', undefined, undefined, undefined, undefined, { provider: 'gemini' }))
+      .rejects.toMatchObject({ provider: 'gemini', kind: 'auth', status: 400 })
+  })
+
+  it('does not call every 400 an auth error', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'gemini' }))
+    mockGenerate.mockRejectedValue(Object.assign(new Error('Unable to process input image'), { status: 400 }))
+    await expect(aiChat('hi', undefined, undefined, undefined, undefined, { provider: 'gemini' }))
+      .rejects.toMatchObject({ kind: 'unavailable', status: 400 })
+  })
+})
+
 describe('onProvider callback', () => {
   const call = (onProvider: (i: unknown) => void, extra = {}) =>
     aiChat('hi', undefined, undefined, undefined, undefined, { onProvider, ...extra })

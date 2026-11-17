@@ -17,9 +17,46 @@ services:
       timeout: 5s
       retries: 5
 
-  # Ollama runs natively on this machine (port 11434) — no Docker needed.
-  # GPU passthrough works out of the box with native install.
-  # To pull models (one-time): ollama pull llama3.2 && ollama pull nomic-embed-text
+  # ── The app (API + web UI on one port) ──────────────────────────────────────
+  # `docker compose up -d` starts Postgres and the app. Migrations apply automatically on boot (MEMEX_AUTO_MIGRATE).
+  # Needs JWT_SECRET in .env (compose stops with a message if it is missing). The app refuses to start with a weak one.
+  # For development use `npm run dev` and start only Postgres: `docker compose up -d postgres`.
+  app:
+    build: .
+    image: memex:local
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${MEMEX_PORT:-3002}:3002"
+    environment:
+      DATABASE_URL: postgresql://memex:memex@postgres:5432/memex
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in the .env file first - .env.example shows how to generate one}
+      KEY_ENCRYPTION_SECRET: ${KEY_ENCRYPTION_SECRET:-}
+      # Native Ollama on the host (the default). With `--profile ollama` set OLLAMA_URL_DOCKER=http://ollama:11434.
+      OLLAMA_URL: ${OLLAMA_URL_DOCKER:-http://host.docker.internal:11434}
+      OLLAMA_CHAT_MODEL: ${OLLAMA_CHAT_MODEL:-llama3.2}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      # Optional cloud providers (a key only makes a provider available; you still choose it and consent in Settings).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # lets Linux reach the host's Ollama, like Docker Desktop does
+    restart: unless-stopped
+
+  # ── Optional: Ollama in Docker (CPU only unless you add GPU passthrough) ────
+  # Off by default: most people run Ollama natively (GPU works out of the box).
+  #   docker compose --profile ollama up -d
+  #   docker compose exec ollama ollama pull llama3.2 && docker compose exec ollama ollama pull nomic-embed-text
+  ollama:
+    image: ollama/ollama
+    profiles: ["ollama"]
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
 
 volumes:
   pg_data:
+  ollama_data:

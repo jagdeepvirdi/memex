@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, Mail, Lock, Sparkles, UserPlus, Brain, Check, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
@@ -24,8 +24,13 @@ export default function LoginPage() {
       ? `${from.pathname}${from.search ?? ''}${from.hash ?? ''}`
       : '/';
 
+  // Creating the account signs the user in, which flips `isAuthenticated`. That must not send them to the page they came
+  // from: a new account goes to /welcome (the AI setup), and this effect would otherwise win that race and land on the
+  // dashboard. `createdAccount` is set just before login() so the effect stands aside for exactly that case.
+  const createdAccount = useRef(false);
+
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isAuthenticated && !createdAccount.current) {
       navigate(redirectTo);
     }
   }, [isAuthenticated, navigate, redirectTo]);
@@ -35,6 +40,16 @@ export default function LoginPage() {
       checkAI();
     }
   }, [isSetup]);
+
+  // A fresh install has no account, so a sign-in form cannot succeed: open setup straight away. If the check fails the
+  // normal form stays (and the toggle below still switches by hand).
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ needsSetup?: boolean }>('/auth/status')
+      .then((s) => { if (!cancelled && s?.needsSetup === true) setIsSetup(true); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   const checkAI = async () => {
     setAiStatus('checking');
@@ -63,6 +78,7 @@ export default function LoginPage() {
         body: JSON.stringify({ email, password }),
       });
 
+      if (isSetup) createdAccount.current = true;
       login(data.user, data.token);
       toast.success(isSetup ? 'Account created' : 'Welcome back');
       navigate(isSetup ? '/welcome' : redirectTo);
@@ -103,20 +119,19 @@ export default function LoginPage() {
           {isSetup && (
              <div className={`p-4 rounded-xl border flex items-center gap-3 transition-all ${
                 aiStatus === 'ready' ? 'bg-green-500/5 border-green-500/10' :
-                aiStatus === 'checking' ? 'bg-white/5 border-white/5' :
-                'bg-red-500/5 border-red-500/10'
+                'bg-white/5 border-white/5'
              }`}>
                 <div className="shrink-0">
                    {aiStatus === 'ready' && <Check className="text-green-500" size={18} />}
                    {aiStatus === 'checking' && <Loader2 className="text-ink-muted animate-spin" size={18} />}
-                   {aiStatus === 'offline' && <AlertCircle className="text-red-500" size={18} />}
+                   {aiStatus === 'offline' && <AlertCircle className="text-ink-muted" size={18} />}
                 </div>
                 <div className="flex-1 min-w-0">
-                   <p className="text-[10px] uppercase tracking-widest font-bold text-ink-muted mb-0.5">Local AI Verification</p>
+                   <p className="text-[10px] uppercase tracking-widest font-bold text-ink-muted mb-0.5">Local AI (optional)</p>
                    <p className="text-xs text-ink truncate">
-                      {aiStatus === 'ready' ? 'Ollama connection successful' : 
-                       aiStatus === 'checking' ? 'Testing local intelligence engine...' :
-                       'Ollama offline or models missing'}
+                      {aiStatus === 'ready' ? 'Ollama detected: local AI is available' :
+                       aiStatus === 'checking' ? 'Looking for local AI (Ollama)...' :
+                       'Ollama not detected. Fine if you will use a cloud provider: you choose on the next screen.'}
                    </p>
                 </div>
                 {aiStatus === 'offline' && (
@@ -154,7 +169,7 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={loading || (isSetup && aiStatus !== 'ready')}
+              disabled={loading}
               className="w-full bg-accent hover:bg-accent-dark disabled:opacity-50 disabled:cursor-not-allowed text-bg font-bold py-3.5 rounded-xl flex items-center justify-center gap-2 shadow-lg shadow-accent/10 transition-all active:scale-95"
             >
               {loading ? <Loader2 className="animate-spin" /> : (
@@ -178,9 +193,9 @@ export default function LoginPage() {
 
         {isSetup && aiStatus === 'offline' && (
            <div className="bg-white/5 border border-white/5 p-4 rounded-xl space-y-2 animate-in slide-in-from-bottom-4">
-              <p className="text-xs text-ink font-medium flex items-center gap-2"><Brain size={14} className="text-accent" /> How to fix AI offline:</p>
+              <p className="text-xs text-ink font-medium flex items-center gap-2"><Brain size={14} className="text-accent" /> Want to use local AI instead?</p>
               <ol className="text-[10px] text-ink-muted space-y-1 list-decimal list-inside px-1">
-                 <li>Ensure Ollama is running natively.</li>
+                 <li>Install and start Ollama (ollama.com).</li>
                  <li>Run: <code className="bg-bg px-1 rounded">ollama pull llama3.2</code></li>
                  <li>Run: <code className="bg-bg px-1 rounded">ollama pull nomic-embed-text</code></li>
               </ol>

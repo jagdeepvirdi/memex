@@ -33,6 +33,8 @@ function toProviderError(provider: ProviderId, err: unknown): AiProviderError {
   const message = redactSecrets(e?.message ?? String(err))
   if (status === 429) return new AiProviderError(provider, 'rate_limit', message, status)
   if (status === 401 || status === 403) return new AiProviderError(provider, 'auth', message, status)
+  // Google reports an invalid key as HTTP 400 (INVALID_ARGUMENT / API_KEY_INVALID), not 401: still a key problem.
+  if (status === 400 && /API_KEY_INVALID|api key not valid/i.test(message)) return new AiProviderError(provider, 'auth', message, status)
   if (e?.name === 'AbortError' || e?.name === 'TimeoutError' || e?.name === 'APIConnectionTimeoutError') {
     return new AiProviderError(provider, 'timeout', message, status)
   }

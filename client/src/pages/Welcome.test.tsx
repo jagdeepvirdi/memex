@@ -24,7 +24,19 @@ vi.mock('../lib/api', () => ({
   fetchInsights: (...a: any[]) => mockFetchInsights(...a),
 }))
 
+// The AI setup step has its own tests; here it is a stand-in whose button finishes it.
+vi.mock('../components/setup/AiSetupStep', () => ({
+  AiSetupStep: ({ onDone }: { onDone: () => void }) => <button onClick={onDone}>stub-ai-setup-done</button>,
+}))
+
 import WelcomePage from './Welcome'
+
+/** Renders the page and gets past the AI setup step, to the original welcome flow. */
+function renderPastAiSetup() {
+  const utils = render(<WelcomePage />)
+  fireEvent.click(screen.getByText('stub-ai-setup-done'))
+  return utils
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -34,19 +46,32 @@ beforeEach(() => {
 
 // ── Step 1 ────────────────────────────────────────────────────────────────────
 
+describe('WelcomePage — AI setup comes first', () => {
+  it('opens on the AI setup step, not the greeting', () => {
+    render(<WelcomePage />)
+    expect(screen.getByText('stub-ai-setup-done')).toBeInTheDocument()
+    expect(screen.queryByText('Hello, World.')).not.toBeInTheDocument()
+  })
+
+  it('moves on to the greeting when the AI setup is finished or skipped', () => {
+    renderPastAiSetup()
+    expect(screen.getByText('Hello, World.')).toBeInTheDocument()
+  })
+})
+
 describe('WelcomePage — step 1', () => {
   it('renders the Hello, World. heading on step 1', () => {
-    render(<WelcomePage />)
+    renderPastAiSetup()
     expect(screen.getByText('Hello, World.')).toBeInTheDocument()
   })
 
   it('renders the "Let\'s get started" button', () => {
-    render(<WelcomePage />)
+    renderPastAiSetup()
     expect(screen.getByText(/let's get started/i)).toBeInTheDocument()
   })
 
   it('advances to step 2 when the CTA button is clicked', () => {
-    render(<WelcomePage />)
+    renderPastAiSetup()
     fireEvent.click(screen.getByText(/let's get started/i))
     expect(screen.getByText('Choose My Persona')).toBeInTheDocument()
   })
@@ -56,7 +81,7 @@ describe('WelcomePage — step 1', () => {
 
 describe('WelcomePage — step 2', () => {
   const goToStep2 = () => {
-    render(<WelcomePage />)
+    renderPastAiSetup()
     fireEvent.click(screen.getByText(/let's get started/i))
   }
 
@@ -96,7 +121,7 @@ describe('WelcomePage — step 2', () => {
 
 describe('WelcomePage — step 3 / completion', () => {
   const goToStep3 = () => {
-    render(<WelcomePage />)
+    renderPastAiSetup()
     fireEvent.click(screen.getByText(/let's get started/i))
     // Select a persona to enable Continue
     fireEvent.click(screen.getByText('Inspirational Creative Muse').closest('button')!)
