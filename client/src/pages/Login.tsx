@@ -159,7 +159,6 @@ export default function LoginPage() {
                 <input
                   type="password"
                   placeholder="Password"
-                  minLength={isSetup ? 10 : undefined}
                   autoComplete={isSetup ? 'new-password' : 'current-password'}
                   className="w-full bg-bg border border-white/10 rounded-xl py-3 pl-10 pr-4 text-ink outline-none focus:border-accent/50 transition-all placeholder:text-ink-muted/30"
                   value={password}

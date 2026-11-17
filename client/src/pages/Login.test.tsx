@@ -328,7 +328,8 @@ describe('LoginPage — password rules', () => {
     expect(await screen.findByText(/At least 10 characters/)).toBeInTheDocument()
     expect(screen.getByText(/vault has its own master password/)).toBeInTheDocument()
     const input = screen.getByPlaceholderText('Password')
-    expect(input).toHaveAttribute('minlength', '10')
+    // No minlength attribute on purpose: the browser's own validation would block the submit before the server can explain.
+    expect(input).not.toHaveAttribute('minlength')
     expect(input).toHaveAttribute('autocomplete', 'new-password')
   })
 
