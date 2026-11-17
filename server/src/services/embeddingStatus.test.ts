@@ -9,7 +9,7 @@ vi.mock('./ai.js', () => ({ listProviders: () => mockListProviders() }))
 
 import { pool } from '../db/client'
 import { getEmbeddingStatus, embeddingBlockedReason } from './embeddingStatus'
-import { setActiveEmbedding, buildEmbedding } from './embeddingConfig'
+import { setActiveEmbedding, buildEmbedding, setThresholdOverrides } from './embeddingConfig'
 
 const cfg = (over: Partial<AiConfig> = {}): AiConfig => ({
   model: 'llama3.2', useClaude: false, strictLocal: false, provider: 'ollama',
@@ -34,7 +34,29 @@ beforeEach(() => {
   mockListProviders.mockResolvedValue(providers(true))
   db()
 })
-afterEach(() => setActiveEmbedding(null))
+afterEach(() => { setActiveEmbedding(null); setThresholdOverrides(null) })
+
+describe('getEmbeddingStatus — similarity thresholds', () => {
+  it('reports the tuned thresholds of the local model', async () => {
+    expect((await getEmbeddingStatus()).thresholds).toEqual({ duplicate: 0.92, graph: 0.85, entity: 0.92, basis: 'tuned' })
+  })
+
+  it('reports the thresholds of a cloud model and that they are only a probe estimate', async () => {
+    setActiveEmbedding(buildEmbedding('gemini'))
+    expect((await getEmbeddingStatus()).thresholds).toEqual({ duplicate: 0.94, graph: 0.8, entity: null, basis: 'probe' })
+  })
+
+  it('reports the strict fallback for a model nobody has measured', async () => {
+    setActiveEmbedding(buildEmbedding('openai'))
+    expect((await getEmbeddingStatus()).thresholds).toEqual({ duplicate: 0.97, graph: null, entity: null, basis: 'default' })
+  })
+
+  it('reports calibrated thresholds as library-based', async () => {
+    setActiveEmbedding(buildEmbedding('gemini'))
+    setThresholdOverrides({ 'gemini:gemini-embedding-001': { duplicate: 0.955, graph: 0.83 } })
+    expect((await getEmbeddingStatus()).thresholds).toMatchObject({ duplicate: 0.955, graph: 0.83, basis: 'library' })
+  })
+})
 
 describe('getEmbeddingStatus', () => {
   it('reports the local model as usable with item counts and no job', async () => {

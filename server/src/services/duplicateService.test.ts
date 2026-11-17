@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { findSimilarItems, findItemsBySourceUrl, mergeSimilar } from './duplicateService'
 import { pool } from '../db/client'
+import { setActiveEmbedding, buildEmbedding } from './embeddingConfig'
 
 vi.mock('../db/client', () => ({ pool: { query: vi.fn() } }))
 
@@ -29,6 +30,15 @@ describe('findSimilarItems', () => {
     const [sql, params] = vi.mocked(pool.query).mock.calls[0]
     expect(String(sql)).toMatch(/embedding_model = \$4/)
     expect((params as unknown[])[3]).toBe('ollama:nomic-embed-text')
+  })
+
+  it('uses the duplicate threshold of the active embedding model', async () => {
+    setActiveEmbedding(buildEmbedding('gemini'))
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any)
+    await findSimilarItems([0.1, 0.2])
+    const params = vi.mocked(pool.query).mock.calls[0][1] as unknown[]
+    expect(params).toEqual([JSON.stringify([0.1, 0.2]), 0.94, 3, 'gemini:gemini-embedding-001'])
+    setActiveEmbedding(null)
   })
 
   it('passes the similarity threshold and limit to the query', async () => {

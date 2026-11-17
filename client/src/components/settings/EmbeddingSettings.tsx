@@ -160,6 +160,18 @@ export function EmbeddingSettings() {
         </div>
       )}
 
+      {(status.thresholds.basis === 'probe' || status.thresholds.basis === 'default') && (
+        <p data-testid="threshold-note" className="text-[11px] text-ink-muted flex items-start gap-1.5">
+          <Info size={13} className="mt-0.5 shrink-0" />
+          <span>
+            {status.thresholds.basis === 'probe'
+              ? `Similarity thresholds for this model are estimates from a small test (duplicate hints above ${status.thresholds.duplicate}, graph links above ${status.thresholds.graph ?? 'none'}). `
+              : 'This model has no measured similarity thresholds yet: duplicate hints are strict, the graph draws no semantic links, and entities are never merged. '}
+            Tune them to your library with <code className="font-mono">calibrateEmbedding.ts</code> in <code className="font-mono">server/src/scripts</code>.
+          </span>
+        </p>
+      )}
+
       {!run.running && status.usable && waiting > 0 && (
         <div className="flex flex-wrap items-center gap-3 text-xs text-ink-muted">
           <Info size={14} className="shrink-0" />

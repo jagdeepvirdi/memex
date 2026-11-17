@@ -1,9 +1,10 @@
-import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
+import { describe, it, expect, vi, beforeEach, beforeAll, afterEach } from 'vitest'
 import request from 'supertest'
 import jwt from 'jsonwebtoken'
 import { app } from '../index'
 import { pool } from '../db/client'
 import { embedQuery } from '../services/embedder'
+import { setActiveEmbedding, buildEmbedding } from '../services/embeddingConfig'
 
 vi.mock('../db/client', () => ({ pool: { query: vi.fn(), connect: vi.fn() } }))
 vi.mock('../services/embedder', () => ({
@@ -45,14 +46,36 @@ describe('POST /api/search — keyword fallback', () => {
   })
 })
 
-describe('GET /api/search/graph — model filter', () => {
-  it('only links items whose vectors come from the active model', async () => {
+describe('GET /api/search/graph — model filter and thresholds', () => {
+  afterEach(() => setActiveEmbedding(null))
+
+  it('only links items whose vectors come from the active model, at the graph threshold of that model', async () => {
     vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any).mockResolvedValueOnce({ rows: [] } as any)
     const res = await request(app).get('/api/search/graph').set('Authorization', AUTH)
     expect(res.status).toBe(200)
-    for (const call of vi.mocked(pool.query).mock.calls) {
-      expect(String(call[0])).toMatch(/embedding_model = \$2/)
-      expect(call[1]).toEqual([100, 'ollama:nomic-embed-text'])
-    }
+    expect(res.body).toMatchObject({ nodes: [], links: [], semanticLinks: true })
+    const [nodes, links] = vi.mocked(pool.query).mock.calls
+    expect(String(nodes[0])).toMatch(/embedding_model = \$2/)
+    expect(nodes[1]).toEqual([100, 'ollama:nomic-embed-text'])
+    expect(String(links[0])).toMatch(/embedding_model = \$2/)
+    expect(String(links[0])).toMatch(/> \$3/)
+    expect(links[1]).toEqual([100, 'ollama:nomic-embed-text', 0.85]) // nomic's tuned graph threshold
+  })
+
+  it('uses the threshold of the model that is active, not a fixed one', async () => {
+    setActiveEmbedding(buildEmbedding('gemini'))
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: [] } as any).mockResolvedValueOnce({ rows: [] } as any)
+    await request(app).get('/api/search/graph').set('Authorization', AUTH)
+    expect(vi.mocked(pool.query).mock.calls[1][1]).toEqual([100, 'gemini:gemini-embedding-001', 0.8])
+  })
+
+  it('draws no semantic links for a model nobody has measured, but still returns the nodes', async () => {
+    setActiveEmbedding(buildEmbedding('openai'))
+    const nodes = [{ id: 'a', title: 'A', type: 'note' }]
+    vi.mocked(pool.query).mockResolvedValueOnce({ rows: nodes } as any)
+    const res = await request(app).get('/api/search/graph').set('Authorization', AUTH)
+    expect(res.status).toBe(200)
+    expect(res.body).toEqual({ nodes, links: [], semanticLinks: false })
+    expect(pool.query).toHaveBeenCalledTimes(1) // the expensive pairwise query is not even run
   })
 })

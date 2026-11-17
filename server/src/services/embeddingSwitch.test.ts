@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 vi.mock('../db/client', () => ({ pool: { query: vi.fn() } }))
 const mockBlocked = vi.fn()
@@ -9,6 +9,8 @@ vi.mock('./embeddingStatus', () => ({
 }))
 const mockHasRunning = vi.fn()
 vi.mock('./ingestJobs', () => ({ hasRunningJob: (...a: unknown[]) => mockHasRunning(...a) }))
+const mockSnapshot = vi.fn()
+vi.mock('./embeddingCalibration', () => ({ snapshotReference: (...a: unknown[]) => mockSnapshot(...a) }))
 const mockLoad = vi.fn()
 vi.mock('./embeddingConfig', async (orig) => ({
   ...(await orig<typeof import('./embeddingConfig')>()),
@@ -16,7 +18,7 @@ vi.mock('./embeddingConfig', async (orig) => ({
 }))
 
 import { pool } from '../db/client'
-import { buildEmbedding } from './embeddingConfig'
+import { buildEmbedding, setActiveEmbedding } from './embeddingConfig'
 import { estimateReembed, switchEmbeddingModel, reembedRunning, EmbeddingSwitchError } from './embeddingSwitch'
 
 const GEMINI = buildEmbedding('gemini')
@@ -38,6 +40,7 @@ beforeEach(() => {
   mockBlocked.mockResolvedValue(null)
   mockHasRunning.mockResolvedValue(false)
   mockLoad.mockResolvedValue(GEMINI)
+  mockSnapshot.mockResolvedValue('saved')
   vi.mocked(pool.query).mockResolvedValue(rows())
 })
 
@@ -137,6 +140,34 @@ describe('switchEmbeddingModel', () => {
     await switchEmbeddingModel('gemini')
     const sqls = vi.mocked(pool.query).mock.calls.map(c => String(c[0]))
     expect(sqls.some(s => /UPDATE items/.test(s))).toBe(false)
+  })
+})
+
+describe('switchEmbeddingModel — calibration reference', () => {
+  afterEach(() => setActiveEmbedding(null))
+
+  it('saves the reference share of the model it is leaving, before changing anything', async () => {
+    await switchEmbeddingModel('gemini')
+    expect(mockSnapshot).toHaveBeenCalledWith('ollama:nomic-embed-text')
+    // the snapshot happens before the settings are written
+    expect(mockSnapshot.mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(pool.query).mock.invocationCallOrder[0])
+  })
+
+  it('does not snapshot when switching to the model that is already active', async () => {
+    await switchEmbeddingModel('ollama')
+    expect(mockSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('does not snapshot when the switch is refused', async () => {
+    mockBlocked.mockResolvedValue('Cloud AI is not enabled in Settings')
+    await expect(switchEmbeddingModel('gemini')).rejects.toBeInstanceOf(EmbeddingSwitchError)
+    expect(mockSnapshot).not.toHaveBeenCalled()
+  })
+
+  it('still switches when the snapshot reports it could not save', async () => {
+    mockSnapshot.mockResolvedValue('skipped')
+    expect(await switchEmbeddingModel('gemini')).toBe(GEMINI)
+    expect(mockLoad).toHaveBeenCalled()
   })
 })
 

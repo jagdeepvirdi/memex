@@ -1,12 +1,12 @@
 import { pool } from '../db/client.js'
 import { activeEmbeddingId } from './embeddingService.js'
+import { activeProfile } from './embeddingProfiles.js'
 import type { ItemType } from '../../../shared/types.js'
 import { normalizeSourceUrl, sameSourceUrl, isBareLinkTo } from './urlNormalize.js'
 
-// Cosine similarity threshold for flagging near-duplicates.
-// 0.92 catches the same article/recipe saved twice while ignoring
-// genuinely related but distinct content.
-const SIMILARITY_THRESHOLD = 0.92
+// The similarity threshold for flagging near-duplicates comes from the active embedding model's profile
+// (embeddingProfiles.ts): a cosine score means different things in different models. For nomic-embed-text it is 0.92,
+// which catches the same article/recipe saved twice while ignoring related but distinct content.
 
 export interface SimilarItem {
   id: string
@@ -63,7 +63,7 @@ export function mergeSimilar(...lists: SimilarItem[][]): SimilarItem[] {
 
 /**
  * Given a content embedding, returns up to `limit` existing items whose
- * embeddings exceed SIMILARITY_THRESHOLD. Returns [] if the library has
+ * embeddings exceed the active model's duplicate threshold. Returns [] if the library has
  * no embeddings yet or if Ollama failed to embed.
  */
 export async function findSimilarItems(
@@ -85,7 +85,7 @@ export async function findSimilarItems(
          AND (1 - (embedding <=> $1::vector)) > $2
        ORDER BY similarity DESC
        LIMIT $3`,
-      [vectorStr, SIMILARITY_THRESHOLD, limit, activeEmbeddingId()],
+      [vectorStr, activeProfile().duplicate, limit, activeEmbeddingId()],
     )
 
     return rows

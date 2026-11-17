@@ -501,6 +501,11 @@ export interface EmbeddingStatus {
   usable: boolean
   blockedReason: string | null
   counts: { embedded: number; needsReembed: number; skippedPrivate: number; pending: number; total: number }
+  /**
+   * The similarity thresholds in force and how far to trust them: tuned (by hand), probe (small synthetic test),
+   * library (calibrated on this library) or default (nothing known: strict duplicates, no graph links, no merges).
+   */
+  thresholds: { duplicate: number; graph: number | null; entity: number | null; basis: 'tuned' | 'probe' | 'library' | 'default' }
   /** A re-embed that is running right now, so the page can follow it after a reload. */
   job: { id: string; progress: number; completed: number; total: number } | null
 }

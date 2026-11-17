@@ -1,8 +1,9 @@
 import { pool } from '../db/client.js'
 import { cloudSafe } from './cloudSafe.js'
 import {
-  buildEmbedding, loadEmbeddingConfig, type ActiveEmbedding,
+  activeEmbedding, buildEmbedding, loadEmbeddingConfig, type ActiveEmbedding,
 } from './embeddingConfig.js'
+import { snapshotReference } from './embeddingCalibration.js'
 import { embeddingBlockedReason, REEMBED_JOB_KIND, REEMBED_STALE_HOURS } from './embeddingStatus.js'
 import { hasRunningJob } from './ingestJobs.js'
 
@@ -124,6 +125,11 @@ export async function switchEmbeddingModel(provider: ActiveEmbedding['provider']
   }
   const reason = await embeddingBlockedReason(target)
   if (reason) throw new EmbeddingSwitchError(409, reason)
+
+  // Items keep only one vector, so once the library is re-embedded the model we are leaving is gone, and with it the
+  // chance to measure what its similarity thresholds meant on this library. Save that now (best effort, never blocks).
+  const leaving = activeEmbedding().id
+  if (leaving !== target.id) await snapshotReference(leaving)
 
   await pool.query(
     `INSERT INTO settings (key, value, updated_at) VALUES ('embedding_provider', $1, NOW()), ('embedding_model', $2, NOW())

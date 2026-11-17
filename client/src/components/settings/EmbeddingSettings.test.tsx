@@ -27,9 +27,11 @@ import type { EmbeddingStatus, ReembedEstimate } from '../../lib/api'
 const STATUS: EmbeddingStatus = {
   provider: 'ollama', model: 'nomic-embed-text', id: 'ollama:nomic-embed-text', cloud: false, configured: true, usable: true,
   blockedReason: null, counts: { embedded: 725, needsReembed: 0, skippedPrivate: 0, pending: 0, total: 813 }, job: null,
+  thresholds: { duplicate: 0.92, graph: 0.85, entity: 0.92, basis: 'tuned' },
 }
 const GEMINI_STATUS: EmbeddingStatus = {
   ...STATUS, provider: 'gemini', model: 'gemini-embedding-001', id: 'gemini:gemini-embedding-001', cloud: true,
+  thresholds: { duplicate: 0.94, graph: 0.8, entity: null, basis: 'probe' },
 }
 const GEMINI_ESTIMATE: ReembedEstimate = {
   target: { provider: 'gemini', model: 'gemini-embedding-001', id: 'gemini:gemini-embedding-001' }, cloud: true,
@@ -92,6 +94,40 @@ describe('EmbeddingSettings — status', () => {
     await loaded()
     expect(screen.getByLabelText('Embedding provider')).toHaveValue('gemini')
     expect(screen.getByLabelText('Embedding model id')).toHaveValue('gemini-embedding-001')
+  })
+})
+
+describe('EmbeddingSettings — similarity thresholds', () => {
+  it('says nothing about thresholds for a model that was tuned by hand', async () => {
+    await loaded()
+    expect(screen.queryByTestId('threshold-note')).not.toBeInTheDocument()
+  })
+
+  it('says nothing for thresholds calibrated on the library', async () => {
+    vi.mocked(fetchEmbeddingStatus).mockResolvedValue({ ...GEMINI_STATUS, thresholds: { duplicate: 0.955, graph: 0.83, entity: null, basis: 'library' } })
+    await loaded()
+    expect(screen.queryByTestId('threshold-note')).not.toBeInTheDocument()
+  })
+
+  it('tells the user the numbers are estimates, shows them, and says how to calibrate', async () => {
+    vi.mocked(fetchEmbeddingStatus).mockResolvedValue(GEMINI_STATUS)
+    await loaded()
+    const note = screen.getByTestId('threshold-note')
+    expect(note).toHaveTextContent(/estimates from a small test/)
+    expect(note).toHaveTextContent('duplicate hints above 0.94, graph links above 0.8')
+    expect(note).toHaveTextContent('calibrateEmbedding.ts')
+  })
+
+  it('explains what an unmeasured model does without', async () => {
+    vi.mocked(fetchEmbeddingStatus).mockResolvedValue({
+      ...GEMINI_STATUS, provider: 'openai', model: 'text-embedding-3-small', id: 'openai:text-embedding-3-small',
+      thresholds: { duplicate: 0.97, graph: null, entity: null, basis: 'default' },
+    })
+    await loaded()
+    const note = screen.getByTestId('threshold-note')
+    expect(note).toHaveTextContent(/no measured similarity thresholds/)
+    expect(note).toHaveTextContent(/graph draws no semantic links/)
+    expect(note).toHaveTextContent(/entities are never merged/)
   })
 })
 

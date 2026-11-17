@@ -116,6 +116,9 @@ memex/
 │   │   ├── embeddingStatus.ts   # GET /api/ai/embedding: usable/blocked + counts + running job
 │   │   ├── embeddingSwitch.ts   # estimate + validated switch of the embedding model
 │   │   ├── reembedJob.ts        # resumable, cancellable background re-embed
+│   │   ├── embeddingProfiles.ts # per-model similarity thresholds (duplicate / graph / entity) + their basis
+│   │   ├── embeddingCalibration.ts # equivalent-strictness calibration + reference snapshot
+│   │   ├── entityMerge.ts       # plan + transactional merge of near-duplicate entities
 │   │   ├── recipeParser.ts    # Recipe extraction → structured schema
 │   │   ├── keepImporter.ts    # Google Keep Takeout ZIP parser
 │   │   ├── scraper.ts         # Jina URL fetcher
@@ -125,7 +128,8 @@ memex/
 │   │   ├── rediscoveryService.ts  # "On this day" + forgotten items resurfacing
 │   │   └── settings.ts        # getSetting(), getAiConfig() DB helpers
 │   ├── scripts/
-│   │   ├── resolveEntities.ts # Background entity deduplication/merging script
+│   │   ├── resolveEntities.ts # Entity merge: dry run by default, --commit to merge
+│   │   ├── calibrateEmbedding.ts # Calibrate similarity thresholds for an embedding model on the user's library
 │   │   └── seedEntityGraph.ts # One-time script to seed entity graph from existing items
 │   └── db/
 │       ├── schema.sql
@@ -206,9 +210,12 @@ Routing logic (`aiChat(prompt, system, format, options, signal, { task, provider
   3. `POST /api/ai/embedding/reembed {confirm: true, id}` → `202 {jobId}`. Needs the literal `confirm: true` and the `id` (`provider:model`) the user saw; a different active model returns 409. Runs as an `ingest_jobs` row of kind `reembed` (poll `GET /api/ingest/jobs/:id`; cancel with `POST /api/ingest/jobs/:id/cancel`; details `{target, stage: items|entities, embedded, skippedPrivate, failures}`).
 - **The re-embed job** is resumable (it only takes items whose vector is missing or from another model, never skipped, never encrypted, keyset-paged by id), runs 3 calls at a time, stops at once on a `blocked`/`auth` error and after 5 failures in a row, and is cancellable. It is deliberately not in `AI_JOB_KINDS` (those have 15-20 minute limits; this one has its own 6 hour limit and "one at a time" rule). **Entity names are embedded only by a local model** (an entity cannot tell whether its item was private, and names are only used for same-model fuzzy merging), so under a cloud model `getOrCreateEntity` stores no vector.
 - **The background worker** only fills gaps (new items, first attempts that failed); it never switches models. It waits quietly while the active cloud model is blocked, excludes encrypted items, and backs off per item (1, 2, 4 ... 60 minutes, in memory) so a failing item cannot starve the others.
+- **Similarity thresholds are per model** (`services/embeddingProfiles.ts`): a cosine score means different things in different models (unrelated notes score ~0.5 in nomic-embed-text and ~0.68 in gemini-embedding-001), so each model has a profile `{duplicate, graph, entity, basis}`. `duplicate` drives the "looks like a note you already saved" hint (`duplicateService`), `graph` the semantic links in `/api/search/graph` (null: no links, `semanticLinks: false`), `entity` the auto-merge of entities (null: never merged). `basis` says how far to trust it: `tuned` (nomic: 0.92 / 0.85 / 0.92), `probe` (gemini-embedding-001: 0.94 / 0.80 / off, from a synthetic probe 2026-11-17: near-duplicates 0.971-0.994, same topic but a different note 0.796-0.870, unrelated 0.610-0.753), `library` (calibrated on the user's library), `default` (a model nobody measured: duplicate 0.97, no graph links, no merges). `GET /api/ai/embedding` reports `thresholds`; Settings shows a note for `probe` / `default`.
+- **Calibration** (`scripts/calibrateEmbedding.ts`, `services/embeddingCalibration.ts`) uses "equivalent strictness": there is no ground truth for "duplicate", so it measures what share of item pairs in the library a trusted model's thresholds flag, then finds the thresholds that flag the same share for another model. An item keeps ONE vector, so once the library is re-embedded the old model's vectors are gone: the reference share (`embedding_calibration_reference` setting) must be saved before switching. `switchEmbeddingModel` does that automatically (best effort, only from a `tuned`/`library` model, never overwrites an existing reference); `--save-reference` does it by hand. `--apply` stores `embedding_thresholds[<model id>]` (validated, 0.5-0.9999; the server reads it at startup and on every model switch). The script prints only numbers (never titles or content) and writes nothing without `--save-reference` / `--apply`. It is a calibration, not proof: skim a few flagged pairs before trusting it.
+- **Entity merging** (`scripts/resolveEntities.ts`, `services/entityMerge.ts`) is a DRY RUN unless `--commit` is passed. It only compares entities embedded by the same model, uses that model's `entity` threshold (null: skipped and reported), keeps the entity with more links (then the older), lets an entity take part in one merge per run (run again to continue a chain), and merges in one transaction that deletes colliding links first and rolls back on any error. (The old script recovered from a unique-key error inside the transaction, which Postgres cannot do: the transaction is already aborted.)
 - **Client:** Settings > AI > "Search & embeddings" (`EmbeddingSettings.tsx`, `useReembedJob.ts`): status and counts, a "paused because ..." banner, Review change (estimate) -> Confirm -> progress with Cancel; a running job is picked up again after a reload. Search and Ask show a notice when a result is keyword-only (`semantic: false`).
 - `npx tsx src/scripts/verifyEmbeddingProvider.ts gemini|openai [model]` is a live check with 5 synthetic strings (prints dimensions, norms, a similarity sanity check; writes nothing). Verified for Gemini 2026-11-17; OpenAI is mock-only until a key exists.
-- `retrievalService.realdb.test.ts` and `reembed.realdb.test.ts` are opt-in (`MEMEX_REALDB_TEST=1`): they check the ranking and re-embed SQL against the real Postgres inside a rolled-back transaction (with an independent connection confirming nothing leaked). The model call is mocked; nothing is sent to a provider.
+- `retrievalService.realdb.test.ts`, `reembed.realdb.test.ts`, `entityMerge.realdb.test.ts` and `embeddingCalibration.realdb.test.ts` are opt-in (`MEMEX_REALDB_TEST=1`): they check the ranking and re-embed SQL against the real Postgres inside a rolled-back transaction (with an independent connection confirming nothing leaked). The model call is mocked; nothing is sent to a provider.
 
 ## AI Classification (100% local, zero cost)
 Classification uses JSON mode + temperature 0 + enum trick for reliability:
@@ -331,6 +338,9 @@ Key-value table with JSONB values. Default rows:
 | `use_claude` | `false` (legacy; migrated on read) |
 | `auto_lock_timeout` | `15` (minutes) |
 | `strict_local_mode` | `false` |
+| `embedding_provider` / `embedding_model` | `ollama` / provider default (only via `PUT /api/ai/embedding`) |
+| `embedding_thresholds` | `{}` (per-model calibrated `{duplicate, graph, entity}`; written by `calibrateEmbedding.ts --apply`) |
+| `embedding_calibration_reference` | unset (share of pairs the trusted model flagged; saved before a model switch) |
 
 ## Password Vault Security
 - Master password never leaves the browser

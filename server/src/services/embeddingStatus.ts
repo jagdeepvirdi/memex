@@ -2,6 +2,7 @@ import { pool } from '../db/client.js'
 import { listProviders } from './ai.js'
 import { getAiConfig } from './settings.js'
 import { activeEmbedding, type ActiveEmbedding, type EmbeddingProvider } from './embeddingConfig.js'
+import { activeProfile, type SimilarityProfile } from './embeddingProfiles.js'
 
 import { REEMBED_JOB_KIND } from './actionJobs.js'
 export { REEMBED_JOB_KIND }
@@ -29,6 +30,8 @@ export interface EmbeddingStatus {
     pending: number
     total: number
   }
+  /** The similarity thresholds in force for this model and how far to trust them (see embeddingProfiles.ts). */
+  thresholds: SimilarityProfile
   /** The re-embed job that is running right now, if any (so the UI can follow it after a page reload). */
   job: { id: string; progress: number; completed: number; total: number } | null
 }
@@ -88,6 +91,7 @@ export async function getEmbeddingStatus(): Promise<EmbeddingStatus> {
       embedded: n('embedded'), needsReembed: n('needs_reembed'), skippedPrivate: n('skipped_private'),
       pending: n('pending'), total: n('total'),
     },
+    thresholds: activeProfile(),
     job: job ? { id: job.id, progress: job.progress, completed: job.completed, total: job.total } : null,
   }
 }

@@ -3,6 +3,7 @@ import { pool } from '../db/client.js';
 import { rowToItem } from '../db/helpers.js';
 import { retrieveItems } from '../services/retrievalService.js';
 import { activeEmbeddingId } from '../services/embeddingService.js';
+import { activeProfile } from '../services/embeddingProfiles.js';
 import { askKnowledge } from '../services/ragService.js';
 import type { ItemType } from '../../../shared/types.js';
 import logger from '../lib/logger.js'
@@ -61,7 +62,15 @@ router.get('/graph', async (req, res) => {
       LIMIT $1
     `, [limit, activeEmbeddingId()])
 
-    // 2. Build links based on semantic similarity
+    // 2. Build links based on semantic similarity, using the active model's graph threshold (a cosine score means
+    // different things in different models). A model nobody has measured yet draws no semantic links rather than
+    // guessing: the nodes are still returned.
+    const threshold = activeProfile().graph
+    if (threshold === null) {
+      res.json({ nodes, links: [], semanticLinks: false })
+      return
+    }
+
     // We'll use a cross-join with a distance threshold
     // This is expensive, so we limit to same count
     const linksSql = `
@@ -76,11 +85,11 @@ router.get('/graph', async (req, res) => {
       SELECT a.id as source, b.id as target, (1 - (a.embedding <=> b.embedding)) as weight
       FROM indexed_items a
       JOIN indexed_items b ON a.id < b.id
-      WHERE (1 - (a.embedding <=> b.embedding)) > 0.85
+      WHERE (1 - (a.embedding <=> b.embedding)) > $3
     `
-    const { rows: links } = await pool.query(linksSql, [limit, activeEmbeddingId()])
+    const { rows: links } = await pool.query(linksSql, [limit, activeEmbeddingId(), threshold])
 
-    res.json({ nodes, links })
+    res.json({ nodes, links, semanticLinks: true })
   } catch (error) {
     logger.error(error, 'Graph error')
     res.status(500).json({ error: 'Failed to build graph' })

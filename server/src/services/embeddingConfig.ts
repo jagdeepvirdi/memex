@@ -38,6 +38,13 @@ export function buildEmbedding(provider: EmbeddingProvider, model?: string | nul
 }
 
 let current: ActiveEmbedding = buildEmbedding('ollama')
+// Per-model similarity thresholds the user calibrated (settings `embedding_thresholds`), validated in embeddingProfiles.ts.
+let thresholdOverrides: Record<string, unknown> = {}
+
+/** The raw per-model threshold overrides, as stored. Use `profileFor` in embeddingProfiles.ts, which validates them. */
+export function getThresholdOverrides(): Record<string, unknown> {
+  return thresholdOverrides
+}
 
 /** The embedding model currently in use (synchronous, from the in-memory cache). */
 export function activeEmbedding(): ActiveEmbedding {
@@ -56,10 +63,17 @@ export async function loadEmbeddingConfig(): Promise<ActiveEmbedding> {
     isEmbeddingProvider(provider) ? provider : 'ollama',
     typeof model === 'string' ? model : null,
   )
+  const overrides = await getSetting<unknown>('embedding_thresholds', {})
+  thresholdOverrides = overrides && typeof overrides === 'object' && !Array.isArray(overrides) ? (overrides as Record<string, unknown>) : {}
   return current
 }
 
 /** Pins the cache without touching the database (tests and one-off scripts); null restores local Ollama. */
 export function setActiveEmbedding(active: ActiveEmbedding | null): void {
   current = active ?? buildEmbedding('ollama')
+}
+
+/** Pins the threshold overrides without touching the database (tests). */
+export function setThresholdOverrides(overrides: Record<string, unknown> | null): void {
+  thresholdOverrides = overrides ?? {}
 }

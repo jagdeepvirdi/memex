@@ -7,12 +7,13 @@ vi.mock('./settings.js', () => ({
 
 import {
   activeEmbedding, activeEmbeddingId, loadEmbeddingConfig, buildEmbedding, isEmbeddingProvider,
-  setActiveEmbedding, DEFAULT_EMBEDDING_MODELS, EMBEDDING_DIMENSIONS,
+  setActiveEmbedding, DEFAULT_EMBEDDING_MODELS, EMBEDDING_DIMENSIONS, getThresholdOverrides, setThresholdOverrides,
 } from './embeddingConfig'
 
 beforeEach(() => {
   for (const k of Object.keys(settings)) delete settings[k]
   setActiveEmbedding(null)
+  setThresholdOverrides(null)
 })
 afterEach(() => setActiveEmbedding(null))
 
@@ -37,6 +38,35 @@ describe('embedding config', () => {
     expect(buildEmbedding('openai', '  text-embedding-3-large ').id).toBe('openai:text-embedding-3-large')
     expect(buildEmbedding('openai', '   ').id).toBe('openai:text-embedding-3-small')
     expect(buildEmbedding('gemini', null).model).toBe('gemini-embedding-001')
+  })
+})
+
+describe('loadEmbeddingConfig — calibrated thresholds', () => {
+  it('has none by default', async () => {
+    await loadEmbeddingConfig()
+    expect(getThresholdOverrides()).toEqual({})
+  })
+
+  it('reads the per-model overrides from settings', async () => {
+    settings.embedding_thresholds = { 'gemini:gemini-embedding-001': { duplicate: 0.955, graph: 0.83 } }
+    await loadEmbeddingConfig()
+    expect(getThresholdOverrides()).toEqual({ 'gemini:gemini-embedding-001': { duplicate: 0.955, graph: 0.83 } })
+  })
+
+  it.each([['a string', 'oops'], ['an array', [1, 2]], ['null', null], ['a number', 7]])('ignores %s', async (_n, bad) => {
+    settings.embedding_thresholds = { 'x:y': { duplicate: 0.9 } }
+    await loadEmbeddingConfig()
+    settings.embedding_thresholds = bad
+    await loadEmbeddingConfig()
+    expect(getThresholdOverrides()).toEqual({})
+  })
+
+  it('drops the overrides again when the setting is removed', async () => {
+    settings.embedding_thresholds = { 'x:y': { duplicate: 0.9 } }
+    await loadEmbeddingConfig()
+    delete settings.embedding_thresholds
+    await loadEmbeddingConfig()
+    expect(getThresholdOverrides()).toEqual({})
   })
 })
 
