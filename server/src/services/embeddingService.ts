@@ -1,6 +1,6 @@
 import { pool } from '../db/client.js'
 import logger from '../lib/logger.js'
-import { OLLAMA_EMBED_MODEL } from '../lib/embeddingModel.js'
+import { activeEmbedding, type ActiveEmbedding } from './embeddingConfig.js'
 import { embedItem } from './embedder.js'
 import { cloudSafe, type CloudSafeItem } from './cloudSafe.js'
 
@@ -8,23 +8,7 @@ import { cloudSafe, type CloudSafeItem } from './cloudSafe.js'
 // made it (`items.embedding_model`), and every similarity query filters to the active model, because two models'
 // 768-dim vectors compare without any error and give meaningless scores.
 
-export type EmbeddingProvider = 'ollama' | 'gemini' | 'openai'
-
-export interface ActiveEmbedding {
-  provider: EmbeddingProvider
-  model: string
-  /** '<provider>:<model>', the value stored in `embedding_model` columns. */
-  id: string
-}
-
-/** The embedding model currently in use. Phase A: always local Ollama; cloud providers arrive with the settings. */
-export function activeEmbedding(): ActiveEmbedding {
-  return { provider: 'ollama', model: OLLAMA_EMBED_MODEL, id: `ollama:${OLLAMA_EMBED_MODEL}` }
-}
-
-export function activeEmbeddingId(): string {
-  return activeEmbedding().id
-}
+export { activeEmbedding, activeEmbeddingId, type ActiveEmbedding, type EmbeddingProvider } from './embeddingConfig.js'
 
 /** A local model may embed anything. A cloud model only sees items that pass the privacy guard. */
 export function embeddingAllowed(active: ActiveEmbedding, item: CloudSafeItem): boolean {

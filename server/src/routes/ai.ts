@@ -8,6 +8,7 @@ import {
 } from '../services/apiKeys.js'
 import { checkYoutubeKey } from '../services/youtubeApi.js'
 import { listOllamaModels } from '../services/ollama.js'
+import { getEmbeddingStatus } from '../services/embeddingStatus.js'
 import logger from '../lib/logger.js'
 
 const router = Router()
@@ -54,6 +55,16 @@ router.get('/providers', async (_req, res) => {
   } catch (err) {
     logger.error(err, 'GET /api/ai/providers error')
     res.status(500).json({ error: 'Failed to list AI providers' })
+  }
+})
+
+// GET /api/ai/embedding → active embedding model, whether it can be used right now, and counts of items by state.
+router.get('/embedding', async (_req, res) => {
+  try {
+    res.json(await getEmbeddingStatus())
+  } catch (err) {
+    logger.error(err, 'GET /api/ai/embedding error')
+    res.status(500).json({ error: 'Failed to read embedding status' })
   }
 })
 

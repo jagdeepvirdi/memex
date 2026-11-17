@@ -5,6 +5,7 @@ import { ollamaChat, ollamaEmbed } from './ollama.js'
 import { getAiConfig, type AiConfig, type ProviderId } from './settings.js'
 import logger from '../lib/logger.js'
 import { peekApiKey, ensureApiKeysLoaded, redactSecrets } from './apiKeys.js'
+import { activeEmbedding, EMBEDDING_DIMENSIONS } from './embeddingConfig.js'
 
 export type { ProviderId } from './settings.js'
 
@@ -305,9 +306,114 @@ export async function aiChat(
   }
 }
 
-// Embeddings always go through Ollama — Anthropic has no embeddings API and vectors must stay comparable.
-export async function aiEmbed(text: string): Promise<number[]> {
-  return ollamaEmbed(text)
+// ── Embeddings ───────────────────────────────────────────────────────────────
+
+export type EmbedKind = 'document' | 'query'
+export interface EmbedOptions {
+  /** 'document' for stored items, 'query' for a search/Ask question (cloud models embed the two differently). */
+  kind?: EmbedKind
+  signal?: AbortSignal
+}
+
+const EMBED_TIMEOUT_MS = 30_000
+const EMBED_MAX_ATTEMPTS = 3
+const EMBED_BACKOFF_MS = 500
+
+/** Scales a vector to unit length. Cloud models return shortened (768-dim) vectors that are not normalised. */
+export function l2Normalize(v: number[]): number[] {
+  const norm = Math.sqrt(v.reduce((sum, x) => sum + x * x, 0))
+  if (!Number.isFinite(norm) || norm === 0) return v
+  return v.map(x => x / norm)
+}
+
+/** Rejects anything that would not fit the vector(768) columns, rather than letting Postgres or a bad vector decide. */
+function checkVector(provider: ProviderId, values: number[] | undefined): number[] {
+  if (!values || values.length !== EMBEDDING_DIMENSIONS || values.some(x => typeof x !== 'number' || !Number.isFinite(x))) {
+    throw new AiProviderError(
+      provider, 'bad_response',
+      `${provider} returned ${values ? values.length : 'no'} embedding values, expected ${EMBEDDING_DIMENSIONS}`,
+    )
+  }
+  if (values.every(x => x === 0)) throw new AiProviderError(provider, 'bad_response', `${provider} returned an all-zero embedding`)
+  return l2Normalize(values)
+}
+
+const sleep = (ms: number, signal?: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    const t = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => { clearTimeout(t); reject(signal.reason) }, { once: true })
+  })
+
+/** Retries rate limits and 5xx with exponential backoff; auth, blocked and bad responses fail at once. */
+async function withEmbedRetry<T>(provider: ProviderId, call: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await call()
+    } catch (err) {
+      const e = toProviderError(provider, err)
+      const retryable = e.kind === 'rate_limit' || (e.status !== undefined && e.status >= 500)
+      if (!retryable || attempt >= EMBED_MAX_ATTEMPTS || signal?.aborted) throw e
+      logger.warn({ provider, attempt, kind: e.kind }, 'Embedding call failed, retrying')
+      await sleep(EMBED_BACKOFF_MS * 2 ** (attempt - 1), signal)
+    }
+  }
+}
+
+async function geminiEmbed(text: string, model: string, kind: EmbedKind, signal?: AbortSignal): Promise<number[]> {
+  try {
+    const res = await getGeminiClient().models.embedContent({
+      model,
+      contents: text,
+      config: {
+        outputDimensionality: EMBEDDING_DIMENSIONS,
+        // gemini-embedding-2 normalises itself and has no task types; -001 wants them.
+        ...(/embedding-2/i.test(model) ? {} : { taskType: kind === 'query' ? 'RETRIEVAL_QUERY' : 'RETRIEVAL_DOCUMENT' }),
+        abortSignal: signal ? AbortSignal.any([signal, AbortSignal.timeout(EMBED_TIMEOUT_MS)]) : AbortSignal.timeout(EMBED_TIMEOUT_MS),
+      },
+    })
+    return checkVector('gemini', res.embeddings?.[0]?.values)
+  } catch (err) {
+    throw toProviderError('gemini', err)
+  }
+}
+
+async function openaiEmbed(text: string, model: string, signal?: AbortSignal): Promise<number[]> {
+  try {
+    const res = await getOpenAIClient().embeddings.create(
+      { model, input: text, dimensions: EMBEDDING_DIMENSIONS },
+      { signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(EMBED_TIMEOUT_MS)]) : AbortSignal.timeout(EMBED_TIMEOUT_MS) },
+    )
+    return checkVector('openai', res.data[0]?.embedding)
+  } catch (err) {
+    throw toProviderError('openai', err)
+  }
+}
+
+/**
+ * Embeds text with the ACTIVE embedding model (settings `embedding_provider` / `embedding_model`, default local
+ * Ollama). A cloud model is used only under the same rules as chat: Strict Local Mode off, cloud consent on, key set.
+ * Otherwise this throws a `blocked` AiProviderError and never falls back to another model, because vectors from
+ * different models are not comparable. Per-item privacy (`cloudSafe`) is enforced by the caller that stores vectors.
+ */
+export async function aiEmbed(text: string, opts: EmbedOptions = {}): Promise<number[]> {
+  const active = activeEmbedding()
+  if (active.provider === 'ollama') return ollamaEmbed(text)
+
+  await ensureApiKeysLoaded()
+  const config = await getAiConfig()
+  const provider: ProviderId = active.provider
+  let blockedReason: string | null = null
+  if (config.strictLocal) blockedReason = 'Strict Local Mode is on'
+  else if (!config.allowCloud) blockedReason = 'cloud AI is not enabled in Settings'
+  else if (!PROVIDERS[provider].available()) blockedReason = `no API key is configured for ${provider}`
+  if (blockedReason) throw new AiProviderError(provider, 'blocked', `Cannot embed with ${provider}: ${blockedReason}`)
+
+  const kind = opts.kind ?? 'document'
+  return withEmbedRetry(
+    provider,
+    () => (provider === 'gemini' ? geminiEmbed(text, active.model, kind, opts.signal) : openaiEmbed(text, active.model, opts.signal)),
+    opts.signal,
+  )
 }
 
 /** The provider `aiChat` would use for these options right now (does not make a call). */

@@ -27,6 +27,7 @@ import { itemCategoriesHandler } from './routes/categories.js'
 import { itemTagsHandler } from './routes/tags.js'
 import { checkOllamaHealth } from './services/ollama.js'
 import { startEmbeddingWorker } from './services/embeddingWorker.js'
+import { loadEmbeddingConfig } from './services/embeddingConfig.js'
 import logger from './lib/logger.js'
 import { refreshedSessionToken, REFRESH_HEADER } from './lib/session.js'
 import { isBookmarkletRoute, matchesBookmarkletKey } from './lib/bookmarkletScope.js'
@@ -139,7 +140,9 @@ if (process.env.NODE_ENV !== 'test') {
   app.listen(PORT, () => {
     logger.info(`Memex server listening on http://localhost:${PORT}`)
     
-    // Start background workers
-    startEmbeddingWorker()
+    // Start background workers. The active embedding model must be known before the worker embeds anything.
+    loadEmbeddingConfig()
+      .catch((err) => logger.error(err, 'Could not read the embedding settings, using local Ollama'))
+      .finally(() => startEmbeddingWorker())
   })
 }

@@ -11,9 +11,9 @@ function buildEmbedText(title: string, content: string): string {
 
 export async function embedItem(title: string, content: string): Promise<number[]> {
   const text = buildEmbedText(title, content)
-  return aiEmbed(text)
+  return aiEmbed(text, { kind: 'document' })
 }
 
 export async function embedQuery(query: string): Promise<number[]> {
-  return aiEmbed(query.slice(0, MAX_EMBED_CHARS))
+  return aiEmbed(query.slice(0, MAX_EMBED_CHARS), { kind: 'query' })
 }
