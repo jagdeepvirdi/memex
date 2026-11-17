@@ -211,11 +211,72 @@ const openaiProvider: Provider = {
   },
 }
 
+// Groq speaks the OpenAI Chat Completions protocol, so it reuses the `openai` SDK pointed at Groq's endpoint.
+export const GROQ_BASE_URL = 'https://api.groq.com/openai/v1'
+
+let _groq: { key: string | undefined; client: OpenAI } | null = null
+function getGroqClient(): OpenAI {
+  const key = peekApiKey('groq')
+  if (!_groq || _groq.key !== key) _groq = { key, client: new OpenAI({ apiKey: key, baseURL: GROQ_BASE_URL }) }
+  return _groq.client
+}
+
+// Reasoning models on Groq (gpt-oss, Qwen3, DeepSeek R1) spend completion tokens on hidden reasoning, so a small cap can
+// come back empty. They accept a temperature, unlike OpenAI's gpt-5 family.
+const isGroqReasoningModel = (model: string) => /(gpt-oss|qwen3|deepseek-r1)/i.test(model)
+const GROQ_REASONING_MIN_TOKENS = 4096
+
+const groqProvider: Provider = {
+  id: 'groq',
+  available: () => !!peekApiKey('groq'),
+  model: (c) => c.groqModel,
+  async chat(r) {
+    const system = withJsonInstruction(r.system, r.format)
+    const model = r.config.groqModel
+    const cap = maxTokens(r.options)
+    const body = {
+      model,
+      max_completion_tokens: isGroqReasoningModel(model) ? Math.max(cap, GROQ_REASONING_MIN_TOKENS) : cap,
+      ...(typeof r.options?.temperature === 'number' ? { temperature: r.options.temperature } : {}),
+      // JSON mode needs the word "JSON" in the messages; withJsonInstruction always adds it.
+      ...(r.format ? { response_format: { type: 'json_object' as const } } : {}),
+      messages: [
+        ...(system ? [{ role: 'system' as const, content: system }] : []),
+        { role: 'user' as const, content: r.prompt },
+      ],
+    }
+    try {
+      const client = getGroqClient()
+      const signal = withTimeout(r.signal)
+      let completion
+      try {
+        completion = await client.chat.completions.create(body, { signal })
+      } catch (err) {
+        // A model that does not support JSON mode answers 400. The prompt already asks for JSON, so retry without the flag.
+        const e = err as { status?: number; message?: string }
+        if (!(body.response_format && e.status === 400 && /json|response_format/i.test(e.message ?? ''))) throw err
+        const { response_format: _dropped, ...withoutJsonMode } = body
+        completion = await client.chat.completions.create(withoutJsonMode, { signal })
+      }
+      const choice = completion.choices[0]
+      const text = choice?.message?.content
+      if (!text) {
+        const why = choice?.finish_reason ? ` (finish_reason: ${choice.finish_reason})` : ''
+        throw new AiProviderError('groq', 'bad_response', `Groq returned no text${why}`)
+      }
+      return r.format ? stripJsonFences(text) : text
+    } catch (err) {
+      throw toProviderError('groq', err)
+    }
+  },
+}
+
 const PROVIDERS: Record<ProviderId, Provider> = {
   ollama: ollamaProvider,
   claude: claudeProvider,
   gemini: geminiProvider,
   openai: openaiProvider,
+  groq: groqProvider,
 }
 
 export function getProvider(id: ProviderId): Provider {

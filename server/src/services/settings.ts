@@ -20,8 +20,8 @@ export function asBool(v: unknown): boolean {
   return v === true || v === 'true'
 }
 
-export type ProviderId = 'ollama' | 'claude' | 'gemini' | 'openai'
-export const PROVIDER_IDS: readonly ProviderId[] = ['ollama', 'claude', 'gemini', 'openai']
+export type ProviderId = 'ollama' | 'claude' | 'gemini' | 'openai' | 'groq'
+export const PROVIDER_IDS: readonly ProviderId[] = ['ollama', 'claude', 'gemini', 'openai', 'groq']
 
 export function isProviderId(v: unknown): v is ProviderId {
   return typeof v === 'string' && (PROVIDER_IDS as readonly string[]).includes(v)
@@ -38,6 +38,7 @@ export interface AiConfig {
   claudeModel: string
   geminiModel: string
   openaiModel: string
+  groqModel: string
   /** Per-task provider overrides, e.g. { classify: 'ollama', explain: 'gemini' }. */
   perTask: Record<string, ProviderId>
   /** Consent to send item content to a cloud provider. Always false in strict-local mode. */
@@ -46,13 +47,15 @@ export interface AiConfig {
 
 const AI_SETTING_KEYS = [
   'ai_model', 'use_claude', 'strict_local_mode',
-  'ai_provider', 'claude_model', 'gemini_model', 'openai_model', 'ai_task_providers', 'allow_cloud',
+  'ai_provider', 'claude_model', 'gemini_model', 'openai_model', 'groq_model', 'ai_task_providers', 'allow_cloud',
 ]
 
 export const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-5-5'
 export const DEFAULT_GEMINI_MODEL = 'gemini-3.8-flash'
 // OpenAI retires model ids regularly (gpt-5-mini shuts down 2026-12-11); the model is editable in Settings.
 export const DEFAULT_OPENAI_MODEL = 'gpt-5.4-mini'
+// Groq lists llama-3.3-70b-versatile and llama-3.1-8b-instant as deprecated; gpt-oss-120b is its current production model.
+export const DEFAULT_GROQ_MODEL = 'openai/gpt-oss-120b'
 
 export async function getAiConfig(): Promise<AiConfig> {
   const values: Record<string, unknown> = {}
@@ -89,6 +92,7 @@ export async function getAiConfig(): Promise<AiConfig> {
     claudeModel: str('claude_model', process.env.CLAUDE_MODEL ?? DEFAULT_CLAUDE_MODEL),
     geminiModel: str('gemini_model', process.env.GEMINI_MODEL ?? DEFAULT_GEMINI_MODEL),
     openaiModel: str('openai_model', process.env.OPENAI_MODEL ?? DEFAULT_OPENAI_MODEL),
+    groqModel: str('groq_model', process.env.GROQ_MODEL ?? DEFAULT_GROQ_MODEL),
     perTask: strictLocal ? {} : perTask,
     allowCloud: strictLocal ? false : consent,
   }

@@ -34,7 +34,7 @@ export function KeysPrivacyTab({ settings, onUpdate }: Props) {
       >
         <SettingRow
           title="Strict Local Mode"
-          description="Runs all AI on local Ollama — Claude, Gemini and OpenAI are never called, even if enabled — and blocks fetching external URLs."
+          description="Runs all AI on local Ollama — Claude, Gemini, OpenAI and Groq are never called, even if enabled — and blocks fetching external URLs."
         >
           <label className="relative inline-flex items-center cursor-pointer">
             <input

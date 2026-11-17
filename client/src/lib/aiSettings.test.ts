@@ -13,8 +13,8 @@ describe('truthy', () => {
 })
 
 describe('isProvider', () => {
-  it('knows every provider, including openai', () => {
-    for (const id of ['ollama', 'claude', 'gemini', 'openai']) expect(isProvider(id)).toBe(true)
+  it('knows every provider, including openai and groq', () => {
+    for (const id of ['ollama', 'claude', 'gemini', 'openai', 'groq']) expect(isProvider(id)).toBe(true)
     expect(isProvider('mistral')).toBe(false)
     expect(isProvider(undefined)).toBe(false)
   })

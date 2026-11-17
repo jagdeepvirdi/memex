@@ -120,7 +120,7 @@ export interface ExplanationData {
 
 /** Optional per-click provider choice; omitted = the per-task default from Settings. */
 export interface ExplainRequest {
-  provider?: 'ollama' | 'claude' | 'gemini' | 'openai'
+  provider?: 'ollama' | 'claude' | 'gemini' | 'openai' | 'groq'
   /** Replace an existing explanation. */
   force?: boolean
 }
@@ -131,7 +131,7 @@ export interface ExplainStartResponse {
 }
 
 export interface ExtractRecipeRequest {
-  provider?: 'ollama' | 'claude' | 'gemini' | 'openai'
+  provider?: 'ollama' | 'claude' | 'gemini' | 'openai' | 'groq'
   /** Create another recipe even if one was already extracted from this item. */
   force?: boolean
 }

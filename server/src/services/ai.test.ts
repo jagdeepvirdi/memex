@@ -60,7 +60,7 @@ const OLD = { a: process.env.ANTHROPIC_API_KEY, g: process.env.GEMINI_API_KEY, o
 function cfg(over: Partial<AiConfig> = {}): AiConfig {
   return {
     model: 'llama3.2', useClaude: false, strictLocal: false,
-    provider: 'ollama', claudeModel: 'claude-test', geminiModel: 'gemini-test', openaiModel: 'gpt-test',
+    provider: 'ollama', claudeModel: 'claude-test', geminiModel: 'gemini-test', openaiModel: 'gpt-test', groqModel: 'groq-test',
     perTask: {}, allowCloud: false,
     ...over,
   }
@@ -401,6 +401,7 @@ describe('activeProvider / activeModelLabel / listProviders', () => {
       { id: 'claude', configured: true },
       { id: 'gemini', configured: false },
       { id: 'openai', configured: true },
+      { id: 'groq', configured: false },
     ])
     expect(JSON.stringify(list)).not.toContain('test-key')
   })
@@ -451,7 +452,7 @@ describe('keys saved from Settings', () => {
     NO_ENV()
     expect(await listProviders()).toEqual([
       { id: 'ollama', configured: true }, { id: 'claude', configured: false },
-      { id: 'gemini', configured: false }, { id: 'openai', configured: false },
+      { id: 'gemini', configured: false }, { id: 'openai', configured: false }, { id: 'groq', configured: false },
     ])
     stored.claude = 'sk-saved-claude-key'
     expect((await listProviders()).find(p => p.id === 'claude')!.configured).toBe(true)

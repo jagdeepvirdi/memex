@@ -25,7 +25,7 @@ beforeAll(() => {
   AUTH = `Bearer ${jwt.sign({ userId: 'u1', email: 't@t.com' }, secret)}`
 })
 
-const OLD = { a: process.env.ANTHROPIC_API_KEY, g: process.env.GEMINI_API_KEY, o: process.env.OPENAI_API_KEY }
+const OLD = { a: process.env.ANTHROPIC_API_KEY, g: process.env.GEMINI_API_KEY, o: process.env.OPENAI_API_KEY, q: process.env.GROQ_API_KEY }
 const settingsRows = (o: Record<string, unknown> = {}) =>
   vi.mocked(pool.query).mockResolvedValue({ rows: Object.entries(o).map(([key, value]) => ({ key, value })) } as any)
 
@@ -35,8 +35,11 @@ beforeEach(() => {
   process.env.ANTHROPIC_API_KEY = 'sk-ant-secret-123'
   delete process.env.GEMINI_API_KEY
   delete process.env.OPENAI_API_KEY
+  delete process.env.GROQ_API_KEY
 })
 afterEach(() => {
+  if (OLD.q === undefined) delete process.env.GROQ_API_KEY
+  else process.env.GROQ_API_KEY = OLD.q
   if (OLD.o === undefined) delete process.env.OPENAI_API_KEY
   else process.env.OPENAI_API_KEY = OLD.o
   if (OLD.a === undefined) delete process.env.ANTHROPIC_API_KEY
@@ -54,7 +57,7 @@ describe('GET /api/ai/providers', () => {
     const res = await request(app).get('/api/ai/providers').set('Authorization', AUTH)
     expect(res.status).toBe(200)
     expect(res.body.map((p: any) => [p.id, p.configured, p.cloud])).toEqual([
-      ['ollama', true, false], ['claude', true, true], ['gemini', false, true], ['openai', false, true],
+      ['ollama', true, false], ['claude', true, true], ['gemini', false, true], ['openai', false, true], ['groq', false, true],
     ])
     expect(res.body[0].models).toEqual(['llama3.2', 'gemma3:4b'])
     expect(JSON.stringify(res.body)).not.toContain('sk-ant-secret-123')
@@ -66,6 +69,20 @@ describe('GET /api/ai/providers', () => {
     const openai = res.body.find((p: any) => p.id === 'openai')
     expect(openai.models[0]).toBe('gpt-custom')
     expect(openai.models).toContain('gpt-5.4-mini')
+  })
+
+  it('suggests Groq models, with the configured one first and the default gpt-oss model available', async () => {
+    settingsRows({ groq_model: 'groq-custom' })
+    const res = await request(app).get('/api/ai/providers').set('Authorization', AUTH)
+    const groq = res.body.find((p: any) => p.id === 'groq')
+    expect(groq).toMatchObject({ cloud: true })
+    expect(groq.models[0]).toBe('groq-custom')
+    expect(groq.models).toContain('openai/gpt-oss-120b')
+  })
+
+  it('offers the default Groq model when none is configured', async () => {
+    const res = await request(app).get('/api/ai/providers').set('Authorization', AUTH)
+    expect(res.body.find((p: any) => p.id === 'groq').models[0]).toBe('openai/gpt-oss-120b')
   })
 
   it('puts the currently configured model first and de-duplicates', async () => {
@@ -101,6 +118,16 @@ describe('POST /api/ai/test', () => {
     expect(res.body).toMatchObject({ ok: true, provider: 'claude', model: 'claude-x', reply: 'OK' })
     expect(typeof res.body.latencyMs).toBe('number')
     expect(vi.mocked(aiChat).mock.calls[0][5]).toMatchObject({ provider: 'claude', userInitiated: true, task: 'test' })
+  })
+
+  it('tests Groq like any other provider', async () => {
+    vi.mocked(aiChat).mockImplementationOnce(async (...args: any[]) => {
+      args[5].onProvider({ provider: 'groq', model: 'openai/gpt-oss-120b' })
+      return 'OK'
+    })
+    const res = await post({ provider: 'groq' })
+    expect(res.body).toMatchObject({ ok: true, provider: 'groq', model: 'openai/gpt-oss-120b', reply: 'OK' })
+    expect(vi.mocked(aiChat).mock.calls[0][5]).toMatchObject({ provider: 'groq', userInitiated: true })
   })
 
   it('reports a provider failure as ok:false with its kind', async () => {

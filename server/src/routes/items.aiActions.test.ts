@@ -142,6 +142,14 @@ describe('POST /api/items/:id/explain (background job)', () => {
     release() // the runner was still going when the 202 went out
   })
 
+  it('accepts Groq as the provider for Explain', async () => {
+    explainDb()
+    vi.mocked(runExplainJob).mockResolvedValue(undefined as never)
+    const res = await post('vid-1', { provider: 'groq' })
+    expect(res.status).toBe(202)
+    expect(vi.mocked(runExplainJob).mock.calls[0][0]).toMatchObject({ provider: 'groq', cloudSafe: true })
+  })
+
   it('records which item the job is for, so the UI can find it again', async () => {
     explainDb()
     const res = await post()
@@ -276,6 +284,14 @@ describe('POST /api/items/:id/extract-recipe (background job)', () => {
       source: 'youtube', provider: 'gemini', cloudSafe: true,
     })
     release()
+  })
+
+  it('accepts Groq as the provider for Extract recipe', async () => {
+    extractDb()
+    vi.mocked(runExtractRecipeJob).mockResolvedValue(undefined as never)
+    const res = await post('vid-1', { provider: 'groq' })
+    expect(res.status).toBe(202)
+    expect(vi.mocked(runExtractRecipeJob).mock.calls[0][0]).toMatchObject({ provider: 'groq', cloudSafe: true })
   })
 
   it('records which item the job is for', async () => {

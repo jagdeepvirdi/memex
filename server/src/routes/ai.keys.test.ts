@@ -12,6 +12,7 @@ vi.hoisted(() => { process.env.AI_KEY_RATE_LIMIT_MAX = '1000'; process.env.AI_TE
 // middleware does, so the real service, real encryption and real routes all run.
 let table: Array<{ provider: string; ciphertext: string; iv: string; last4: string }> = []
 let bookmarkletKey: string | null = null
+let checkViolation = false
 let tableMissing = false
 
 vi.mock('../db/client', () => ({ pool: { query: vi.fn(), connect: vi.fn() } }))
@@ -33,6 +34,7 @@ beforeEach(() => {
   table = []
   bookmarkletKey = null
   tableMissing = false
+  checkViolation = false
   resetApiKeyCache()
   for (const v of Object.values(KEY_ENV)) delete process.env[v]
   vi.mocked(pool.query).mockImplementation((async (sql: string, params: unknown[] = []) => {
@@ -44,6 +46,7 @@ beforeEach(() => {
     if (/INSERT INTO api_keys/.test(sql)) {
       const [provider, ciphertext, iv, last4] = params as string[]
       table = [...table.filter(r => r.provider !== provider), { provider, ciphertext, iv, last4 }]
+      if (checkViolation) throw Object.assign(new Error('new row violates check constraint "api_keys_provider_check"'), { code: '23514' })
       return { rows: [], rowCount: 1 }
     }
     if (/DELETE FROM api_keys/.test(sql)) {
@@ -76,10 +79,10 @@ describe('API key routes — access', () => {
 })
 
 describe('GET /api/ai/keys', () => {
-  it('lists the three providers as unconfigured by default', async () => {
+  it('lists every key provider as unconfigured by default', async () => {
     const res = await auth(request(app).get('/api/ai/keys'))
     expect(res.status).toBe(200)
-    expect(res.body.map((k: { provider: string }) => k.provider)).toEqual(['claude', 'gemini', 'openai', 'youtube'])
+    expect(res.body.map((k: { provider: string }) => k.provider)).toEqual(['claude', 'gemini', 'openai', 'groq', 'youtube'])
     expect(res.body.every((k: { configured: boolean }) => !k.configured)).toBe(true)
   })
 
@@ -110,6 +113,29 @@ describe('PUT /api/ai/keys/:provider', () => {
     expect(res.body).toMatchObject({ provider: 'openai', label: 'OpenAI (ChatGPT)', configured: true, source: 'stored', last4: '7788' })
     expect(JSON.stringify(res.body)).not.toContain('OpenAiSecret')
     expect(JSON.stringify(table)).not.toContain('OpenAiSecret')
+  })
+
+  it('saves a Groq key the same way, encrypted and never echoed back', async () => {
+    const res = await auth(request(app).put('/api/ai/keys/groq').send({ key: 'gsk_GroqSecretValueABCDEFGH5566' }))
+    expect(res.status).toBe(200)
+    expect(res.body).toMatchObject({ provider: 'groq', label: 'Groq', configured: true, source: 'stored', last4: '5566' })
+    expect(JSON.stringify(res.body)).not.toContain('GroqSecret')
+    expect(JSON.stringify(table)).not.toContain('GroqSecret')
+  })
+
+  it('reports a Groq key from the environment as the one in effect', async () => {
+    process.env.GROQ_API_KEY = 'gsk_EnvironmentGroqKeyNeverShown4321'
+    const res = await auth(request(app).get('/api/ai/keys'))
+    expect(res.body.find((k: { provider: string }) => k.provider === 'groq')).toMatchObject({ configured: true, source: 'env', last4: '4321' })
+    expect(JSON.stringify(res.body)).not.toContain('NeverShown')
+  })
+
+  it('tells you to run the migration when the database predates Groq support (migration 026)', async () => {
+    checkViolation = true
+    const res = await auth(request(app).put('/api/ai/keys/groq').send({ key: 'gsk_GroqSecretValueABCDEFGH5566' }))
+    expect(res.status).toBe(503)
+    expect(res.body.error).toMatch(/npm run migrate/)
+    expect(JSON.stringify(res.body)).not.toContain('GroqSecret')
   })
 
   it('shows up in the listing afterwards, still without the key', async () => {

@@ -81,8 +81,18 @@ describe('PUT /api/settings — AI provider validation', () => {
     expect(writes.map((c: any[]) => c[1][0])).toContain('ai_task_providers')
   })
 
+  it('accepts groq as the provider, a per-task provider, and a trimmed model name', async () => {
+    const client = (await vi.mocked(pool.connect)()) as any
+    const res = await put({ ai_provider: 'groq', allow_cloud: true, groq_model: '  openai/gpt-oss-20b  ', ai_task_providers: { ask: 'groq' } })
+    expect(res.status).toBe(200)
+    const writes = client.query.mock.calls.filter((c: any[]) => /INSERT INTO settings/.test(c[0]))
+    expect(writes.find((c: any[]) => c[1][0] === 'groq_model')[1][1]).toBe('"openai/gpt-oss-20b"')
+    expect(writes.find((c: any[]) => c[1][0] === 'ai_provider')[1][1]).toBe('"groq"')
+  })
+
   it.each([
     ['unknown provider', { ai_provider: 'skynet' }],
+    ['empty groq model name', { groq_model: '   ' }],
     ['unknown per-task provider', { ai_task_providers: { explain: 'mistral' } }],
     ['non-boolean consent', { allow_cloud: 'yes' }],
     ['empty model name', { claude_model: '   ' }],

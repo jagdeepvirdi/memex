@@ -115,7 +115,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
 // ── AI providers ──────────────────────────────────────────────────────────────
 
-export type AiProviderId = 'ollama' | 'claude' | 'gemini' | 'openai'
+export type AiProviderId = 'ollama' | 'claude' | 'gemini' | 'openai' | 'groq'
 
 export interface AiProviderInfo {
   id: AiProviderId
@@ -142,7 +142,7 @@ export function fetchAiProviders(): Promise<AiProviderInfo[]> {
 
 // ── API keys (write-only: the server never returns a key) ───────────────────
 
-export type ApiKeyProvider = 'claude' | 'gemini' | 'openai' | 'youtube'
+export type ApiKeyProvider = 'claude' | 'gemini' | 'openai' | 'groq' | 'youtube'
 
 export interface ApiKeyStatus {
   provider: ApiKeyProvider

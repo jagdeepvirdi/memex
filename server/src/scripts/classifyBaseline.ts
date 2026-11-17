@@ -73,7 +73,7 @@ interface RunOptions {
   concurrency: number
 }
 
-const VALID_PROVIDERS: readonly ProviderId[] = ['ollama', 'claude', 'gemini', 'openai']
+const VALID_PROVIDERS: readonly ProviderId[] = ['ollama', 'claude', 'gemini', 'openai', 'groq']
 const key = (c: string[]) => c.join(' > ')
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 const MAX_ATTEMPTS = 3

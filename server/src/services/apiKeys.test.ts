@@ -204,11 +204,11 @@ describe('setApiKey / deleteApiKey', () => {
 })
 
 describe('getKeyStatuses', () => {
-  it('reports all four providers, unconfigured by default', async () => {
+  it('reports every provider, unconfigured by default', async () => {
     const s = await getKeyStatuses()
-    expect(s.map(x => x.provider)).toEqual(['claude', 'gemini', 'openai', 'youtube'])
+    expect(s.map(x => x.provider)).toEqual(['claude', 'gemini', 'openai', 'groq', 'youtube'])
     expect(s.every(x => !x.configured && x.source === null && !x.hasStored && !x.undecryptable)).toBe(true)
-    expect(s.map(x => x.label)).toEqual(['Anthropic (Claude)', 'Google Gemini', 'OpenAI (ChatGPT)', 'YouTube Data API'])
+    expect(s.map(x => x.label)).toEqual(['Anthropic (Claude)', 'Google Gemini', 'OpenAI (ChatGPT)', 'Groq', 'YouTube Data API'])
   })
 
   it('shows source and last four for a saved key', async () => {

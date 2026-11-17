@@ -20,6 +20,7 @@ const PROVIDERS = [
   { id: 'claude', configured: true, cloud: true, models: ['claude-sonnet-5-5', 'claude-opus-5-5'] },
   { id: 'gemini', configured: false, cloud: true, models: ['gemini-2.5-flash'] },
   { id: 'openai', configured: false, cloud: true, models: ['gpt-5.4-mini', 'gpt-5.2'] },
+  { id: 'groq', configured: false, cloud: true, models: ['openai/gpt-oss-120b', 'openai/gpt-oss-20b'] },
 ]
 
 const onUpdate = vi.fn()
@@ -32,6 +33,48 @@ const setup = async (settings: Record<string, unknown> = {}) => {
 beforeEach(() => {
   vi.clearAllMocks()
   mockFetchAiProviders.mockResolvedValue(PROVIDERS)
+})
+
+describe('AiProviderSettings — Groq', () => {
+  it('offers Groq as a provider and saves the choice', async () => {
+    await setup({})
+    expect(within(screen.getByLabelText('AI provider')).getByRole('option', { name: /Groq \(cloud\)/ })).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('AI provider'), { target: { value: 'groq' } })
+    expect(onUpdate).toHaveBeenCalledWith({ ai_provider: 'groq' })
+  })
+
+  it('stores the Groq model under groq_model and suggests its models', async () => {
+    await setup({ ai_provider: 'groq', allow_cloud: true, groq_model: 'openai/gpt-oss-120b' })
+    const input = screen.getByLabelText('Model') as HTMLInputElement
+    expect(input.value).toBe('openai/gpt-oss-120b')
+    fireEvent.change(input, { target: { value: 'openai/gpt-oss-20b' } })
+    fireEvent.blur(input)
+    expect(onUpdate).toHaveBeenCalledWith({ groq_model: 'openai/gpt-oss-20b' })
+  })
+
+  it('offers Groq per task and can test it once a key exists', async () => {
+    await setup({})
+    expect(within(screen.getByLabelText('Ask Memex provider')).getByRole('option', { name: /Groq/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Test Groq' })).toBeDisabled()
+  })
+
+  it('runs the Groq connection test and reports the model', async () => {
+    mockFetchAiProviders.mockResolvedValue(PROVIDERS.map(p => (p.id === 'groq' ? { ...p, configured: true } : p)))
+    mockTestAiProvider.mockResolvedValue({ ok: true, provider: 'groq', model: 'openai/gpt-oss-120b', latencyMs: 310 })
+    await setup({ ai_provider: 'groq', allow_cloud: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Test Groq' }))
+    await waitFor(() => expect(screen.getByTestId('provider-row-groq')).toHaveTextContent('Working · openai/gpt-oss-120b'))
+    expect(mockTestAiProvider).toHaveBeenCalledWith('groq')
+  })
+
+  it('points to the key screen when Groq is chosen without a key', async () => {
+    const onOpenKeys = vi.fn()
+    render(<AiProviderSettings settings={{ ai_provider: 'groq', allow_cloud: true }} onUpdate={vi.fn()} onOpenKeys={onOpenKeys} />)
+    const hint = await screen.findByTestId('missing-key-hint')
+    expect(hint).toHaveTextContent('Groq has no API key yet')
+    fireEvent.click(within(hint).getByRole('button', { name: 'Add a key' }))
+    expect(onOpenKeys).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe('AiProviderSettings — OpenAI', () => {
@@ -208,7 +251,7 @@ describe('AiProviderSettings — provider status and connection test', () => {
     expect(screen.getByTestId('provider-row-gemini')).toHaveTextContent(/no api key/i)
     expect(screen.getByTestId('provider-row-openai')).toHaveTextContent(/no api key/i)
     // The rows only report status. Keys are entered on the Keys & Privacy screen, so no key field exists here.
-    for (const id of ['ollama', 'claude', 'gemini', 'openai']) {
+    for (const id of ['ollama', 'claude', 'gemini', 'openai', 'groq']) {
       expect(within(screen.getByTestId(`provider-row-${id}`)).queryByLabelText(/key/i, { selector: 'input' })).toBeNull()
     }
     expect(container.querySelectorAll('input[type="password"]')).toHaveLength(0)

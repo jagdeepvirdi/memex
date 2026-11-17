@@ -50,7 +50,7 @@ interface Entry {
 
 interface Options { providers: ProviderId[] | 'none'; scope: 'shortlist' | 'notes'; limit?: number; out: string }
 
-const VALID: readonly ProviderId[] = ['ollama', 'claude', 'gemini', 'openai']
+const VALID: readonly ProviderId[] = ['ollama', 'claude', 'gemini', 'openai', 'groq']
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 const BACKOFF_MS = [2000, 5000, 12000]
 

@@ -22,7 +22,7 @@ router.get('/', async (req, res) => {
 });
 
 // PUT /api/settings
-const ProviderEnum = z.enum(['ollama', 'claude', 'gemini', 'openai'])
+const ProviderEnum = z.enum(['ollama', 'claude', 'gemini', 'openai', 'groq'])
 const modelName = z.string().trim().min(1).max(100)
 
 // Only the AI-provider keys are validated; every other setting is stored as before.
@@ -33,6 +33,7 @@ const SettingsBody = z.object({
   claude_model: modelName.optional(),
   gemini_model: modelName.optional(),
   openai_model: modelName.optional(),
+  groq_model: modelName.optional(),
 }).passthrough();
 
 // The embedding model decides which vectors search can see, and switching it sends library text to a provider, so it

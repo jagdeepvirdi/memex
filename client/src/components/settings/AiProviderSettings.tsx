@@ -164,7 +164,7 @@ export function AiProviderSettings({ settings, onUpdate, onOpenKeys }: Props) {
         <div>
           <p className="text-sm text-ink font-medium flex items-center gap-1.5"><Cloud size={14} aria-hidden="true" /> Allow cloud AI</p>
           <p className="text-xs text-ink-muted mt-0.5 max-w-md">
-            Lets the selected cloud provider (Claude, Gemini or OpenAI) receive item content, as the default or per task. Nothing is sent without this.
+            Lets the selected cloud provider (Claude, Gemini, OpenAI or Groq) receive item content, as the default or per task. Nothing is sent without this.
             Passwords, Personal items and anything tagged <code className="bg-white/10 px-1 rounded">private</code>,{' '}
             <code className="bg-white/10 px-1 rounded">no-cloud</code> or <code className="bg-white/10 px-1 rounded">local-only</code> always stay local.
           </p>

@@ -38,7 +38,7 @@ import { setActiveEmbedding, buildEmbedding } from './embeddingConfig.js'
 
 const cfg = (over: Partial<AiConfig> = {}): AiConfig => ({
   model: 'llama3.2', useClaude: false, strictLocal: false, provider: 'ollama',
-  claudeModel: 'c', geminiModel: 'g', openaiModel: 'o', perTask: {}, allowCloud: true, ...over,
+  claudeModel: 'c', geminiModel: 'g', openaiModel: 'o', groqModel: 'q', perTask: {}, allowCloud: true, ...over,
 })
 /** A 768-dim vector whose norm is `scale` (all weight on the first component). */
 const vec = (scale: number, len = 768) => Array.from({ length: len }, (_, i) => (i === 0 ? scale : 0))

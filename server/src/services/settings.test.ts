@@ -9,17 +9,19 @@ import { getAiConfig } from './settings'
 const rows = (o: Record<string, unknown>) =>
   vi.mocked(pool.query).mockResolvedValue({ rows: Object.entries(o).map(([key, value]) => ({ key, value })) } as never)
 
-const ENV = { c: process.env.CLAUDE_MODEL, g: process.env.GEMINI_MODEL, o: process.env.OPENAI_MODEL }
+const ENV = { c: process.env.CLAUDE_MODEL, g: process.env.GEMINI_MODEL, o: process.env.OPENAI_MODEL, q: process.env.GROQ_MODEL }
 beforeEach(() => {
   vi.clearAllMocks()
   delete process.env.CLAUDE_MODEL
   delete process.env.GEMINI_MODEL
   delete process.env.OPENAI_MODEL
+  delete process.env.GROQ_MODEL
 })
 afterEach(() => {
   if (ENV.c !== undefined) process.env.CLAUDE_MODEL = ENV.c
   if (ENV.g !== undefined) process.env.GEMINI_MODEL = ENV.g
   if (ENV.o !== undefined) process.env.OPENAI_MODEL = ENV.o
+  if (ENV.q !== undefined) process.env.GROQ_MODEL = ENV.q
 })
 
 describe('getAiConfig', () => {
@@ -73,6 +75,20 @@ describe('getAiConfig', () => {
   it('ignores a malformed ai_provider and non-object per-task values', async () => {
     rows({ ai_provider: 'skynet', ai_task_providers: ['gemini'] })
     expect(await getAiConfig()).toMatchObject({ provider: 'ollama', perTask: {} })
+  })
+
+  it('accepts groq as a provider and resolves its model: setting, then env, then default', async () => {
+    rows({ ai_provider: 'groq', allow_cloud: true, ai_task_providers: { explain: 'groq' } })
+    expect(await getAiConfig()).toMatchObject({ provider: 'groq', groqModel: 'openai/gpt-oss-120b', perTask: { explain: 'groq' } })
+    process.env.GROQ_MODEL = 'llama-from-env'
+    expect((await getAiConfig()).groqModel).toBe('llama-from-env')
+    rows({ groq_model: 'model-from-settings' })
+    expect((await getAiConfig()).groqModel).toBe('model-from-settings')
+  })
+
+  it('forces groq back to Ollama in Strict Local Mode, like every cloud provider', async () => {
+    rows({ ai_provider: 'groq', allow_cloud: true, strict_local_mode: true, ai_task_providers: { ask: 'groq' } })
+    expect(await getAiConfig()).toMatchObject({ provider: 'ollama', allowCloud: false, perTask: {} })
   })
 
   it('accepts openai as a provider and resolves its model: setting, then env, then default', async () => {

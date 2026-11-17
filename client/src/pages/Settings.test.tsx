@@ -80,6 +80,7 @@ describe('SettingsPage', () => {
     { id: 'claude', configured: true, cloud: true, models: ['claude-sonnet-5-5'] },
     { id: 'gemini', configured: false, cloud: true, models: ['gemini-2.5-flash'] },
     { id: 'openai', configured: false, cloud: true, models: ['gpt-5.4-mini'] },
+    { id: 'groq', configured: false, cloud: true, models: ['openai/gpt-oss-120b'] },
   ]
 
   /** Routes the calls every tab makes, then lets a test add or override endpoints. */
@@ -274,7 +275,7 @@ describe('SettingsPage', () => {
 
   describe('Keys & Privacy section', () => {
     it('shows the key panel for every provider, empty by default', async () => {
-      mockFetchApiKeys.mockResolvedValue(['claude', 'gemini', 'openai', 'youtube'].map(provider => ({
+      mockFetchApiKeys.mockResolvedValue(['claude', 'gemini', 'openai', 'groq', 'youtube'].map(provider => ({
         provider, label: provider, configured: false, source: null, hasStored: false, undecryptable: false,
       })))
       renderTab('privacy')

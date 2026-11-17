@@ -17,10 +17,10 @@ import type { ApiKeyStatus } from '../../lib/api'
 
 const status = (provider: ApiKeyStatus['provider'], over: Partial<ApiKeyStatus> = {}): ApiKeyStatus => ({
   provider,
-  label: { claude: 'Anthropic (Claude)', gemini: 'Google Gemini', openai: 'OpenAI (ChatGPT)', youtube: 'YouTube Data API' }[provider],
+  label: { claude: 'Anthropic (Claude)', gemini: 'Google Gemini', openai: 'OpenAI (ChatGPT)', groq: 'Groq', youtube: 'YouTube Data API' }[provider],
   configured: false, source: null, hasStored: false, undecryptable: false, ...over,
 })
-const NONE = [status('claude'), status('gemini'), status('openai'), status('youtube')]
+const NONE = [status('claude'), status('gemini'), status('openai'), status('groq'), status('youtube')]
 const SECRET = 'sk-ant-api03-TOPSECRETVALUE-1234'
 
 const setup = async (statuses: ApiKeyStatus[] = NONE, onChanged = vi.fn()) => {
@@ -53,10 +53,29 @@ describe('ApiKeysPanel — OpenAI', () => {
   })
 })
 
+describe('ApiKeysPanel — Groq', () => {
+  it('saves a Groq key under the groq provider and clears the field', async () => {
+    mockSave.mockResolvedValue(status('groq', { configured: true, source: 'stored', last4: '5566', hasStored: true }))
+    const { onChanged } = await setup()
+    type('groq', 'gsk_GroqSecretValueABCDEFGH5566')
+    fireEvent.click(within(row('groq')).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(mockSave).toHaveBeenCalledWith('groq', 'gsk_GroqSecretValueABCDEFGH5566'))
+    await waitFor(() => expect(screen.getByTestId('api-key-status-groq')).toHaveTextContent('Saved · ends in 5566'))
+    expect((within(row('groq')).getByLabelText(/./, { selector: 'input' }) as HTMLInputElement).value).toBe('')
+    expect(onChanged).toHaveBeenCalled()
+  })
+
+  it('says where to get a key and that Groq cannot make embeddings', async () => {
+    await setup()
+    expect(row('groq')).toHaveTextContent('console.groq.com')
+    expect(row('groq')).toHaveTextContent(/cannot make embeddings/i)
+  })
+})
+
 describe('ApiKeysPanel — display', () => {
   it('shows each provider as not set by default', async () => {
     await setup()
-    for (const p of ['claude', 'gemini', 'openai', 'youtube']) expect(screen.getByTestId(`api-key-status-${p}`)).toHaveTextContent('Not set')
+    for (const p of ['claude', 'gemini', 'openai', 'groq', 'youtube']) expect(screen.getByTestId(`api-key-status-${p}`)).toHaveTextContent('Not set')
     expect(screen.getByLabelText('Anthropic (Claude)')).toBeInTheDocument()
     expect(screen.getByLabelText('OpenAI (ChatGPT)')).toBeInTheDocument()
     expect(screen.getByLabelText('YouTube Data API')).toBeInTheDocument()
@@ -79,9 +98,9 @@ describe('ApiKeysPanel — display', () => {
   })
 
   it('inputs are password fields that are never pre-filled', async () => {
-    const { container } = await setup([status('claude', { configured: true, source: 'stored', last4: '1234', hasStored: true }), status('gemini'), status('openai'), status('youtube')])
+    const { container } = await setup([status('claude', { configured: true, source: 'stored', last4: '1234', hasStored: true }), status('gemini'), status('openai'), status('groq'), status('youtube')])
     const inputs = container.querySelectorAll('input')
-    expect(inputs).toHaveLength(4)
+    expect(inputs).toHaveLength(5)
     inputs.forEach(i => { expect(i.type).toBe('password'); expect(i.value).toBe(''); expect(i.autocomplete).toBe('off') })
   })
 

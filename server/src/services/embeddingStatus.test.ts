@@ -13,7 +13,7 @@ import { setActiveEmbedding, buildEmbedding } from './embeddingConfig'
 
 const cfg = (over: Partial<AiConfig> = {}): AiConfig => ({
   model: 'llama3.2', useClaude: false, strictLocal: false, provider: 'ollama',
-  claudeModel: 'c', geminiModel: 'g', openaiModel: 'o', perTask: {}, allowCloud: true, ...over,
+  claudeModel: 'c', geminiModel: 'g', openaiModel: 'o', groqModel: 'q', perTask: {}, allowCloud: true, ...over,
 })
 const providers = (geminiKey: boolean) => [
   { id: 'ollama', configured: true }, { id: 'gemini', configured: geminiKey }, { id: 'openai', configured: false },
