@@ -39,9 +39,9 @@ export function TagPill({ name }: { name: string }) {
   return (
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-body"
       style={{
-        background: 'rgba(245,230,200,0.06)',
+        background: 'rgb(var(--c-overlay) / 0.06)',
         color: 'rgb(var(--c-ink-muted))',
-        border: '1px solid rgba(245,230,200,0.08)',
+        border: '1px solid rgb(var(--c-overlay) / 0.08)',
       }}>
       {name}
     </span>

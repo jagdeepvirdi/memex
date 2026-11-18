@@ -47,7 +47,10 @@ export default {
         rose: v('rose'),
         sage: v('sage'),
         lilac: v('lilac'),
-        sky: v('sky'),
+        // `sky` is both the badge colour (text-sky) and a palette: text-sky-400 etc. were used but never defined, so they
+        // rendered unstyled before; the shades now exist and flip with the theme like the other semantic palettes.
+        sky: { DEFAULT: v('sky'), ...shades('sky', [300, 400, 500]) },
+        violet: shades('violet', [400]),
 
         // Semantic palettes (only the shades the app uses), deeper in light mode
         amber: shades('amber', [300, 400, 500]),

@@ -26,9 +26,9 @@ export default function MediaCard({ item, onClick }: Props) {
           <span
             className="font-body text-xs px-2 py-0.5 rounded-full"
             style={{
-              background: 'rgba(191,176,224,0.12)',
+              background: 'rgb(var(--c-lilac) / 0.12)',
               color: 'rgb(var(--c-lilac))',
-              border: '1px solid rgba(191,176,224,0.2)',
+              border: '1px solid rgb(var(--c-lilac) / 0.2)',
             }}
           >
             {s.genre}

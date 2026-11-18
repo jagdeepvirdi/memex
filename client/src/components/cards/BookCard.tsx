@@ -34,9 +34,9 @@ export default function BookCard({ item, onClick }: Props) {
           <span
             className="font-body text-xs px-2 py-0.5 rounded-full"
             style={{
-              background: 'rgba(168,197,160,0.12)',
+              background: 'rgb(var(--c-sage) / 0.12)',
               color: 'rgb(var(--c-sage))',
-              border: '1px solid rgba(168,197,160,0.2)',
+              border: '1px solid rgb(var(--c-sage) / 0.2)',
             }}
           >
             {s.genre}

@@ -31,9 +31,9 @@ export default function RecipeCard({ item, onClick }: Props) {
           <span
             className="self-start font-body text-xs px-2 py-0.5 rounded-full"
             style={{
-              background: 'rgba(232,180,160,0.12)',
+              background: 'rgb(var(--c-rose) / 0.12)',
               color: 'rgb(var(--c-rose))',
-              border: '1px solid rgba(232,180,160,0.2)',
+              border: '1px solid rgb(var(--c-rose) / 0.2)',
             }}
           >
             {s.cuisine}
