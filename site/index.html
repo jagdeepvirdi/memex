@@ -28,6 +28,7 @@
         <a href="#new">What is new</a>
         <a href="#where">Local or cloud</a>
         <a href="#privacy">Privacy</a>
+        <a href="#assistants">AI assistants</a>
         <a href="#install">Install</a>
         <a href="https://github.com/jagdeepvirdi/memex">GitHub</a>
         <button type="button" class="theme" id="theme">Theme: auto</button>
@@ -208,11 +209,78 @@
       <p class="more"><a href="https://github.com/jagdeepvirdi/memex/blob/main/SECURITY.md">Read the full security notes</a></p>
     </section>
 
+    <section class="band wrap" id="assistants" aria-labelledby="assistants-h">
+      <h2 id="assistants-h">Use your notes from an AI assistant</h2>
+      <p class="intro">Memex includes a small <a href="https://modelcontextprotocol.io">MCP</a> server. Claude Desktop, Cursor and other MCP apps start it on your computer, and it talks to your own Memex. Then you can ask the assistant "what did I save about the harbour restaurants?" or say "save this recipe to Memex", without leaving the app you are in.</p>
+
+      <h3 class="ver">Set it up in about two minutes</h3>
+      <ol class="steps">
+        <li>Build the server once with <code>npm run mcp:build</code> (Node 20 or newer).</li>
+        <li>In Memex, open <strong>Settings &gt; Capture &gt; AI assistants</strong> and press <strong>Create key</strong>. The key is shown once.</li>
+        <li>Paste the block Memex shows into your assistant's MCP settings, with the path to your Memex folder. For Claude Desktop that is <code>claude_desktop_config.json</code>.</li>
+        <li>Restart the assistant. Memex must be running.</li>
+      </ol>
+      <div class="code">
+        <button type="button" class="copy" data-target="mcp-config" aria-label="Copy the assistant config">Copy</button>
+        <pre id="mcp-config"><code>{
+  "mcpServers": {
+    "memex": {
+      "command": "node",
+      "args": ["/path/to/memex/mcp/dist/index.js"],
+      "env": {
+        "MEMEX_URL": "http://localhost:3002",
+        "MEMEX_MCP_KEY": "mxk_..."
+      }
+    }
+  }
+}</code></pre>
+      </div>
+
+      <h3 class="ver">What the assistant can do</h3>
+      <div class="table-wrap">
+        <table>
+          <caption class="sr">The five tools an assistant gets</caption>
+          <thead>
+            <tr><th scope="col">Tool</th><th scope="col">What it does</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>search_memex</code></th><td>Searches by meaning and keywords; returns titles, short summaries and ids</td></tr>
+            <tr><th scope="row"><code>recent_memex_items</code></th><td>Lists the newest items you saved</td></tr>
+            <tr><th scope="row"><code>get_memex_item</code></th><td>Reads the full text of one item</td></tr>
+            <tr><th scope="row"><code>save_note_to_memex</code></th><td>Saves a note; Memex files and tags it, and adds a <code>from-mcp</code> tag so you can find it</td></tr>
+            <tr><th scope="row"><code>save_link_to_memex</code></th><td>Saves a web page (fetched and summarised); saving the same page twice does nothing</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="split">
+        <div>
+          <h3>Safe by design</h3>
+          <ul class="plain">
+            <li>The key works only for these five tools. It cannot delete, edit or export anything, and cannot touch settings, API keys or the vault.</li>
+            <li>Memex keeps only a fingerprint of the key and shows the key once. <strong>Revoke</strong> locks the assistant out at once.</li>
+            <li>The vault, Passwords and Personal, anything tagged <code>private</code>, <code>no-cloud</code> or <code>local-only</code>, and text that looks like account details are never returned. A search only says how many matches were held back.</li>
+            <li>There is no "ask" tool on purpose, so private text never ends up inside an answer that leaves your machine.</li>
+            <li>Strict Local Mode turns the whole thing off.</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Worth knowing</h3>
+          <ul class="plain">
+            <li>What the assistant reads goes to that assistant, which may be a cloud service. Connecting it is your choice, and you can revoke it any time.</li>
+            <li>It runs on your computer and talks only to your own Memex.</li>
+            <li>Tested with automated tests and a real MCP session against a stand-in Memex. If you try it with Claude Desktop or Cursor, please tell us what you find.</li>
+          </ul>
+        </div>
+      </div>
+      <p class="more"><a href="https://github.com/jagdeepvirdi/memex#use-memex-from-an-ai-assistant-mcp">Read the full setup guide</a></p>
+    </section>
+
     <section class="band wrap" id="install" aria-labelledby="install-h">
       <h2 id="install-h">Install it in a few minutes</h2>
       <p class="intro">You need <a href="https://www.docker.com/products/docker-desktop/">Docker</a> and nothing else. The first build takes a few minutes.</p>
       <div class="code">
-        <button type="button" class="copy" id="copy" aria-label="Copy the install commands">Copy</button>
+        <button type="button" class="copy" id="copy" data-target="cmds" aria-label="Copy the install commands">Copy</button>
         <pre id="cmds"><code>git clone https://github.com/jagdeepvirdi/memex.git &amp;&amp; cd memex
 cp .env.example .env     # set JWT_SECRET: the file shows how to make one
 docker compose up -d</code></pre>

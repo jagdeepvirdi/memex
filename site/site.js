@@ -43,11 +43,12 @@
   })
   render('local')
 
-  var copy = document.getElementById('copy')
-  var cmds = document.getElementById('cmds')
-  if (copy && cmds) {
+  // Copy buttons: each one names the <pre> it copies in data-target
+  Array.prototype.slice.call(document.querySelectorAll('.copy[data-target]')).forEach(function (copy) {
+    var source = document.getElementById(copy.getAttribute('data-target'))
+    if (!source) return
     copy.addEventListener('click', function () {
-      var text = cmds.textContent.trim()
+      var text = source.textContent.trim()
       var done = function () {
         copy.textContent = 'Copied'
         setTimeout(function () { copy.textContent = 'Copy' }, 1800)
@@ -58,7 +59,7 @@
         copy.textContent = 'Select and copy'
       }
     })
-  }
+  })
 
   // Theme button: auto (follow the system) -> light -> dark -> auto
   var themeBtn = document.getElementById('theme')
