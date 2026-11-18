@@ -6,6 +6,10 @@ All notable changes to Memex are documented here.
 
 ## [Unreleased]
 
+---
+
+## [1.1.0] — 2026-11-18
+
 ### Added
 - **Five AI providers.** Ollama (local, default) plus Claude, Gemini, OpenAI and Groq, each opt-in (a key, a provider choice, cloud consent), with per-task overrides. Keys can be saved in Settings (encrypted, write-only).
 - **Choose your embedding model** (Ollama, Gemini or OpenAI) with a read-only estimate, a resumable re-embed job, per-model similarity thresholds, calibration, and a safe entity merge.
