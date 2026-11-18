@@ -1,6 +1,6 @@
 {
   "name": "memex",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Memex: Personal Knowledge OS",
   "type": "module",
   "scripts": {

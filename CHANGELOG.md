@@ -6,12 +6,18 @@ All notable changes to Memex are documented here.
 
 ## [Unreleased]
 
+---
+
+## [1.2.0] — 2026-11-18
+
 ### Added
 - **MCP server for AI assistants** (`mcp/`). Claude Desktop, Cursor and other MCP apps can search, read and save your notes through five tools (`search_memex`, `recent_memex_items`, `get_memex_item`, `save_note_to_memex`, `save_link_to_memex`). It uses its own key from Settings > Capture, which can reach only the assistant routes (not delete, edit, export, settings, API keys or the vault) and is stored as a hash. Private items (vault, Passwords / Personal, private tags, text that looks like account details) are never returned, and Strict Local Mode turns it off. Build it with `npm run mcp:build`.
 - **Light and dark themes with a fresh palette.** "Midnight" (dark, default) and "Daylight" (light) with an iris accent. Follows your system setting; pick System, Light or Dark in Settings > Appearance, or cycle them with the button in the header; the choice is remembered in your browser. The landing page uses the same palette.
 
 ### Changed
+- **Settings > Appearance** has the System / Light / Dark choice as three cards, next to the header button.
 - Dependencies: `zod` 3 to 4 (server), `react-router-dom` 6 to 7 (web app), `qs` updated; `npm audit --omit=dev` now reports 0 advisories for both. CI actions moved to `checkout@v7` / `setup-node@v7`.
+- Link badges and chips that use the blue "sky" shades were never styled (the shades were missing from the design tokens); they now render, in both themes.
 - Phones: header actions get their own row under the title bar on every page, the Library category buttons are visible on touch devices, and the settings section strip shows a fade when more sections are off screen.
 
 ---
@@ -188,6 +194,7 @@ First public release. Everything below was built for this version.
 
 ---
 
-[Unreleased]: https://github.com/jagdeepvirdi/memex/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/jagdeepvirdi/memex/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/jagdeepvirdi/memex/releases/tag/v1.2.0
 [1.1.0]: https://github.com/jagdeepvirdi/memex/releases/tag/v1.1.0
 [1.0.0]: https://github.com/jagdeepvirdi/memex/releases/tag/v1.0.0

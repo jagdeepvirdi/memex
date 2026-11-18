@@ -117,8 +117,19 @@
     </section>
 
     <section class="band wrap new" id="new" aria-labelledby="new-h">
-      <h2 id="new-h">What is new in v1.1, and why it helps</h2>
-      <p class="intro">Version 1.1 is about three things: starting in minutes, knowing what happens to your notes, and enjoying the app every day.</p>
+      <h2 id="new-h">What is new, and why it helps</h2>
+
+      <h3 class="ver">v1.2: your notes, in your AI assistant</h3>
+      <ul class="plain two">
+        <li><strong>Use your notes from Claude Desktop, Cursor and other AI apps.</strong> A small server on your computer lets an assistant search Memex, read an item, and save a note or a web page. Ask "what did I save about the harbour restaurants?" in the app you already use. <span class="why">Why it helps: your notes become useful everywhere you work, not just inside Memex.</span></li>
+        <li><strong>A key that can do very little.</strong> It can search, read and save. It cannot delete, edit, export, or touch settings, keys or the vault. You see it once, Memex keeps only a fingerprint, and you can revoke it in one click. <span class="why">Why it helps: you can try an assistant without handing it the keys to everything.</span></li>
+        <li><strong>Private items stay private.</strong> The vault, Passwords and Personal, anything tagged private, and text that looks like account details are never shown to the assistant, and Strict Local Mode turns the whole thing off. <span class="why">Why it helps: the same safety rules as for a cloud AI, applied to the assistant too.</span></li>
+        <li><strong>Light and dark, your choice.</strong> A fresh palette that follows your system, with System, Light and Dark in Settings and a button in the header. This page uses the same one. <span class="why">Why it helps: comfortable by day and by night.</span></li>
+        <li><strong>Fits a phone.</strong> Headers, page actions and settings were reworked for small screens. <span class="why">Why it helps: save and search from anywhere.</span></li>
+        <li><strong>No known dependency issues.</strong> The audit of both the server and the web app is clean (checked November 2026). <span class="why">Why it helps: fewer known holes in the software you run.</span></li>
+      </ul>
+
+      <h3 class="ver">v1.1: easy to start, easy to trust</h3>
       <ul class="plain two">
         <li><strong>Install with one command.</strong> <code>docker compose up -d</code> starts the database and the app together. If something is wrong, Memex says what and how to fix it. <span class="why">Why it helps: no setup puzzle, and no stack trace to decode.</span></li>
         <li><strong>A first-run screen.</strong> It walks you through choosing local or cloud AI and tests the choice before you save anything. <span class="why">Why it helps: you know it works before your first note.</span></li>
@@ -129,11 +140,9 @@
         <li><strong>A smarter privacy guard.</strong> Besides vault items and private tags, text that looks like account numbers, PINs or an address is held back from a cloud AI. <span class="why">Why it helps: a safety net for the note you forgot to tag.</span></li>
         <li><strong>Look around first.</strong> About forty made-up items load with one click and clear with one click, leaving your own notes alone. <span class="why">Why it helps: see the app working before you trust it with real notes.</span></li>
         <li><strong>Backups you can trust.</strong> One command to back up and one to restore; a restore refuses a file that is not a complete backup and keeps a safety copy first. <span class="why">Why it helps: you can upgrade or switch models without worry.</span></li>
-        <li><strong>Closed by default.</strong> The app and the database listen on your own computer only, other websites cannot talk to it, new passwords must be 10 characters or more, and the dependency audit shows no known issues (checked November 2026). Security reports can be sent privately. <span class="why">Why it helps: a personal knowledge base should not be reachable from the cafe Wi-Fi.</span></li>
-        <li><strong>Light and dark.</strong> A fresh palette that follows your system setting, with a button to choose. This page uses the same one. <span class="why">Why it helps: comfortable by day and by night.</span></li>
-        <li><strong>Fits a phone.</strong> Headers, page actions and settings were reworked to fit small screens. <span class="why">Why it helps: save and search from anywhere.</span></li>
+        <li><strong>Closed by default.</strong> The app and the database listen on your own computer only, other websites cannot talk to it, and new passwords must be 10 characters or more. Security reports can be sent privately. <span class="why">Why it helps: a personal knowledge base should not be reachable from the cafe Wi-Fi.</span></li>
       </ul>
-      <p class="more"><a href="https://github.com/jagdeepvirdi/memex/releases/tag/v1.1.0">Read the v1.1.0 release notes</a></p>
+      <p class="more"><a href="https://github.com/jagdeepvirdi/memex/releases/tag/v1.2.0">Read the v1.2.0 release notes</a></p>
     </section>
 
     <section class="band wrap" id="where" aria-labelledby="where-h">
@@ -164,6 +173,7 @@
         <li><strong>Reminders.</strong> Attach a date to any item and get a browser notification when it is due.</li>
         <li><strong>Password vault.</strong> Encrypted in your browser with a master password that never leaves it.</li>
         <li><strong>Sharing.</strong> A public link for one item that expires in a week and can be revoked.</li>
+        <li><strong>AI assistants.</strong> Connect Claude Desktop or Cursor and ask them about your notes, with private items kept out.</li>
         <li><strong>Obsidian export.</strong> Your whole library as Markdown files, whenever you want to leave.</li>
         <li><strong>Backup and restore.</strong> One command each. Restore refuses a file that is not a complete backup.</li>
         <li><strong>Sample data.</strong> Forty made-up items to look around in, removed with one click.</li>
@@ -219,7 +229,7 @@ docker compose up -d</code></pre>
         <a href="https://github.com/jagdeepvirdi/memex">Source</a>
         <a href="https://github.com/jagdeepvirdi/memex/blob/main/README.md">Documentation</a>
         <a href="https://github.com/jagdeepvirdi/memex/blob/main/SECURITY.md">Security</a>
-        <a href="https://github.com/jagdeepvirdi/memex/releases/tag/v1.1.0">v1.1.0</a>
+        <a href="https://github.com/jagdeepvirdi/memex/releases/tag/v1.2.0">v1.2.0</a>
         <a href="https://github.com/jagdeepvirdi/memex/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://github.com/jagdeepvirdi/memex/issues">Report a problem</a>
       </nav>

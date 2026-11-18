@@ -2,7 +2,7 @@
 
 A self-hosted knowledge management app that ingests, auto-classifies, and organizes everything you save — notes, recipes, movies, books, places, links, files, voice memos, and more. Runs on your machine with local AI (Ollama) by default. Gemini, OpenAI, Claude or Groq are optional and used only with your key, your choice and your consent.
 
-Project site: https://memex.jagdeepsinghvirdi.com · Latest release: [v1.1.0](https://github.com/jagdeepvirdi/memex/releases/tag/v1.1.0)
+Project site: https://memex.jagdeepsinghvirdi.com · Latest release: [v1.2.0](https://github.com/jagdeepvirdi/memex/releases/tag/v1.2.0)
 
 ## Try it in two minutes
 

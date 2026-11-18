@@ -68,7 +68,7 @@ An AI assistant (Claude Desktop, Cursor, ...) launches `node mcp/dist/index.js` 
 Static page (no build step) deployed to Vercel as project `memex-site`, served at https://memex.jagdeepsinghvirdi.com (GoDaddy DNS: CNAME `memex` to the target Vercel shows; the certificate had to be issued by hand with `vercel certs issue`). The Vercel project is Git-connected with Root Directory `site`, so every push to `main` redeploys it (do not clear that setting: with an empty root directory the push deploys the repo root and the site 404s); by hand: `vercel deploy --prod` from the repo root. Fonts are self-hosted and nothing loads from a third party. It uses no app screenshots until the L9 redesign.
 
 ## Releases
-`v1.1.0` is the current release (tag + GitHub release; body in `RELEASE_NOTES_v1.1.0.md`, history in `CHANGELOG.md`). Only the root `package.json` carries the release version; `server/` and `client/` stay at 0.1.0.
+`v1.2.0` is the current release (tag + GitHub release; body in `RELEASE_NOTES_v1.2.0.md`, history in `CHANGELOG.md`; the v1.1.0 notes stay in `RELEASE_NOTES_v1.1.0.md`). Only the root `package.json` carries the release version; `server/` and `client/` stay at 0.1.0.
 
 ## Project Structure
 ```
