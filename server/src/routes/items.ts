@@ -57,7 +57,7 @@ const createItemSchema = z.object({
   source: z.enum(ITEM_SOURCES),
   sourceUrl: z.string().url().optional(),
   encrypted: z.boolean().optional(),
-  structured: z.record(z.unknown()).optional(),
+  structured: z.record(z.string(), z.unknown()).optional(),
   intent: z.enum(ITEM_INTENTS).optional(),
   priority: z.enum(ITEM_PRIORITIES).nullable().optional(),
   confidence: z.number().min(0).max(100).optional(),
@@ -69,7 +69,7 @@ const updateItemSchema = z.object({
   content: z.string().min(1).optional(),
   categories: z.array(z.string()).optional(),
   tags: z.array(z.string()).optional(),
-  structured: z.record(z.unknown()).optional(),
+  structured: z.record(z.string(), z.unknown()).optional(),
   deleted: z.boolean().optional(),
   reviewed: z.boolean().optional(),
   confidence: z.number().nullable().optional(),
@@ -359,7 +359,7 @@ router.post('/reprocess-bulk', async (req, res) => {
 
 const MAX_BULK_PRIORITY = 500
 const bulkPrioritySchema = z.object({
-  ids: z.array(z.string().uuid()).min(1).max(MAX_BULK_PRIORITY),
+  ids: z.array(z.guid()).min(1).max(MAX_BULK_PRIORITY),
   priority: z.enum(ITEM_PRIORITIES).nullable(),
 })
 

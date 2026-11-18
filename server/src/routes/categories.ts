@@ -14,12 +14,12 @@ const router = Router()
 
 const createCategorySchema = z.object({
   name: z.string().min(1).max(100),
-  parentId: z.string().uuid().nullable().optional(),
+  parentId: z.guid().nullable().optional(),
 })
 
 const updateCategorySchema = z.object({
   name: z.string().min(1).max(100).optional(),
-  parentId: z.string().uuid().nullable().optional(),
+  parentId: z.guid().nullable().optional(),
 })
 
 // ── Row types ─────────────────────────────────────────────────────────────────
@@ -298,7 +298,7 @@ router.get('/anomalies', async (_req, res) => {
 // ── POST /api/categories/remap — bulk reassign rogue category items ───────────
 
 const remapSchema = z.object({
-  fromRootId: z.string().uuid(),
+  fromRootId: z.guid(),
   toPath: z.array(z.string().min(1)).min(1),
 })
 

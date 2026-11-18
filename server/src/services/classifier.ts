@@ -17,9 +17,9 @@ const classificationSchema = z.object({
   categories: z.array(z.string()).catch([]),
   tags: z.array(z.string()).catch([]),
   summary: z.string().catch(''),
-  structured: z.record(z.unknown()).catch({}),
+  structured: z.record(z.string(), z.unknown()).catch({}),
   multiEntity: z.boolean().optional(),
-  entities: z.array(z.record(z.unknown())).optional(),
+  entities: z.array(z.record(z.string(), z.unknown())).optional(),
   confidence: z.number().min(0).max(100).catch(80),
   intent: z.enum(['actionable', 'reference', 'idea']).default('reference').catch('reference'),
 })
