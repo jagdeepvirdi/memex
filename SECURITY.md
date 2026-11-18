@@ -30,4 +30,4 @@ Your vault master password and `JWT_SECRET` (in `.env`) are not in any backup. W
 
 ## Known dependency advisories
 
-`npm audit --omit=dev` is checked before each release. Open at the time of writing: `zod` (a memory-exhaustion advisory for oversized constrained collections; the fix is the v4 major, planned) and, in the web app, `react-router-dom` (the fix is the v7 major, planned). Neither is reachable by anyone who cannot already sign in.
+`npm audit --omit=dev` is checked before each release. At the time of writing (2026-11-18) both the server and the web app report 0 advisories: `zod` was moved to v4 (it had a memory-exhaustion advisory for oversized constrained collections), `react-router-dom` to v7, and `qs` was updated.
