@@ -10,7 +10,8 @@ const KEY = 'mxk_' + 'e'.repeat(48)
 
 beforeEach(() => {
   apiFetch.mockReset()
-  Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
+  // defineProperty, not assignment: on some Node/jsdom versions navigator.clipboard is a getter-only property.
+  Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockResolvedValue(undefined) }, configurable: true })
 })
 
 describe('buildMcpConfig', () => {
