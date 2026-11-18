@@ -10,6 +10,11 @@ interface Props {
   left: ReactNode
   /** Page-specific right-side actions rendered before the common controls */
   actions?: ReactNode
+  /**
+   * Hide `actions` (and the divider after them) below md. For pages whose actions are too wide for a phone: the
+   * page then renders the same controls itself, e.g. in a row above its content.
+   */
+  collapseActionsOnMobile?: boolean
 }
 
 /**
@@ -19,7 +24,7 @@ interface Props {
  * Include <AppHeader.Spacer /> immediately after <AppHeader> in each page so
  * content doesn't slide under the fixed bar.
  */
-export function AppHeader({ left, actions }: Props) {
+export function AppHeader({ left, actions, collapseActionsOnMobile }: Props) {
   const navigate = useNavigate()
   const { user, logout } = useAuthStore()
   const { aiStatus, enrichment, eta, isOnline } = useAiStatus()
@@ -40,10 +45,10 @@ export function AppHeader({ left, actions }: Props) {
       <div className="flex items-center gap-3 text-ink-muted shrink-0">
         {/* Page-specific actions */}
         {actions && (
-          <>
+          <div className={collapseActionsOnMobile ? 'hidden md:flex items-center gap-3' : 'contents'}>
             {actions}
             <div className="w-px h-5 bg-white/10" />
-          </>
+          </div>
         )}
 
         <DemoBanner />

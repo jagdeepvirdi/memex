@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -114,6 +114,16 @@ describe('CategoryPage — sort and filter', () => {
     const sortSelect = screen.getAllByRole('combobox')[0]
     fireEvent.change(sortSelect, { target: { value: 'oldest' } })
     await waitFor(() => expect(mockFetchItems).toHaveBeenCalled())
+  })
+
+  it('offers the mobile copy of the controls and it changes the same sort state as the header', async () => {
+    render(<CategoryPage />)
+    const mobile = await screen.findByTestId('category-controls-mobile')
+    const [mobileSort] = within(mobile).getAllByRole('combobox')
+    fireEvent.change(mobileSort, { target: { value: 'oldest' } })
+    await waitFor(() => expect(mockFetchItems).toHaveBeenCalled())
+    // Header copy and mobile copy are both bound to the one state, so the header select now shows it too.
+    expect((screen.getAllByRole('combobox')[0] as HTMLSelectElement).value).toBe('oldest')
   })
 
   it('filters by type when type filter select changes', async () => {

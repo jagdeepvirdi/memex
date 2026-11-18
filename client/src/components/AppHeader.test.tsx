@@ -144,4 +144,11 @@ describe('AppHeader Component', () => {
     expect(header.className).not.toMatch(/(^|\s)left-64(\s|$)/)
     expect(header.className).toContain('px-4')
   })
+
+  it('hides actions below md only when asked to, so a page can move them out of the bar', () => {
+    const { rerender } = render(<AppHeader left={<div>Title</div>} actions={<button>Sort</button>} />)
+    expect(screen.getByText('Sort').closest('.hidden')).toBeNull()
+    rerender(<AppHeader left={<div>Title</div>} actions={<button>Sort</button>} collapseActionsOnMobile />)
+    expect(screen.getByText('Sort').parentElement!.className).toContain('hidden md:flex')
+  })
 })
