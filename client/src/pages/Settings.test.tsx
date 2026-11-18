@@ -126,10 +126,31 @@ describe('SettingsPage', () => {
       const nav = screen.getByRole('navigation', { name: 'Settings sections' })
       const links = within(nav).getAllByRole('link')
       expect(links.map(l => l.getAttribute('href'))).toEqual([
-        '/settings/ai', '/settings/privacy', '/settings/library', '/settings/vault', '/settings/capture',
+        '/settings/ai', '/settings/privacy', '/settings/library', '/settings/vault', '/settings/capture', '/settings/appearance',
       ])
       expect(within(nav).getByRole('link', { name: /^AI/ })).toHaveAttribute('aria-current', 'page')
       expect(screen.getByTestId('settings-tab-ai')).toBeInTheDocument()
+    })
+
+    it('lets you pick System, Light or Dark in the Appearance section, and remembers it', async () => {
+      localStorage.clear()
+      window.matchMedia = vi.fn().mockImplementation(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })) as unknown as typeof window.matchMedia
+      renderTab('appearance')
+      const group = screen.getByRole('radiogroup', { name: 'Theme' })
+      const radios = within(group).getAllByRole('radio')
+      expect(radios.map(r => r.textContent)).toEqual([
+        expect.stringContaining('System'), expect.stringContaining('Light'), expect.stringContaining('Dark'),
+      ])
+      expect(within(group).getByRole('radio', { name: /System/ })).toHaveAttribute('aria-checked', 'true')
+      fireEvent.click(within(group).getByRole('radio', { name: /Light/ }))
+      expect(document.documentElement.dataset.theme).toBe('light')
+      expect(within(group).getByRole('radio', { name: /Light/ })).toHaveAttribute('aria-checked', 'true')
+      expect(localStorage.getItem('memex-theme')).toBe('light')
+      fireEvent.click(within(group).getByRole('radio', { name: /Dark/ }))
+      expect(document.documentElement.dataset.theme).toBe('dark')
+      fireEvent.click(within(group).getByRole('radio', { name: /System/ }))
+      expect(localStorage.getItem('memex-theme')).toBeNull()
+      expect(within(group).getByRole('radio', { name: /System/ })).toHaveAttribute('aria-checked', 'true')
     })
 
     it('shows a scroll hint only while more sections are hidden to the right (mobile strip)', async () => {

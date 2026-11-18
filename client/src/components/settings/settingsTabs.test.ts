@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { SETTINGS_TABS, DEFAULT_SETTINGS_TAB, resolveSettingsTab, settingsTabPath } from './settingsTabs'
 
 describe('settings tabs', () => {
-  it('defines the five sections in order', () => {
-    expect(SETTINGS_TABS.map(t => t.id)).toEqual(['ai', 'privacy', 'library', 'vault', 'capture'])
+  it('defines the six sections in order', () => {
+    expect(SETTINGS_TABS.map(t => t.id)).toEqual(['ai', 'privacy', 'library', 'vault', 'capture', 'appearance'])
   })
 
   it('gives every section a label and a hint, and no duplicate ids', () => {

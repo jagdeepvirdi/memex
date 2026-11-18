@@ -10,6 +10,7 @@ import { KeysPrivacyTab } from '../components/settings/tabs/KeysPrivacyTab'
 import { LibraryTab } from '../components/settings/tabs/LibraryTab'
 import { VaultTab } from '../components/settings/tabs/VaultTab'
 import { CaptureTab } from '../components/settings/tabs/CaptureTab'
+import { AppearanceTab } from '../components/settings/tabs/AppearanceTab'
 import {
   SETTINGS_TABS,
   resolveSettingsTab,
@@ -144,6 +145,7 @@ export default function SettingsPage() {
               {active === 'library' && <LibraryTab notify={notify} />}
               {active === 'vault' && <VaultTab settings={settings} onUpdate={handleUpdateSettings} notify={notify} />}
               {active === 'capture' && <CaptureTab settings={settings} />}
+              {active === 'appearance' && <AppearanceTab />}
             </div>
           </div>
         </div>
