@@ -79,7 +79,7 @@ CI (`.github/workflows/ci.yml`) runs `tsc --noEmit`, `npm test`, and `npm run co
 ## Migrations
 
 - Add a new file in `server/src/db/migrations/` with the next sequential number (e.g. `015_your_change.sql`).
-- Migrations run automatically on server start (`npm run migrate`) — they are idempotent.
+- Migrations are not run by `npm run dev`. Apply them with `npm run migrate` (in `server/`) or `npm run db:migrate`; `memex.sh` / `memex.ps1` run them on every start, and the server applies them at startup only when `MEMEX_AUTO_MIGRATE=true` (the Docker image sets it). They are idempotent.
 - After adding a migration, update `server/src/db/schema.sql` and its header comment (`reflects all N migrations`) to keep the drift guard passing.
 
 ---

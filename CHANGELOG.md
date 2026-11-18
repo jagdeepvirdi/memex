@@ -180,4 +180,6 @@ First public release. Everything below was built for this version.
 
 ---
 
+[Unreleased]: https://github.com/jagdeepvirdi/memex/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/jagdeepvirdi/memex/releases/tag/v1.1.0
 [1.0.0]: https://github.com/jagdeepvirdi/memex/releases/tag/v1.0.0

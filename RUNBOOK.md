@@ -145,6 +145,22 @@ Cloud-only install: skip this section and follow "Path B" in the README.
 
 ---
 
+## Landing page (`site/`)
+```bash
+cd site
+vercel deploy --prod      # redeploy https://memex.jagdeepsinghvirdi.com
+python -m http.server 4173   # local preview
+```
+Project `memex-site` on Vercel. The domain is a CNAME at the DNS provider; if HTTPS fails after the record is live, run `vercel certs issue memex.jagdeepsinghvirdi.com`.
+
+## Live provider checks (synthetic text only)
+```bash
+cd server
+npx tsx src/scripts/verifyGroq.ts [model]
+npx tsx src/scripts/verifyEmbeddingProvider.ts gemini|openai [model]
+```
+They need a saved key and cloud consent, write nothing and never start Ollama.
+
 ## Running tests
 
 ```powershell
