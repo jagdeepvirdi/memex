@@ -145,10 +145,28 @@ describe('AppHeader Component', () => {
     expect(header.className).toContain('px-4')
   })
 
-  it('hides actions below md only when asked to, so a page can move them out of the bar', () => {
-    const { rerender } = render(<AppHeader left={<div>Title</div>} actions={<button>Sort</button>} />)
-    expect(screen.getByText('Sort').closest('.hidden')).toBeNull()
-    rerender(<AppHeader left={<div>Title</div>} actions={<button>Sort</button>} collapseActionsOnMobile />)
-    expect(screen.getByText('Sort').parentElement!.className).toContain('hidden md:flex')
+  it('puts actions in a row of their own on a phone (full width) and inline from md up', () => {
+    render(<AppHeader left={<div>Title</div>} actions={<button>Sort</button>} />)
+    const row = screen.getByTestId('header-actions')
+    expect(row).toContainElement(screen.getByText('Sort'))
+    expect(row.className).toContain('w-full')
+    expect(row.className).toContain('md:w-auto')
+    // One copy only, so page tests and screen readers see each action once.
+    expect(screen.getAllByText('Sort')).toHaveLength(1)
+  })
+
+  it('renders no actions row when a page has no actions', () => {
+    render(<AppHeader left={<div>Title</div>} />)
+    expect(screen.queryByTestId('header-actions')).not.toBeInTheDocument()
+  })
+
+  it('makes the spacer taller on a phone only while the actions row is showing', () => {
+    const { container, rerender } = render(<><AppHeader left={<div>Title</div>} /><AppHeader.Spacer /></>)
+    const spacer = () => container.lastElementChild as HTMLElement
+    expect(spacer().className).not.toContain('max-md:h-28')
+    rerender(<><AppHeader left={<div>Title</div>} actions={<button>Go</button>} /><AppHeader.Spacer /></>)
+    expect(spacer().className).toContain('max-md:h-28')
+    rerender(<><AppHeader left={<div>Title</div>} /><AppHeader.Spacer /></>)
+    expect(spacer().className).not.toContain('max-md:h-28')
   })
 })

@@ -69,7 +69,6 @@ export default function CategoryPage() {
     setOffset(0)
   }
 
-  // Shown in the header from md up; on a phone the same controls sit in a row above the list (the bar has no room).
   const sortFilterControls = (
     <div className="flex items-center gap-6"><div className="flex items-center gap-2"><SortAsc size={14} className="text-ink-muted" /><select className="bg-surface border border-white/10 rounded-lg px-3 py-1 text-xs text-ink outline-none focus:border-accent/50 cursor-pointer" value={sortBy} onChange={(e) => handleUpdateSort(e.target.value as SortOption)}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="alpha">Alphabetical</option><option value="type">By Type</option></select></div><div className="flex items-center gap-2"><Filter size={14} className="text-ink-muted" /><select className="bg-surface border border-white/10 rounded-lg px-3 py-1 text-xs text-ink outline-none focus:border-accent/50 cursor-pointer" value={typeFilter || ''} onChange={(e) => handleUpdateFilter(e.target.value || null)}><option value="">All Types</option><option value="note">Notes</option><option value="recipe">Recipes</option><option value="media">Media</option><option value="link">Links</option><option value="book">Books</option><option value="stock">Stocks</option><option value="spec">Specs</option></select></div></div>
   )
@@ -82,12 +81,10 @@ export default function CategoryPage() {
         <AppHeader
           left={<div className="flex items-center gap-6"><Link to="/" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></Link><div className="flex flex-col"><h1 className="font-display text-lg text-ink">{category ? category.name : 'Loading...'}</h1><p className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">{category?.itemCount || 0} items in this category</p></div></div>}
           actions={sortFilterControls}
-          collapseActionsOnMobile
         />
         <AppHeader.Spacer />
 
         <div className="px-4 py-6 md:p-12 max-w-7xl mx-auto w-full flex-1 flex flex-col">
-          <div className="md:hidden mb-6 overflow-x-auto" data-testid="category-controls-mobile">{sortFilterControls}</div>
           {loading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
                {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
