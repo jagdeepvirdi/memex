@@ -12,3 +12,4 @@ docs/screenshots
 *.log
 .playwright-mcp
 prompt.txt
+mcp

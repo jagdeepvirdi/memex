@@ -145,6 +145,13 @@ Cloud-only install: skip this section and follow "Path B" in the README.
 
 ---
 
+## MCP server (`mcp/`)
+```bash
+npm run mcp:build           # install + compile to mcp/dist (the host runs: node mcp/dist/index.js)
+cd mcp && npm test          # 32 tests, including a real MCP round trip over an in-memory pipe
+```
+The server needs `MEMEX_MCP_KEY` (Settings > Capture > AI assistants) and `MEMEX_URL` (default `http://localhost:3002`) in its environment; the host passes them from its config. It writes only to stderr (stdout is the protocol). Problems the assistant reports, and what they mean: "Cannot reach Memex" = Memex is not running or `MEMEX_URL` is wrong; "rejected the key" = revoked or replaced, create a new one; "Strict Local Mode is on" = turn it off in Settings > Keys & Privacy; "private in Memex" = by design. Server side: `routes/mcp.ts`, `lib/mcpScope.ts`, `services/quickSave.ts`; the key is stored as `settings.mcp_key_hash`.
+
 ## Landing page (`site/`)
 ```bash
 cd site

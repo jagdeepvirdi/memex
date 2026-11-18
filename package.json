@@ -4,7 +4,7 @@
   "description": "Memex: Personal Knowledge OS",
   "type": "module",
   "scripts": {
-    "install:all": "npm install && cd client && npm install && cd ../server && npm install",
+    "install:all": "npm install && cd client && npm install && cd ../server && npm install && cd ../mcp && npm install",
     "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
@@ -12,9 +12,11 @@
     "db:migrate": "cd server && npm run migrate",
     "backup": "cd server && npx tsx src/scripts/backup.ts",
     "restore": "cd server && npx tsx src/scripts/restore.ts",
-    "test": "npm run test:server && npm run test:client",
+    "mcp:build": "cd mcp && npm install && npm run build",
+    "test": "npm run test:server && npm run test:client && npm run test:mcp",
     "test:server": "cd server && npm test",
-    "test:client": "cd client && npm test"
+    "test:client": "cd client && npm test",
+    "test:mcp": "cd mcp && npm test"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

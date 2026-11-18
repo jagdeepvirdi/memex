@@ -1,0 +1,31 @@
+{
+  "name": "memex-mcp",
+  "version": "1.0.0",
+  "description": "Memex MCP server: lets an AI assistant (Claude Desktop, Cursor, ...) search, read and save notes in your Memex, through a scoped key. Private items are never shared.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "memex-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.5",
+    "tsx": "^4.19.1",
+    "typescript": "^5.5.4",
+    "vitest": "^4.1.7"
+  }
+}

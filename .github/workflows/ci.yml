@@ -70,6 +70,36 @@ jobs:
       - name: Run tests
         run: npm test
 
+  mcp:
+    name: MCP server — typecheck + tests + build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mcp
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      # `npm install`, not `npm ci`: the lock file was made on Windows and omits Linux-only optional packages.
+      - name: Install dependencies
+        run: npm install
+
+      - name: Type-check
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Production dependencies have no known advisories
+        run: npm audit --omit=dev
+
   docker-smoke:
     name: Docker — build, start, first-run checks
     runs-on: ubuntu-latest

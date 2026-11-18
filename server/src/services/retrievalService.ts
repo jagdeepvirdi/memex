@@ -21,7 +21,8 @@ export interface RetrieveResult {
   semantic: boolean
 }
 
-const COLUMNS = `
+/** The columns a retrieval query selects, in the shape `rowToItem` reads (also used by the MCP `recent` route). */
+export const COLUMNS = `
   i.id, i.title, i.type, i.content, i.structured,
   i.source, i.source_url, i.encrypted, i.created_at, i.updated_at,
   COALESCE(

@@ -28,6 +28,7 @@ import settingsRouter from './routes/settings.js'
 import demoRouter from './routes/demo.js'
 import aiRouter from './routes/ai.js'
 import shareRouter from './routes/share.js'
+import mcpRouter from './routes/mcp.js'
 import { itemCategoriesHandler } from './routes/categories.js'
 import { itemTagsHandler } from './routes/tags.js'
 import { checkOllamaHealth } from './services/ollama.js'
@@ -36,6 +37,7 @@ import { loadEmbeddingConfig } from './services/embeddingConfig.js'
 import logger from './lib/logger.js'
 import { refreshedSessionToken, REFRESH_HEADER } from './lib/session.js'
 import { isBookmarkletRoute, matchesBookmarkletKey } from './lib/bookmarkletScope.js'
+import { isMcpRoute, matchesMcpKey } from './lib/mcpScope.js'
 import { prepareStartup } from './lib/startup.js'
 import { StartupError } from './lib/startupChecks.js'
 import { clientDistDir, mountClient, shouldServeClient } from './lib/serveClient.js'
@@ -120,6 +122,18 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction) =
     }
   } catch {}
 
+  // 3. Try the MCP key (given to an AI assistant). Scoped to the /api/mcp routes; only its hash is stored.
+  try {
+    const { rows } = await pool.query("SELECT value FROM settings WHERE key = 'mcp_key_hash'")
+    if (rows.length > 0 && matchesMcpKey(token, rows[0].value)) {
+      if (!isMcpRoute(req.method, req.path)) {
+        return res.status(403).json({ error: 'This key can only be used by an AI assistant to search, read and save notes through the Memex MCP server.' })
+      }
+      req.user = 'mcp'
+      return next()
+    }
+  } catch {}
+
   res.status(401).json({ error: 'Invalid token' })
 }
 
@@ -163,6 +177,7 @@ app.use('/api/settings', settingsRouter)
 app.use('/api/demo', demoRouter)
 app.use('/api/ai', aiRouter)
 app.use('/api/share', shareRouter)
+app.use('/api/mcp', mcpRouter)
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 

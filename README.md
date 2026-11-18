@@ -36,6 +36,7 @@ Everything is reachable from this computer only by default. More detail, local A
 - **Sharing** — generate a public link for any item (expires in 7 days by default); revokable at any time
 - **Obsidian export** — download your entire library as a ZIP of Markdown files with YAML frontmatter
 - **Bookmarklet** — one-click "Save to Memex" from any browser page; warns if a duplicate already exists
+- **AI assistants (MCP)** — let Claude Desktop, Cursor and other MCP apps search, read and save your notes, with a key that can do nothing else and never sees private items
 - **Category Review** — two-tab staging area: review low-confidence items before accepting them, and remap rogue AI-generated categories to the canonical tree
 - **Password vault** — AES-256-GCM client-side encryption; master password never leaves the browser
 - **Move to Vault** — one-click encryption of sensitive plain-text notes
@@ -397,6 +398,42 @@ Auto-shown every Monday (once per day, tracked in localStorage). Contains:
 Generate a persistent API key in **Settings → Bookmarklet**. Drag the "Save to Memex" button to your bookmarks bar. Click it on any page to scrape + classify + save in one shot. A floating toast confirms the save and warns if a similar item already exists.
 
 ---
+
+## Use Memex from an AI assistant (MCP)
+
+The `mcp/` folder is a small [Model Context Protocol](https://modelcontextprotocol.io) server. An assistant such as Claude Desktop or Cursor launches it on your computer, and it talks to your running Memex. You can then ask the assistant "what did I save about the harbour restaurants?" or "save this recipe to Memex".
+
+**Set up (about two minutes)**
+
+1. Build the server once: `npm run mcp:build` (needs Node 20 or newer).
+2. In Memex, open **Settings > Capture > AI assistants (MCP)** and press **Create key**. The key is shown once; Memex stores only a hash of it.
+3. Copy the config block Memex shows into your assistant's MCP settings and replace the path with your Memex folder. For Claude Desktop that is `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "memex": {
+      "command": "node",
+      "args": ["/path/to/memex/mcp/dist/index.js"],
+      "env": { "MEMEX_URL": "http://localhost:3002", "MEMEX_MCP_KEY": "mxk_..." }
+    }
+  }
+}
+```
+
+Memex must be running (`docker compose up -d`, or `npm run dev` and use `http://localhost:5175` as `MEMEX_URL` if you prefer the dev address).
+
+**What the assistant can do**
+
+| Tool | What it does |
+|---|---|
+| `search_memex` | Search by meaning and keywords; returns titles, summaries and ids |
+| `recent_memex_items` | The newest items |
+| `get_memex_item` | The full text of one item |
+| `save_note_to_memex` | Save a note; Memex files and tags it, plus a `from-mcp` tag |
+| `save_link_to_memex` | Save a web page (fetched and summarised); the same page twice is a no-op |
+
+**What it cannot do, by design.** The key only works on the `/api/mcp` routes. It cannot delete or edit anything, export, read or change settings and API keys, or touch the vault. Items that Memex keeps off cloud AI (the vault, Passwords and Personal, anything tagged `private`, `no-cloud` or `local-only`, and text that looks like account details) are never returned: a search only says how many matches were held back. There is no "ask" tool, so private text is never mixed into an answer that leaves your machine. Strict Local Mode switches the whole thing off. Anything the assistant *does* read goes to the assistant you connected, which may be a cloud service: that is your choice when you create the key, and **Revoke key** locks it out at once.
 
 ## Sharing
 

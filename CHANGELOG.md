@@ -7,6 +7,7 @@ All notable changes to Memex are documented here.
 ## [Unreleased]
 
 ### Added
+- **MCP server for AI assistants** (`mcp/`). Claude Desktop, Cursor and other MCP apps can search, read and save your notes through five tools (`search_memex`, `recent_memex_items`, `get_memex_item`, `save_note_to_memex`, `save_link_to_memex`). It uses its own key from Settings > Capture, which can reach only the assistant routes (not delete, edit, export, settings, API keys or the vault) and is stored as a hash. Private items (vault, Passwords / Personal, private tags, text that looks like account details) are never returned, and Strict Local Mode turns it off. Build it with `npm run mcp:build`.
 - **Light and dark themes with a fresh palette.** "Midnight" (dark, default) and "Daylight" (light) with an iris accent. Follows your system setting; pick System, Light or Dark in Settings > Appearance, or cycle them with the button in the header; the choice is remembered in your browser. The landing page uses the same palette.
 
 ### Changed

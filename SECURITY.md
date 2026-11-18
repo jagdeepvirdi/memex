@@ -17,6 +17,10 @@ Please **do not open a public issue** for a security problem. Use GitHub's priva
 - **Saved API keys** are encrypted (AES-256-GCM) with a key derived from `KEY_ENCRYPTION_SECRET` or `JWT_SECRET`, are write-only in the API, and are never returned or logged.
 - **The bookmarklet key** can do exactly one thing: save the current page. Reading notes, settings or keys needs a real login.
 
+## The MCP key
+
+An AI assistant connects through the MCP server (`mcp/`) with its own key (created in Settings > Capture). It is a scoped credential: through the auth middleware it can reach only the `/api/mcp` routes (search, recent, read one item, save a note, save a link), so it cannot delete, edit, export, or read settings, API keys or the vault. The key is shown once; only its SHA-256 hash is stored, so a settings dump or backup does not hand out a working key. Items that `cloudSafe()` keeps off cloud AI are never returned to it, and Strict Local Mode disables the routes. Anything it does read is sent to the assistant you connected. Revoking the key (Settings) locks it out at once.
+
 ## What Memex does not do
 
 - **No encryption of the database or of backup files.** Notes other than vault items are stored as plain text in Postgres, and `npm run backup` writes plain SQL. Use disk encryption and keep backups private.

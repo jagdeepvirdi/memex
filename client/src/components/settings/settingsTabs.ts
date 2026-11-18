@@ -16,7 +16,7 @@ export const SETTINGS_TABS: readonly SettingsTabDef[] = [
   { id: 'privacy', label: 'Keys & Privacy', hint: 'API keys, Strict Local Mode', icon: ShieldCheck },
   { id: 'library', label: 'Library', hint: 'Categories, import and export', icon: Library },
   { id: 'vault', label: 'Vault', hint: 'Auto-lock, password, reset', icon: Lock },
-  { id: 'capture', label: 'Capture', hint: 'Bookmarklet, YouTube', icon: Bookmark },
+  { id: 'capture', label: 'Capture', hint: 'Bookmarklet, AI assistants, YouTube', icon: Bookmark },
   { id: 'appearance', label: 'Appearance', hint: 'Theme: system, light, dark', icon: Palette },
 ]
 

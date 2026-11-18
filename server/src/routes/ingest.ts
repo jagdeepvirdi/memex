@@ -14,10 +14,9 @@ import { describeImage, getAvailableVisionModel, isImageMime } from '../services
 import { transcribeAudio, checkWhisperInstalled, isAudioMime } from '../services/whisperService.js';
 import { findSimilarItems, findItemsBySourceUrl, mergeSimilar } from '../services/duplicateService.js';
 import { embedForDuplicateCheck } from '../services/embedder.js';
-import { embedAndStoreItem } from '../services/embeddingService.js';
 import { pool } from '../db/client.js';
-import { setItemTags, createItem } from '../db/helpers.js';
-import { extractAndLinkEntities } from '../services/entityService.js';
+import { setItemTags } from '../db/helpers.js';
+import { quickSaveUrl } from '../services/quickSave.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
 import logger from '../lib/logger.js'
 import { createJob, saveJobDetails, failJob, hasRunningJob, cancelJob } from '../services/ingestJobs.js'
@@ -521,60 +520,7 @@ router.post('/quicksave', ingestLimiter, async (req, res) => {
   }
 
   try {
-    // The bookmarklet saves without a confirmation step, so saving the same page twice is a no-op:
-    // return the existing item instead of creating a copy (and skip the scrape/classify work).
-    const [existing] = await findItemsBySourceUrl(url, 1);
-    if (existing) {
-      return res.json({
-        item: { id: existing.id, title: existing.title, type: existing.type },
-        similarItems: [],
-        duplicate: true,
-      });
-    }
-
-    const scraped = await scrapeUrl(url);
-
-    const [preview, embedding] = await Promise.all([
-      summarizeAndClassify(scraped),
-      embedForDuplicateCheck(scraped.content.slice(0, 2000)),
-    ]);
-
-    const similarItems = await findSimilarItems(embedding);
-
-    const client = await pool.connect();
-    let savedItem;
-    try {
-      await client.query('BEGIN');
-      savedItem = await createItem(client, {
-        title: preview.title,
-        type: preview.type,
-        content: preview.content,
-        structured: preview.structured as Record<string, unknown>,
-        source: preview.source,
-        sourceUrl: preview.sourceUrl,
-        categories: preview.categories,
-        tags: preview.tags,
-        confidence: preview.confidence,
-        intent: preview.intent,
-        reviewed: false,
-      });
-      await client.query('COMMIT');
-      // Best effort, after the commit: link repo / creator / channel entities.
-      await extractAndLinkEntities(client, savedItem.id, savedItem.type, savedItem.structured);
-    } catch (err) {
-      await client.query('ROLLBACK');
-      throw err;
-    } finally {
-      client.release();
-    }
-
-    // Async: embed in background
-    void embedAndStoreItem(savedItem);
-
-    res.json({
-      item: { id: savedItem.id, title: savedItem.title, type: savedItem.type },
-      similarItems,
-    });
+    res.json(await quickSaveUrl(url));
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Failed to save';
     logger.error(error, 'Quicksave error')

@@ -3,6 +3,7 @@ import { randomBytes } from 'crypto';
 import { z } from 'zod';
 import { pool } from '../db/client.js';
 import logger from '../lib/logger.js'
+import { generateMcpKey, hashMcpKey } from '../lib/mcpScope.js'
 
 const router = Router();
 
@@ -90,5 +91,34 @@ router.post('/bookmarklet-key', async (_req, res) => {
     res.status(500).json({ error: 'Failed to generate key' });
   }
 });
+
+// POST /api/settings/mcp-key: create (or replace) the key an AI assistant uses with the Memex MCP server.
+// The key is returned ONCE; only its SHA-256 hash is stored, so it cannot be shown again, only replaced.
+router.post('/mcp-key', async (_req, res) => {
+  const key = generateMcpKey()
+  try {
+    await pool.query(
+      `INSERT INTO settings (key, value, updated_at)
+       VALUES ('mcp_key_hash', $1, NOW())
+       ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()`,
+      [JSON.stringify(hashMcpKey(key))],
+    )
+    res.json({ key })
+  } catch (error) {
+    logger.error(error, 'Failed to generate MCP key')
+    res.status(500).json({ error: 'Failed to generate key' })
+  }
+})
+
+// DELETE /api/settings/mcp-key: revoke it. The assistant is locked out at once.
+router.delete('/mcp-key', async (_req, res) => {
+  try {
+    await pool.query("DELETE FROM settings WHERE key = 'mcp_key_hash'")
+    res.json({ status: 'ok' })
+  } catch (error) {
+    logger.error(error, 'Failed to revoke MCP key')
+    res.status(500).json({ error: 'Failed to revoke key' })
+  }
+})
 
 export default router;

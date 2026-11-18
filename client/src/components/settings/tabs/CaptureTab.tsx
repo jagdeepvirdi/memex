@@ -1,5 +1,6 @@
-import { Bookmark, Video } from 'lucide-react'
+import { Bookmark, Video, Bot } from 'lucide-react'
 import { BookmarkletPanel } from '../BookmarkletPanel'
+import { McpPanel } from '../McpPanel'
 import YouTubeBackfillPanel from '../YouTubeBackfillPanel'
 import { SettingsSection } from '../SettingsSection'
 import type { SettingsTabProps } from '../settingsTabs'
@@ -12,6 +13,14 @@ export function CaptureTab({ settings }: Props) {
     <div className="flex flex-col gap-10">
       <SettingsSection icon={<Bookmark size={20} className="text-sky-400" />} title="Bookmarklet">
         <BookmarkletPanel initialKey={typeof settings.bookmarklet_key === 'string' ? settings.bookmarklet_key : null} />
+      </SettingsSection>
+
+      <SettingsSection
+        icon={<Bot size={20} className="text-accent" />}
+        title="AI assistants (MCP)"
+        description="Search, read and save your notes from Claude Desktop, Cursor and other MCP apps."
+      >
+        <McpPanel initiallySet={typeof settings.mcp_key_hash === 'string' && settings.mcp_key_hash.length > 0} />
       </SettingsSection>
 
       <SettingsSection
