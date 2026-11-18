@@ -73,3 +73,5 @@ sessions/
 
 # Personal to-do list (kept local)
 /USER-TODO.md
+
+.vercel

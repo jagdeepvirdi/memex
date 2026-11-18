@@ -1,4 +1,5 @@
-// Two small interactions, no libraries, no network:
+// Small interactions, no libraries, no network:
+//  0. the Theme button (auto / light / dark, remembered in this browser)
 //  1. the "where does each note go?" ledger (mirrors the privacy rules the app applies before a cloud call)
 //  2. copy button for the install commands
 (function () {
@@ -57,5 +58,29 @@
         copy.textContent = 'Select and copy'
       }
     })
+  }
+
+  // Theme button: auto (follow the system) -> light -> dark -> auto
+  var themeBtn = document.getElementById('theme')
+  if (themeBtn) {
+    var order = ['auto', 'light', 'dark']
+    var current = function () {
+      var t = document.documentElement.getAttribute('data-theme')
+      return t === 'light' || t === 'dark' ? t : 'auto'
+    }
+    var label = function () {
+      var c = current()
+      themeBtn.textContent = 'Theme: ' + c
+      themeBtn.setAttribute('aria-label', 'Theme: ' + c + '. Switch to ' + order[(order.indexOf(c) + 1) % 3] + '.')
+    }
+    themeBtn.addEventListener('click', function () {
+      var next = order[(order.indexOf(current()) + 1) % 3]
+      try {
+        if (next === 'auto') { document.documentElement.removeAttribute('data-theme'); localStorage.removeItem('memex-site-theme') }
+        else { document.documentElement.setAttribute('data-theme', next); localStorage.setItem('memex-site-theme', next) }
+      } catch (e) {}
+      label()
+    })
+    label()
   }
 })()

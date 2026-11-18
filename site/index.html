@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Memex: your notes, organized on your own machine</title>
   <meta name="description" content="Memex files the notes, links, recipes and files you save, and answers questions about them. The AI runs on your computer; a cloud AI is optional and off by default. Free and open source." />
-  <meta name="color-scheme" content="dark" />
+  <meta name="color-scheme" content="dark light" />
+  <script src="theme-init.js"></script>
   <meta name="theme-color" content="#0B0E14" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)" />
   <meta property="og:title" content="Memex: your notes, organized on your own machine" />
@@ -24,10 +25,12 @@
       <a class="mark" href="#top" aria-label="Memex, back to the top">Memex</a>
       <nav aria-label="Main">
         <a href="#how">How it works</a>
+        <a href="#new">What is new</a>
         <a href="#where">Local or cloud</a>
         <a href="#privacy">Privacy</a>
         <a href="#install">Install</a>
         <a href="https://github.com/jagdeepvirdi/memex">GitHub</a>
+        <button type="button" class="theme" id="theme">Theme: auto</button>
       </nav>
     </div>
   </header>
@@ -41,7 +44,7 @@
           <a class="btn primary" href="#install">Install with Docker</a>
           <a class="btn" href="https://github.com/jagdeepvirdi/memex">View the source</a>
         </p>
-        <p class="fine">Free, MIT licensed, no account, no telemetry.</p>
+        <p class="fine">Free, MIT licensed, no account, no telemetry. Light and dark, like the app.</p>
       </div>
 
       <figure class="ledger" aria-labelledby="ledger-title">
@@ -111,6 +114,26 @@
           <dd>Ask in plain words, such as "which Thai place did I want to try near the harbour?", and get an answer with the notes it came from. Search finds meaning, not just matching words.</dd>
         </div>
       </dl>
+    </section>
+
+    <section class="band wrap new" id="new" aria-labelledby="new-h">
+      <h2 id="new-h">What is new in v1.1, and why it helps</h2>
+      <p class="intro">Version 1.1 is about three things: starting in minutes, knowing what happens to your notes, and enjoying the app every day.</p>
+      <ul class="plain two">
+        <li><strong>Install with one command.</strong> <code>docker compose up -d</code> starts the database and the app together. If something is wrong, Memex says what and how to fix it. <span class="why">Why it helps: no setup puzzle, and no stack trace to decode.</span></li>
+        <li><strong>A first-run screen.</strong> It walks you through choosing local or cloud AI and tests the choice before you save anything. <span class="why">Why it helps: you know it works before your first note.</span></li>
+        <li><strong>Works without Ollama.</strong> A cloud key is enough; running a local model is optional. <span class="why">Why it helps: a modest laptop is fine.</span></li>
+        <li><strong>Five AI providers.</strong> Ollama, Gemini, OpenAI, Claude and Groq, each switched on by you, with a different one allowed per job. Gemini and Groq have been checked against the live services. <span class="why">Why it helps: use whichever key or free tier you already have, and change your mind later.</span></li>
+        <li><strong>Choose your search model.</strong> Search and Ask can use Ollama, Gemini or OpenAI embeddings. Memex shows what it would send first, works in the background, can be cancelled and resumed, and never sends private items. <span class="why">Why it helps: better search without a graphics card, and the change is reversible.</span></li>
+        <li><strong>See which AI answered.</strong> Every item names the model that classified it, shows a "stays on this machine" note when that is true, and can be redone with another model. <span class="why">Why it helps: you can see, check and compare.</span></li>
+        <li><strong>A smarter privacy guard.</strong> Besides vault items and private tags, text that looks like account numbers, PINs or an address is held back from a cloud AI. <span class="why">Why it helps: a safety net for the note you forgot to tag.</span></li>
+        <li><strong>Look around first.</strong> About forty made-up items load with one click and clear with one click, leaving your own notes alone. <span class="why">Why it helps: see the app working before you trust it with real notes.</span></li>
+        <li><strong>Backups you can trust.</strong> One command to back up and one to restore; a restore refuses a file that is not a complete backup and keeps a safety copy first. <span class="why">Why it helps: you can upgrade or switch models without worry.</span></li>
+        <li><strong>Closed by default.</strong> The app and the database listen on your own computer only, other websites cannot talk to it, new passwords must be 10 characters or more, and the dependency audit shows no known issues (checked November 2026). Security reports can be sent privately. <span class="why">Why it helps: a personal knowledge base should not be reachable from the cafe Wi-Fi.</span></li>
+        <li><strong>Light and dark.</strong> A fresh palette that follows your system setting, with a button to choose. This page uses the same one. <span class="why">Why it helps: comfortable by day and by night.</span></li>
+        <li><strong>Fits a phone.</strong> Headers, page actions and settings were reworked to fit small screens. <span class="why">Why it helps: save and search from anywhere.</span></li>
+      </ul>
+      <p class="more"><a href="https://github.com/jagdeepvirdi/memex/releases/tag/v1.1.0">Read the v1.1.0 release notes</a></p>
     </section>
 
     <section class="band wrap" id="where" aria-labelledby="where-h">
@@ -185,7 +208,7 @@ cp .env.example .env     # set JWT_SECRET: the file shows how to make one
 docker compose up -d</code></pre>
       </div>
       <p class="steps-after">Then open <code>http://localhost:3002</code>, create your account, and choose local AI or paste a cloud key. Settings has a button that loads sample data so you can look around first.</p>
-      <p class="fine">Tested on Windows with Docker Desktop. macOS and Linux use standard Docker features but have not been tried yet; if you try one, please tell us what you find.</p>
+      <p class="fine">Tested on Windows with Docker Desktop. The Docker install is also tested automatically on Linux with every change. macOS has not been tried by hand yet; if you try it, please tell us what you find.</p>
     </section>
   </main>
 
@@ -196,6 +219,7 @@ docker compose up -d</code></pre>
         <a href="https://github.com/jagdeepvirdi/memex">Source</a>
         <a href="https://github.com/jagdeepvirdi/memex/blob/main/README.md">Documentation</a>
         <a href="https://github.com/jagdeepvirdi/memex/blob/main/SECURITY.md">Security</a>
+        <a href="https://github.com/jagdeepvirdi/memex/releases/tag/v1.1.0">v1.1.0</a>
         <a href="https://github.com/jagdeepvirdi/memex/blob/main/CHANGELOG.md">Changelog</a>
         <a href="https://github.com/jagdeepvirdi/memex/issues">Report a problem</a>
       </nav>

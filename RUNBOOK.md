@@ -151,7 +151,7 @@ cd site
 vercel deploy --prod      # redeploy https://memex.jagdeepsinghvirdi.com
 python -m http.server 4173   # local preview
 ```
-Project `memex-site` on Vercel. The domain is a CNAME at the DNS provider; if HTTPS fails after the record is live, run `vercel certs issue memex.jagdeepsinghvirdi.com`.
+Project `memex-site` on Vercel, **connected to the GitHub repo with Root Directory `site`**: every push to `main` deploys the landing page, so a push publishes it. (On 2026-11-18 the root directory was empty, so each push deployed the repo root, which has no `index.html`, and the domain answered 404; fixed by setting it with `vercel api /v9/projects/<id> -X PATCH -F rootDirectory=site`.) To deploy by hand run `vercel deploy --prod` from the repo root (it is linked via `.vercel`, git-ignored; `vercel link` also writes a `.env.local` with a token: delete it). The domain is a CNAME at the DNS provider; if HTTPS fails after the record is live, run `vercel certs issue memex.jagdeepsinghvirdi.com`. In Git Bash prefix `vercel api` paths with `MSYS_NO_PATHCONV=1` (or use PowerShell).
 
 ## Live provider checks (synthetic text only)
 ```bash
