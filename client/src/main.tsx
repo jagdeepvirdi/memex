@@ -4,24 +4,34 @@ import { Toaster } from 'sonner'
 import App from './App'
 import './index.css'
 import { registerSW } from 'virtual:pwa-register'
+import { initTheme, useResolvedTheme } from './lib/theme'
 
 // Register PWA service worker
 registerSW({ immediate: true })
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <App />
-    <Toaster 
-      position="bottom-right" 
-      theme="dark" 
+initTheme()
+
+function ThemedToaster() {
+  const theme = useResolvedTheme()
+  return (
+    <Toaster
+      position="bottom-right"
+      theme={theme}
       toastOptions={{
-        style: { 
-          background: '#1A1A1A', 
-          border: '1px solid rgba(255,255,255,0.05)',
-          color: '#E6E4D5',
-          fontFamily: 'DM Sans, sans-serif'
+        style: {
+          background: 'rgb(var(--c-surface-2))',
+          border: '1px solid rgb(var(--c-overlay) / 0.12)',
+          color: 'rgb(var(--c-ink))',
+          fontFamily: 'DM Sans, sans-serif',
         },
       }}
     />
+  )
+}
+
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <App />
+    <ThemedToaster />
   </React.StrictMode>,
 )

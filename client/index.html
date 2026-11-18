@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Memex — Personal Knowledge OS. Ingest, classify, and organize everything you know." />
-    <meta name="theme-color" content="#0D0D0D" />
+    <meta name="theme-color" content="#0B0E14" />
     <title>Memex — Personal Knowledge OS</title>
 
     <!-- Fonts: Playfair Display (display/headings), DM Sans (body), JetBrains Mono (mono) -->
@@ -15,9 +15,11 @@
       rel="stylesheet"
     />
 
+    <script src="/theme-init.js"></script>
     <style>
-      /* Prevent flash of unstyled content — match Tailwind bg-base */
-      html { background-color: #0D0D0D; }
+      /* Prevent flash of unstyled content: match the theme background */
+      html { background-color: #0B0E14; }
+      html[data-theme='light'] { background-color: #F5F7FB; }
     </style>
   </head>
   <body>

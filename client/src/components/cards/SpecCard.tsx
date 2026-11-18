@@ -30,7 +30,7 @@ export default function SpecCard({ item, onClick }: Props) {
               <Muted className="truncate capitalize">{key}</Muted>
               <span
                 className="font-mono truncate"
-                style={{ fontSize: '12px', color: '#F2EAD8' }}
+                style={{ fontSize: '12px', color: 'rgb(var(--c-ink))' }}
               >
                 {String(value)}
               </span>

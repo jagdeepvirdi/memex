@@ -475,11 +475,11 @@ The "Save to Memex" bookmarklet authenticates with a persistent key (`settings.b
 - Background jobs for heavy processing (classification queues)
 
 ## Design System
-Key tokens:
-- Dark base: `#0D0D0D`
-- Surface: `#161616`, `#1E1E1E`
-- Accent: warm amber `#F59E0B`
-- Text primary: `#F5F5F5`, muted: `#9CA3AF`
+Two palettes, **Midnight** (dark, default) and **Daylight** (light), as CSS variables in `client/src/index.css` (RGB triplets, so Tailwind opacity modifiers work); `tailwind.config.ts` maps every colour to them. `<html data-theme="dark|light">` switches them: `client/public/theme-init.js` sets it before first paint (a file, not an inline script, because the server's CSP only allows `'self'` scripts) from `localStorage['memex-theme']` (`light` / `dark`, absent = follow the system), `lib/theme.ts` (`setThemePref`, `useResolvedTheme`, `useThemePref`) changes it, and `ThemeToggle` in `AppHeader` cycles system / light / dark.
+- Tailwind's `white` is remapped to the overlay tint (`--c-overlay`: white in dark, ink in light), so `bg-white/5` / `border-white/10` work in both; the standard `green/red/amber/orange/yellow/blue/teal/purple/emerald/gray` shades the app uses are variables too (deeper in light). Do NOT add new hardcoded hex colours or other palette shades: use the tokens (a new shade needs a `--x-NNN` pair in both blocks and an entry in `shades()`). Solid white text: `text-[#fff]`.
+- Canvas drawing (the graph) cannot use CSS variables: `SemanticGraph.tsx` keeps one palette per theme (`GRAPH_PALETTE`).
+- Midnight: bg `#0B0E14`, surface `#141922`, text `#E9EEF6`, muted `#8895A7`. Daylight: bg `#F5F7FB`, surface `#FFFFFF`, text `#121826`, muted `#5B687C`.
+- Accent "Iris": `#7C83FF` (dark) / `#5558E8` (light); vault teal `#5EEAD4` / `#0F766E`; type badges rose / sage / lilac / sky. The landing page (`site/style.css`) uses the same values and follows `prefers-color-scheme`.
 - Font display: `Playfair Display`
 - Font body: `DM Sans`
 - Font mono: `JetBrains Mono`

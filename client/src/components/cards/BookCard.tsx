@@ -7,9 +7,9 @@ interface Props {
 }
 
 const STATUS_LABEL: Record<NonNullable<BookData['status']>, { label: string; color: string }> = {
-  'want-to-read': { label: 'Want to read', color: '#8C8472' },
-  reading:        { label: 'Reading',       color: '#F59E0B' },
-  read:           { label: 'Read ✓',        color: '#A8C5A0' },
+  'want-to-read': { label: 'Want to read', color: 'rgb(var(--c-ink-muted))' },
+  reading:        { label: 'Reading',       color: 'rgb(var(--c-accent))' },
+  read:           { label: 'Read ✓',        color: 'rgb(var(--c-sage))' },
 }
 
 export default function BookCard({ item, onClick }: Props) {
@@ -35,7 +35,7 @@ export default function BookCard({ item, onClick }: Props) {
             className="font-body text-xs px-2 py-0.5 rounded-full"
             style={{
               background: 'rgba(168,197,160,0.12)',
-              color: '#A8C5A0',
+              color: 'rgb(var(--c-sage))',
               border: '1px solid rgba(168,197,160,0.2)',
             }}
           >

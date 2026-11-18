@@ -6,6 +6,9 @@ All notable changes to Memex are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Light and dark themes with a fresh palette.** "Midnight" (dark, default) and "Daylight" (light) with an iris accent. Follows your system setting; the sun/moon button in the header cycles system / light / dark and remembers the choice. The landing page uses the same palette.
+
 ### Changed
 - Dependencies: `zod` 3 to 4 (server), `react-router-dom` 6 to 7 (web app), `qs` updated; `npm audit --omit=dev` now reports 0 advisories for both. CI actions moved to `checkout@v7` / `setup-node@v7`.
 - Phones: header actions get their own row under the title bar on every page, the Library category buttons are visible on touch devices, and the settings section strip shows a fade when more sections are off screen.

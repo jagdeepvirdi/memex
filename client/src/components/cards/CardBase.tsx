@@ -4,15 +4,15 @@ import type { ItemType } from '@shared/types'
 // ── Type badge config ─────────────────────────────────────────────────────────
 
 const TYPE_BADGE: Record<ItemType, { label: string; color: string }> = {
-  recipe:   { label: 'Recipe',   color: '#E8B4A0' },
-  media:    { label: 'Movie',    color: '#BFB0E0' },
-  book:     { label: 'Book',     color: '#A8C5A0' },
-  note:     { label: 'Note',     color: '#D6CCB7' },
-  link:     { label: 'Link',     color: '#9CC4E8' },
-  stock:    { label: 'Stock',    color: '#F59E0B' },
-  spec:     { label: 'Spec',     color: '#8C8472' },
-  password: { label: 'Vault',    color: '#5EEAD4' },
-  place:    { label: 'Place',    color: '#FBBF24' },
+  recipe:   { label: 'Recipe',   color: 'rgb(var(--c-rose))' },
+  media:    { label: 'Movie',    color: 'rgb(var(--c-lilac))' },
+  book:     { label: 'Book',     color: 'rgb(var(--c-sage))' },
+  note:     { label: 'Note',     color: 'rgb(var(--c-ink-soft))' },
+  link:     { label: 'Link',     color: 'rgb(var(--c-sky))' },
+  stock:    { label: 'Stock',    color: 'rgb(var(--c-accent))' },
+  spec:     { label: 'Spec',     color: 'rgb(var(--c-ink-muted))' },
+  password: { label: 'Vault',    color: 'rgb(var(--c-vault))' },
+  place:    { label: 'Place',    color: 'rgb(var(--amber-400))' },
 }
 
 interface TypeBadgeProps {
@@ -25,7 +25,7 @@ export function TypeBadge({ type, label }: TypeBadgeProps) {
   return (
     <span
       className="badge"
-      style={{ color: meta.color, borderColor: `${meta.color}55` }}
+      style={{ color: meta.color, borderColor: `color-mix(in srgb, ${meta.color} 33%, transparent)` }}
     >
       <span className="dot" style={{ background: meta.color }} />
       {label ?? meta.label}
@@ -40,7 +40,7 @@ export function TagPill({ name }: { name: string }) {
     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-body"
       style={{
         background: 'rgba(245,230,200,0.06)',
-        color: '#8C8472',
+        color: 'rgb(var(--c-ink-muted))',
         border: '1px solid rgba(245,230,200,0.08)',
       }}>
       {name}

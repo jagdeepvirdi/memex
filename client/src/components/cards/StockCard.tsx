@@ -26,7 +26,7 @@ export default function StockCard({ item, onClick }: Props) {
       {ticker && (
         <span
           className="font-mono font-semibold tracking-wide"
-          style={{ fontSize: '22px', color: '#F59E0B', letterSpacing: '0.04em' }}
+          style={{ fontSize: '22px', color: 'rgb(var(--c-accent))', letterSpacing: '0.04em' }}
         >
           {ticker}
         </span>

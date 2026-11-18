@@ -36,8 +36,8 @@ export default defineConfig({
         name: 'Memex',
         short_name: 'Memex',
         description: 'Personal Knowledge OS',
-        theme_color: '#0D0D0D',
-        background_color: '#0D0D0D',
+        theme_color: '#0B0E14',
+        background_color: '#0B0E14',
         display: 'standalone',
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },

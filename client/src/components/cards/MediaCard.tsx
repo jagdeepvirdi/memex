@@ -27,7 +27,7 @@ export default function MediaCard({ item, onClick }: Props) {
             className="font-body text-xs px-2 py-0.5 rounded-full"
             style={{
               background: 'rgba(191,176,224,0.12)',
-              color: '#BFB0E0',
+              color: 'rgb(var(--c-lilac))',
               border: '1px solid rgba(191,176,224,0.2)',
             }}
           >
@@ -41,11 +41,11 @@ export default function MediaCard({ item, onClick }: Props) {
       <div className="flex items-center gap-2">
         <span
           className="inline-flex items-center gap-1.5 font-body text-xs"
-          style={{ color: s.watched ? '#A8C5A0' : '#8C8472' }}
+          style={{ color: s.watched ? 'rgb(var(--c-sage))' : 'rgb(var(--c-ink-muted))' }}
         >
           <span
             className="w-2 h-2 rounded-full"
-            style={{ background: s.watched ? '#A8C5A0' : '#5A5446' }}
+            style={{ background: s.watched ? 'rgb(var(--c-sage))' : 'rgb(var(--c-ink-faint))' }}
           />
           {s.watched ? 'Watched' : 'Want to watch'}
         </span>

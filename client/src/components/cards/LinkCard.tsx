@@ -18,11 +18,11 @@ const SOURCE_LABEL: Record<string, string> = {
 }
 
 const SOURCE_COLOR: Record<string, string> = {
-  youtube:   '#E8B4A0',
-  instagram: '#BFB0E0',
-  url:       '#9CC4E8',
-  keep:      '#A8C5A0',
-  manual:    '#9CC4E8',
+  youtube:   'rgb(var(--c-rose))',
+  instagram: 'rgb(var(--c-lilac))',
+  url:       'rgb(var(--c-sky))',
+  keep:      'rgb(var(--c-sage))',
+  manual:    'rgb(var(--c-sky))',
 }
 
 const DEV_KIND_LABEL: Record<DevKnowledgeKind, string> = {
@@ -35,7 +35,7 @@ const DEV_KIND_LABEL: Record<DevKnowledgeKind, string> = {
 
 export default function LinkCard({ item, onClick }: Props) {
   const sourceLabel = SOURCE_LABEL[item.source] ?? 'Link'
-  const sourceColor = SOURCE_COLOR[item.source] ?? '#9CC4E8'
+  const sourceColor = SOURCE_COLOR[item.source] ?? 'rgb(var(--c-sky))'
 
   const structured = (item.structured ?? {}) as Partial<RepoData> & { summary?: string; videoId?: string; channel?: string }
   const videoId = item.source === 'youtube' && structured.videoId && /^[\w-]{11}$/.test(structured.videoId)

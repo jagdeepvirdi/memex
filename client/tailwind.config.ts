@@ -1,57 +1,65 @@
 import type { Config } from 'tailwindcss'
 
+// `rgb(var(--c-x) / <alpha-value>)`: a theme variable that still accepts Tailwind's opacity modifiers
+const v = (name: string) => `rgb(var(--c-${name}) / <alpha-value>)`
+const shades = (name: string, levels: number[]) =>
+  Object.fromEntries(levels.map(l => [l, `rgb(var(--${name}-${l}) / <alpha-value>)`]))
+
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        // ── Backgrounds ──────────────────────────────
-        // Use bg-bg (or bg-bg-2) — avoids text-base conflict with fontSize.base
-        bg: {
-          DEFAULT: '#0D0D0D',
-          2: '#131211',
-        },
-        // Surfaces — warm aged-dark palette (from design handoff)
+        // Every colour comes from the CSS variables in index.css, so one palette swap restyles the whole app
+        // (dark "Midnight" / light "Daylight"). `white` is the theme's overlay tint: light-on-dark in dark mode,
+        // ink-on-light in light mode, so `bg-white/5` and `border-white/10` work in both.
+        white: v('overlay'),
+
+        // Backgrounds — use bg-bg (or bg-bg-2); avoids the text-base conflict with fontSize.base
+        bg: { DEFAULT: v('bg'), 2: v('bg-2') },
         surface: {
-          DEFAULT: '#17150F',
-          2: '#1C1A14',
-          // CLAUDE.md aliases (simpler surface references)
-          light: '#161616',
-          lighter: '#1E1E1E',
-          card: '#1A1813',
-          hover: '#221F18',
-          inset: '#0A0908',
+          DEFAULT: v('surface'),
+          2: v('surface-2'),
+          light: v('surface-light'),
+          lighter: v('surface-lighter'),
+          card: v('surface-card'),
+          hover: v('surface-hover'),
+          inset: v('surface-inset'),
         },
 
-        // ── Text — warm aged-paper palette ───────────
+        // Text
         ink: {
-          DEFAULT: '#F2EAD8',
-          soft: '#D6CCB7',
-          muted: '#8C8472',
-          faint: '#5A5446',
-          // CLAUDE.md aliases
-          primary: '#F5F5F5',
-          dimmed: '#9CA3AF',
+          DEFAULT: v('ink'),
+          soft: v('ink-soft'),
+          muted: v('ink-muted'),
+          faint: v('ink-faint'),
+          primary: v('ink-primary'),
+          dimmed: v('ink-dimmed'),
         },
 
-        // ── Accent — warm amber ───────────────────────
-        accent: {
-          DEFAULT: '#F59E0B',
-          soft: '#FCD34D',
-          deep: '#B45309',
-        },
+        // Accent — "Iris" (blue-violet)
+        accent: { DEFAULT: v('accent'), soft: v('accent-soft'), deep: v('accent-deep') },
 
-        // ── Vault — slate teal ────────────────────────
-        vault: {
-          DEFAULT: '#5EEAD4',
-          deep: '#0F766E',
-        },
+        // Vault — teal
+        vault: { DEFAULT: v('vault'), deep: v('vault-deep') },
 
-        // ── Type badge palette ────────────────────────
-        rose: '#E8B4A0',
-        sage: '#A8C5A0',
-        lilac: '#BFB0E0',
-        sky: '#9CC4E8',
+        // Type badge palette
+        rose: v('rose'),
+        sage: v('sage'),
+        lilac: v('lilac'),
+        sky: v('sky'),
+
+        // Semantic palettes (only the shades the app uses), deeper in light mode
+        amber: shades('amber', [300, 400, 500]),
+        green: shades('green', [300, 400, 500]),
+        red: shades('red', [300, 400, 500, 600]),
+        orange: shades('orange', [300, 400, 500]),
+        yellow: shades('yellow', [300, 400, 500]),
+        blue: shades('blue', [300, 400, 500]),
+        teal: shades('teal', [400]),
+        purple: shades('purple', [100, 300, 400, 500]),
+        emerald: shades('emerald', [300, 400, 500]),
+        gray: shades('gray', [300]),
       },
 
       fontFamily: {
@@ -86,14 +94,15 @@ export default {
       },
 
       boxShadow: {
-        'amber-glow': '0 0 24px rgba(245, 158, 11, 0.18)',
-        'vault-glow': '0 0 24px rgba(94, 234, 212, 0.14)',
-        'card': '0 1px 3px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.2)',
+        'amber-glow': 'var(--shadow-glow)', // name kept for existing classes; it is the accent glow now
+        'accent-glow': 'var(--shadow-glow)',
+        'vault-glow': '0 0 24px rgb(var(--c-vault) / 0.16)',
+        'card': 'var(--shadow-card)',
       },
 
       borderColor: {
-        line: 'rgba(245, 230, 200, 0.07)',
-        'line-strong': 'rgba(245, 230, 200, 0.14)',
+        line: 'rgb(var(--c-overlay) / 0.08)',
+        'line-strong': 'rgb(var(--c-overlay) / 0.16)',
       },
 
       backdropBlur: {

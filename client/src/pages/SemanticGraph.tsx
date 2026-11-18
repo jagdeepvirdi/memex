@@ -3,6 +3,7 @@ import ForceGraph2D from 'react-force-graph-2d';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Loader2, Sparkles, Maximize2, Minimize2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { useResolvedTheme } from '../lib/theme'
 import Sidebar from '../components/sidebar/Sidebar';
 import { AppHeader } from '../components/AppHeader';
 import { apiFetch } from '../lib/api';
@@ -21,6 +22,22 @@ interface GraphLink {
   target: string | GraphNode
   weight: number
 }
+
+// Canvas colours can't use CSS variables, so the graph keeps one palette per theme (deeper node colours on light).
+const GRAPH_PALETTE = {
+  dark: {
+    background: '#080A0F',
+    link: 'rgba(255,255,255,0.08)',
+    labelBg: 'rgba(8,10,15,0.8)',
+    nodes: { recipe: '#FBBF24', media: '#A78BFA', book: '#60A5FA', stock: '#34D399', spec: '#818CF8', link: '#F472B6', default: '#94A3B8' },
+  },
+  light: {
+    background: '#EEF1F7',
+    link: 'rgba(18,24,38,0.16)',
+    labelBg: 'rgba(255,255,255,0.85)',
+    nodes: { recipe: '#B45309', media: '#6D28D9', book: '#1D4ED8', stock: '#047857', spec: '#4338CA', link: '#BE185D', default: '#475569' },
+  },
+} as const;
 
 export default function SemanticGraphPage() {
   const [nodeLimit, setNodeLimit] = useState(100);
@@ -46,23 +63,15 @@ export default function SemanticGraphPage() {
     }
   };
 
-  const nodeColor = (node: GraphNode) => {
-    switch (node.type) {
-      case 'recipe': return '#F59E0B'; // Amber
-      case 'media': return '#8B5CF6'; // Purple
-      case 'book': return '#3B82F6'; // Blue
-      case 'stock': return '#10B981'; // Green
-      case 'spec': return '#6366F1'; // Indigo
-      case 'link': return '#EC4899'; // Pink
-      default: return '#94A3B8'; // Gray
-    }
-  };
+  const theme = useResolvedTheme();
+  const pal = GRAPH_PALETTE[theme];
+  const nodeColor = (node: GraphNode) => pal.nodes[node.type as keyof typeof pal.nodes] ?? pal.nodes.default;
 
   return (
     <div className="min-h-screen bg-bg flex">
       {!fullscreen && <Sidebar activeSection="dashboard" />}
 
-      <main className="flex-1 flex flex-col relative overflow-hidden bg-[#050505]">
+      <main className="flex-1 flex flex-col relative overflow-hidden bg-bg-2">
         <AppHeader
           left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-2"><Sparkles className="text-accent" size={18} /><h1 className="font-display text-lg text-ink">Semantic Intelligence Map</h1></div></div>}
           actions={
@@ -97,9 +106,9 @@ export default function SemanticGraphPage() {
                 nodeLabel="title"
                 nodeColor={nodeColor}
                 nodeRelSize={6}
-                linkColor={() => 'rgba(255,255,255,0.05)'}
+                linkColor={() => pal.link}
                 linkWidth={(link) => (link as GraphLink).weight * 2}
-                backgroundColor="#050505"
+                backgroundColor={pal.background}
                 onNodeClick={(node) => navigate(`/item/${(node as GraphNode).id}`)}
                 nodeCanvasObject={(node, ctx, globalScale) => {
                    const gNode = node as GraphNode;
@@ -109,7 +118,7 @@ export default function SemanticGraphPage() {
                    const textWidth = ctx.measureText(label).width;
                    const bckgDimensions = [textWidth, fontSize].map(n => n + fontSize * 0.2);
 
-                   ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                   ctx.fillStyle = pal.labelBg;
                    ctx.fillRect((gNode.x ?? 0) - bckgDimensions[0] / 2, (gNode.y ?? 0) - bckgDimensions[1] / 2, bckgDimensions[0], bckgDimensions[1]);
 
                    ctx.textAlign = 'center';
@@ -141,11 +150,11 @@ export default function SemanticGraphPage() {
            {/* Legend */}
            <div className="absolute bottom-8 left-8 p-4 bg-surface/80 backdrop-blur-md border border-white/5 rounded-2xl flex flex-col gap-2 z-10 pointer-events-none">
               <p className="text-[10px] text-ink-muted uppercase tracking-widest font-bold mb-2">Semantic Clusters</p>
-              <LegendItem color="#F59E0B" label="Recipes" />
-              <LegendItem color="#8B5CF6" label="Media" />
-              <LegendItem color="#3B82F6" label="Books" />
-              <LegendItem color="#10B981" label="Finance" />
-              <LegendItem color="#EC4899" label="Links" />
+              <LegendItem color={pal.nodes.recipe} label="Recipes" />
+              <LegendItem color={pal.nodes.media} label="Media" />
+              <LegendItem color={pal.nodes.book} label="Books" />
+              <LegendItem color={pal.nodes.stock} label="Finance" />
+              <LegendItem color={pal.nodes.link} label="Links" />
            </div>
         </div>
       </main>

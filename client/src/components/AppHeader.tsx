@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useAiStatus } from '../hooks/useAiStatus'
 import { DemoBanner } from './DemoBanner'
+import { ThemeToggle } from './ThemeToggle'
 
 interface Props {
   /** Left side — search bar (Dashboard) or back-button + title (all other pages) */
@@ -125,6 +126,8 @@ export function AppHeader({ left, actions }: Props) {
             </div>
           )}
         </div>
+
+        <ThemeToggle />
 
         {/* Settings */}
         <button

@@ -208,7 +208,7 @@ export default function VoiceIngestPanel({ onSuccess }: Props) {
         {recording ? (
           <>
             <button onClick={stopRecording}
-              className="w-16 h-16 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white transition-all animate-pulse">
+              className="w-16 h-16 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-[#fff] transition-all animate-pulse">
               <Square size={24} fill="white" />
             </button>
             <p className="text-sm text-ink font-mono">{fmtTime(elapsed)} · recording…</p>
