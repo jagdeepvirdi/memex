@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, Settings as SettingsIcon, Check, AlertCircle } from 'lucide-react'
 import Sidebar from '../components/sidebar/Sidebar'
@@ -34,6 +34,19 @@ export default function SettingsPage() {
   })
   const [toast, setToast] = useState<Toast | null>(null)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Is there more of the section strip to the right? (mobile only; the strip is a vertical list from md up)
+  const tabsRef = useRef<HTMLUListElement | null>(null)
+  const [moreTabs, setMoreTabs] = useState(false)
+  const updateTabsHint = useCallback(() => {
+    const el = tabsRef.current
+    setMoreTabs(!!el && el.scrollWidth - el.scrollLeft - el.clientWidth > 4)
+  }, [])
+  useEffect(() => {
+    updateTabsHint()
+    window.addEventListener('resize', updateTabsHint)
+    return () => window.removeEventListener('resize', updateTabsHint)
+  }, [updateTabsHint])
 
   useEffect(() => {
     apiFetch<Record<string, any>>('/settings').then(setSettings).catch(console.error)
@@ -87,8 +100,12 @@ export default function SettingsPage() {
           <SetupStatus key={active} settings={settings} />
 
           <div className="flex flex-col md:flex-row gap-8 md:gap-12">
-            <nav aria-label="Settings sections" className="md:w-56 shrink-0">
-              <ul className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-2 md:pb-0 md:sticky md:top-28">
+            <nav aria-label="Settings sections" className="md:w-56 shrink-0 relative">
+              <ul
+                ref={tabsRef}
+                onScroll={updateTabsHint}
+                className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-2 md:pb-0 md:sticky md:top-28"
+              >
                 {SETTINGS_TABS.map(t => {
                   const Icon = t.icon
                   const isActive = t.id === active
@@ -111,6 +128,14 @@ export default function SettingsPage() {
                   )
                 })}
               </ul>
+              {/* Mobile only: a fade on the right edge says there are more sections to scroll to */}
+              {moreTabs && (
+                <div
+                  aria-hidden="true"
+                  data-testid="settings-tabs-more"
+                  className="md:hidden pointer-events-none absolute right-0 top-0 bottom-2 w-10 bg-gradient-to-l from-bg to-transparent"
+                />
+              )}
             </nav>
 
             <div className="flex-1 min-w-0 max-w-3xl" data-testid={`settings-tab-${active}`}>

@@ -31,9 +31,10 @@ export function AppHeader({ left, actions }: Props) {
   }
 
   return (
-    <header className="h-16 border-b border-white/5 flex items-center justify-between px-8 bg-bg/95 backdrop-blur-md fixed top-0 right-0 left-64 z-20">
-      {/* Left slot */}
-      <div className="flex items-center min-w-0">{left}</div>
+    // The sidebar is hidden below md, so the bar starts at the left edge there; with left-64 it left ~130px for the title.
+    <header className="h-16 border-b border-white/5 flex items-center justify-between px-4 md:px-8 bg-bg/95 backdrop-blur-md fixed top-0 right-0 left-0 md:left-64 z-20">
+      {/* Left slot: may shrink, and a long title is cut with an ellipsis instead of wrapping under the avatar */}
+      <div className="flex items-center min-w-0 flex-1 mr-3 overflow-hidden [&_div]:min-w-0 [&_h1]:truncate">{left}</div>
 
       {/* Right side */}
       <div className="flex items-center gap-3 text-ink-muted shrink-0">

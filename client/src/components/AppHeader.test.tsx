@@ -135,4 +135,13 @@ describe('AppHeader Component', () => {
 
     expect(screen.getByText('15 classified')).toBeInTheDocument()
   })
+
+  it('starts at the left edge on small screens (the sidebar is hidden) and only clears the sidebar from md up', () => {
+    const { container } = render(<AppHeader left={<h1>A very long page title that should be cut off</h1>} />)
+    const header = container.querySelector('header')!
+    expect(header.className).toContain('left-0')
+    expect(header.className).toContain('md:left-64')
+    expect(header.className).not.toMatch(/(^|\s)left-64(\s|$)/)
+    expect(header.className).toContain('px-4')
+  })
 })

@@ -177,7 +177,7 @@ export function LibraryTab({ notify }: Props) {
                     <span className="text-sm text-ink">{cat.name}</span>
                     <span className="text-[10px] text-ink-muted uppercase">{cat.itemCount} items</span>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                  <div className="flex items-center gap-1 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                     <button onClick={() => setEditingCat({ id: cat.id, name: cat.name })} aria-label={`Rename ${cat.name}`} className="p-1.5 text-ink-muted hover:text-accent transition-colors"><Edit2 size={14} /></button>
                     <button onClick={() => handleDeleteCategory(cat.id)} aria-label={`Delete ${cat.name}`} className="p-1.5 text-ink-muted hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
                   </div>

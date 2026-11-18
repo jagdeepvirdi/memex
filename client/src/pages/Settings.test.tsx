@@ -132,6 +132,29 @@ describe('SettingsPage', () => {
       expect(screen.getByTestId('settings-tab-ai')).toBeInTheDocument()
     })
 
+    it('shows a scroll hint only while more sections are hidden to the right (mobile strip)', async () => {
+      const dims = { scrollWidth: 600, clientWidth: 300 }
+      const w = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(() => dims.scrollWidth)
+      const c = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => dims.clientWidth)
+      try {
+        renderTab()
+        expect(screen.getByTestId('settings-tabs-more')).toBeInTheDocument()
+        // Scrolled to the end: nothing left to reveal, so the fade goes away.
+        const list = within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('list')
+        list.scrollLeft = 300
+        fireEvent.scroll(list)
+        expect(screen.queryByTestId('settings-tabs-more')).not.toBeInTheDocument()
+      } finally {
+        w.mockRestore()
+        c.mockRestore()
+      }
+    })
+
+    it('shows no scroll hint when every section already fits', async () => {
+      renderTab()
+      expect(screen.queryByTestId('settings-tabs-more')).not.toBeInTheDocument()
+    })
+
     it.each([
       ['privacy', /Keys & Privacy/],
       ['library', /Library/],
