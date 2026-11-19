@@ -92,7 +92,7 @@ describe('CategoryPage — rendering', () => {
 
   it('renders the category name in the heading', async () => {
     render(<CategoryPage />)
-    await waitFor(() => expect(screen.getByText('Food')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Food' })).toBeInTheDocument())
   })
 
   it('renders the pagination item count when items are shown', async () => {

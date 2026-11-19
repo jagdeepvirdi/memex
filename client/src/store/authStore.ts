@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { clearLegacyApiCache } from '../lib/pwaCache';
 
 interface User {
   id: string;
@@ -31,6 +32,7 @@ export const useAuthStore = create<AuthState>()(
 
       logout: () => {
         set({ user: null, token: null, isAuthenticated: false });
+        void clearLegacyApiCache();
       },
 
       // Guarded so a renewed token arriving after logout can't resurrect the session.

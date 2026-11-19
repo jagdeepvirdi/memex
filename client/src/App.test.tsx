@@ -9,6 +9,7 @@ vi.mock('react-router-dom', () => ({
   Route: () => null,
   Navigate: () => null,
   useLocation: () => ({ pathname: '/', search: '', hash: '' }),
+  useSearchParams: () => [new URLSearchParams(), vi.fn()],
 }))
 
 vi.mock('./components/ErrorBoundary', () => ({
@@ -79,6 +80,14 @@ describe('ReminderPoller', () => {
   it('calls fetchDueReminders on mount when authenticated', async () => {
     await act(async () => { render(<App />) })
     expect(mockFetchDueReminders).toHaveBeenCalled()
+  })
+
+  it('does not request notification permission without a user action', async () => {
+    const NotificationMock = (window as any).Notification
+    NotificationMock.permission = 'default'
+    await act(async () => { render(<App />) })
+    expect(NotificationMock.requestPermission).not.toHaveBeenCalled()
+    expect(mockFetchDueReminders).not.toHaveBeenCalled()
   })
 
   it('does not call fetchDueReminders when not authenticated', async () => {

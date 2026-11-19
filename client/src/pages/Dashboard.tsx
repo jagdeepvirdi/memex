@@ -1,15 +1,13 @@
 import { useState, useEffect, useRef } from 'react'
-import { Plus, Search, HelpCircle, X, Zap, Database, Key, Clock, Sparkles, Calendar, TrendingUp, Lightbulb, Link2, Compass, Loader2, CheckCircle } from 'lucide-react'
+import { Plus, Search, HelpCircle, X, Zap, Database, Key, Clock, Sparkles, Calendar, TrendingUp, Lightbulb, Link2, Compass, Loader2, CheckCircle, Newspaper } from 'lucide-react'
 import { toast } from 'sonner'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AppHeader } from '../components/AppHeader'
-import IngestPanel from '../components/ingest/IngestPanel'
-import SearchModal from '../components/search/SearchModal'
 import Sidebar from '../components/sidebar/Sidebar'
 import ItemCard from '../components/cards/ItemCard'
 import { CardSkeleton } from '../components/Skeleton'
-import { fetchItems, fetchStats, fetchInsights, fetchRediscovery } from '../lib/api'
+import { fetchItems, fetchStats, fetchInsights as fetchDashboardInsights, fetchRediscovery } from '../lib/api'
 import type { Item, StatsResponse, Insight, RediscoveryItem } from '../../../shared/types'
 
 // Local helper: format a reminder date relative to now
@@ -25,15 +23,7 @@ function formatReminder(date: Date): string {
 }
 
 export default function Dashboard() {
-  const [searchParams, setSearchParams] = useSearchParams()
   const navigate = useNavigate()
-  const share = searchParams.get('share') === 'true'
-  const sharedTitle = searchParams.get('title') || ''
-  const sharedText = searchParams.get('text') || ''
-  const sharedUrl = searchParams.get('url') || ''
-
-  const [showIngest, setShowIngest] = useState(share)
-  const [showSearch, setShowSearch] = useState(false)
   const [showShortcuts, setShowShortcuts] = useState(false)
   const [items, setItems] = useState<Item[]>([])
   const [total, setTotal] = useState(0)
@@ -41,17 +31,58 @@ export default function Dashboard() {
   const [insights, setInsights] = useState<Insight[]>([])
   const [rediscovery, setRediscovery] = useState<RediscoveryItem[]>([])
   const [upcomingReminders, setUpcomingReminders] = useState<Item[]>([])
+  const [notificationPermission, setNotificationPermission] = useState<'default' | 'granted' | 'denied' | 'unsupported'>(() =>
+    typeof Notification === 'undefined' ? 'unsupported' : Notification.permission
+  )
   const [loading, setLoading] = useState(true)
   const [loadingInsights, setLoadingInsights] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
+  const [itemsError, setItemsError] = useState(false)
+  const [statsError, setStatsError] = useState(false)
+  const [insightsError, setInsightsError] = useState(false)
+  const [rediscoveryError, setRediscoveryError] = useState(false)
+  const [remindersError, setRemindersError] = useState(false)
   const [offset, setOffset] = useState(0)
   // Bumped on every load and on unmount so a slow response from an older load
   // can't overwrite newer state (or set state after the page is gone).
   const loadSeq = useRef(0)
 
+  const loadInsightData = async () => {
+    setLoadingInsights(true)
+    setInsightsError(false)
+    try { setInsights(await fetchDashboardInsights()) }
+    catch { setInsightsError(true); setInsights([]) }
+    finally { setLoadingInsights(false) }
+  }
+
+  const loadRediscoveryData = async () => {
+    setRediscoveryError(false)
+    try { setRediscovery(await fetchRediscovery()) }
+    catch { setRediscoveryError(true); setRediscovery([]) }
+  }
+
+  const enableBrowserReminders = async () => {
+    if (typeof Notification === 'undefined') {
+      setNotificationPermission('unsupported')
+      return
+    }
+    try {
+      const permission = await Notification.requestPermission()
+      setNotificationPermission(permission)
+      if (permission === 'granted') window.dispatchEvent(new Event('memex:notification-permission-changed'))
+    } catch {
+      setNotificationPermission('denied')
+    }
+  }
+
   useEffect(() => {
     loadData()
-    return () => { loadSeq.current += 1 }
+    const onCaptured = () => loadData()
+    window.addEventListener('memex:item-captured', onCaptured)
+    return () => {
+      loadSeq.current += 1
+      window.removeEventListener('memex:item-captured', onCaptured)
+    }
   }, [])
 
   const loadData = async () => {
@@ -59,45 +90,34 @@ export default function Dashboard() {
     const isCurrent = () => seq === loadSeq.current
 
     setLoading(true)
-    setLoadingInsights(true)
     setOffset(0)
+    setItemsError(false)
+    setStatsError(false)
+    void loadInsightData()
+    void loadRediscoveryData()
 
     // Fire upcoming reminders check in background (non-blocking)
     fetchItems({ hasReminder: true, limit: 5 })
       .then(r => {
         if (!isCurrent()) return
+        setRemindersError(false)
         setUpcomingReminders(r.items.filter(i => i.remindAt && new Date(i.remindAt) > new Date()))
       })
-      .catch(() => {})
+      .catch(() => { if (isCurrent()) { setRemindersError(true); setUpcomingReminders([]) } })
 
-    // Insights are LLM-generated and can take many seconds. Rediscovery is
-    // secondary content. Neither may hold up the items list and stats, so each
-    // fills in on its own when it arrives.
-    fetchInsights()
-      .catch(() => [] as Insight[])
-      .then(res => { if (isCurrent()) setInsights(res) })
-      .finally(() => { if (isCurrent()) setLoadingInsights(false) })
-
-    fetchRediscovery()
-      .catch(() => [] as RediscoveryItem[])
-      .then(res => { if (isCurrent()) setRediscovery(res) })
-
-    try {
-      const [itemsRes, statsRes] = await Promise.all([
-        fetchItems({ limit: 12, offset: 0 }),
-        fetchStats(),
-      ])
-      if (!isCurrent()) return
-      setItems(itemsRes.items)
-      setTotal(itemsRes.total)
-      setStats(statsRes)
-    } catch (err) {
-      if (!isCurrent()) return
-      console.error(err)
-      toast.error('Failed to load dashboard data')
-    } finally {
-      if (isCurrent()) setLoading(false)
-    }
+    const [itemsResult, statsResult] = await Promise.allSettled([
+      fetchItems({ limit: 12, offset: 0 }),
+      fetchStats(),
+    ])
+    if (!isCurrent()) return
+    if (itemsResult.status === 'fulfilled') {
+      setItems(itemsResult.value.items)
+      setTotal(itemsResult.value.total)
+      setItemsError(false)
+    } else { setItemsError(true); setItems([]); setTotal(0) }
+    if (statsResult.status === 'fulfilled') { setStats(statsResult.value); setStatsError(false) }
+    else { setStatsError(true); setStats(null) }
+    setLoading(false)
   }
 
   const loadMoreItems = async () => {
@@ -117,22 +137,11 @@ export default function Dashboard() {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'n') {
-        e.preventDefault()
-        setShowIngest(true)
-        setShowSearch(false)
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
-        e.preventDefault()
-        setShowSearch(true)
-        setShowIngest(false)
-      }
-      if (e.key === '?' && (e.target as HTMLElement).tagName !== 'INPUT' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+      const target = e.target as HTMLElement
+      if (e.key === '?' && !target.isContentEditable && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) {
         setShowShortcuts(prev => !prev)
       }
       if (e.key === 'Escape') {
-        setShowIngest(false)
-        setShowSearch(false)
         setShowShortcuts(false)
       }
     }
@@ -146,19 +155,21 @@ export default function Dashboard() {
       <Sidebar activeSection="dashboard" />
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col relative">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative">
         <AppHeader
           left={
-            <div
-              onClick={() => setShowSearch(true)}
-              className="flex items-center gap-4 bg-surface/80 px-4 py-2 rounded-full border border-white/5 w-96 max-w-full cursor-pointer hover:border-accent/30 transition-all group"
+            <button
+              type="button"
+              aria-label="Search everything (press slash)"
+              onClick={() => window.dispatchEvent(new Event('memex:open-search'))}
+              className="flex items-center gap-4 bg-surface/80 px-4 py-2 rounded-full border border-white/5 w-96 max-w-full text-left cursor-pointer hover:border-accent/30 transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <Search size={18} className="text-ink-muted group-hover:text-accent transition-colors" />
               <span className="text-ink-muted/50 text-sm flex-1">Search everything...</span>
               <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/5 rounded border border-white/5 text-[10px] text-ink-muted font-mono">
-                <span className="text-[8px]">⌘</span>K
+                /
               </div>
-            </div>
+            </button>
           }
           actions={
             <button
@@ -173,27 +184,25 @@ export default function Dashboard() {
         <AppHeader.Spacer />
 
         {/* Hero Section */}
-        <div className="p-12 max-w-7xl mx-auto w-full flex flex-col gap-12">
+        <div className="p-5 sm:p-8 xl:p-12 max-w-7xl mx-auto w-full flex flex-col gap-8 md:gap-10">
           <section className="flex flex-col gap-8 animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div className="space-y-2">
-                <h2 className="font-display text-4xl text-ink">Welcome back</h2>
+                <h2 className="font-display text-3xl md:text-4xl text-ink">Welcome back</h2>
                 <p className="text-ink-muted max-w-lg">
-                  Memex is your personal knowledge OS. Everything you save is classified and organized by local AI.
+                  Capture what matters, then find and revisit it when you need it. AI organization follows your configured provider and privacy settings.
                 </p>
               </div>
-              
-              <button 
-                onClick={() => navigate('/graph')}
-                className="bg-accent/10 hover:bg-accent/20 text-accent border border-accent/20 px-6 py-3 rounded-2xl flex items-center gap-3 transition-all group"
-              >
-                 <Sparkles className="group-hover:rotate-12 transition-transform" size={20} />
-                 <span className="font-bold text-sm">Open Intelligence Map</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" onClick={() => window.dispatchEvent(new Event('memex:open-capture'))} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-bg hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Plus size={16} />Capture something</button>
+                <button type="button" onClick={() => navigate('/ask')} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/10 bg-surface px-4 text-sm font-medium text-ink hover:bg-surface-hover"><Sparkles size={16} className="text-accent" />Ask your library</button>
+                <button type="button" onClick={() => navigate('/digest')} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/10 px-3 text-sm text-ink-muted hover:bg-white/5 hover:text-ink"><Newspaper size={16} />Weekly digest</button>
+                <button type="button" onClick={() => navigate('/graph')} className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-ink-muted hover:bg-white/5 hover:text-ink"><Compass size={16} />Explore connections</button>
+              </div>
             </div>
 
             {/* Actionable Insights */}
-            <div className="flex flex-col gap-4">
+            <div className="order-2 flex flex-col gap-4">
               <div className="flex items-center gap-3">
                 <Sparkles size={16} className="text-accent" />
                 <h3 className="font-display text-lg text-ink">Actionable Insights</h3>
@@ -204,6 +213,11 @@ export default function Dashboard() {
                   {[...Array(3)].map((_, i) => (
                     <div key={i} className="h-24 bg-white/5 rounded-2xl animate-pulse" />
                   ))}
+                </div>
+              ) : insightsError ? (
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-ink-muted">
+                  <span>Insights couldn’t be loaded. Your library and search are still available.</span>
+                  <button type="button" onClick={loadInsightData} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button>
                 </div>
               ) : insights.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -238,24 +252,25 @@ export default function Dashboard() {
                 </div>
               ) : (
                 <div className="p-6 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl text-center">
-                  <p className="text-xs text-ink-muted italic">
-                    Keep adding notes. AI will surface patterns and insights here.
+                  <p className="text-sm text-ink-muted">
+                    No insights to show yet. They appear when there’s a useful pattern in your library.
                   </p>
                 </div>
               )}
             </div>
 
             {/* Quick Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="order-1">
+              {stats ? <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
                <StatCard
                  icon={<Database size={18} className="text-blue-400" />}
                  label="Total Items"
-                 value={stats?.totalItems ?? 0}
+                 value={stats.totalItems}
                />
                <StatCard
                  icon={<Zap size={18} className="text-yellow-400" />}
                  label="AI Enriched"
-                 value={stats?.aiEnriched ?? 0}
+                 value={stats.aiEnriched}
                  sub={stats && stats.pendingAI > 0 ? `${stats.pendingAI} pending` : undefined}
                  onClick={() => navigate('/items/enriched')}
                  onSubClick={stats && stats.pendingAI > 0 ? () => navigate('/items/pending') : undefined}
@@ -263,7 +278,7 @@ export default function Dashboard() {
                <StatCard
                  icon={<CheckCircle size={18} className="text-green-400" />}
                  label="Reviewed"
-                 value={stats?.reviewed ?? 0}
+                 value={stats.reviewed}
                  sub={stats && stats.unreviewed > 0 ? `${stats.unreviewed} to review` : undefined}
                  onClick={() => navigate('/items/enriched')}
                  onSubClick={stats && stats.unreviewed > 0 ? () => navigate('/items/pending') : undefined}
@@ -271,24 +286,36 @@ export default function Dashboard() {
                <StatCard
                  icon={<Key size={18} className="text-teal-400" />}
                  label="Secrets in Vault"
-                 value={stats?.totalVaultItems ?? 0}
+                 value={stats.totalVaultItems}
                />
                <StatCard
                  icon={<Clock size={18} className="text-purple-400" />}
                  label="Last 24h Activity"
-                 value={stats?.recentActivity ?? 0}
+                 value={stats.recentActivity}
                />
+              </div> : statsError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-ink-muted"><span>Library overview couldn’t be loaded.</span><button type="button" onClick={loadData} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></div> : <div role="status" aria-label="Loading library overview" className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">{Array.from({ length: 5 }, (_, i) => <div key={i} className="h-24 animate-pulse rounded-xl border border-white/5 bg-white/5" />)}</div>}
             </div>
           </section>
 
           {/* Upcoming Reminders */}
-          {upcomingReminders.length > 0 && (
+          {(upcomingReminders.length > 0 || remindersError) && (
             <section className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
               <div className="flex items-center gap-3">
                 <Clock size={20} className="text-accent" />
                 <h3 className="font-display text-xl text-ink">Upcoming Reminders</h3>
               </div>
-              <div className="flex flex-col gap-2">
+              {upcomingReminders.length > 0 && notificationPermission === 'default' && (
+                <button type="button" onClick={enableBrowserReminders} className="w-fit rounded-lg border border-accent/20 px-3 py-2 text-sm text-accent hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+                  Enable browser notifications
+                </button>
+              )}
+              {upcomingReminders.length > 0 && notificationPermission === 'denied' && (
+                <p className="text-sm text-ink-muted">Browser notifications are blocked. You can still see reminders here.</p>
+              )}
+              {notificationPermission === 'unsupported' && upcomingReminders.length > 0 && (
+                <p className="text-sm text-ink-muted">This browser does not support notifications. You can still see reminders here.</p>
+              )}
+              {remindersError ? <p role="status" className="text-sm text-ink-muted">Reminders couldn’t be loaded right now.</p> : <div className="flex flex-col gap-2">
                 {upcomingReminders.map(item => (
                   <button
                     key={item.id}
@@ -308,18 +335,18 @@ export default function Dashboard() {
                     </div>
                   </button>
                 ))}
-              </div>
+              </div>}
             </section>
           )}
 
           {/* Rediscovery / Serendipity */}
-          {rediscovery.length > 0 && (
+          {(rediscovery.length > 0 || rediscoveryError) && (
             <section className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-4">
               <div className="flex items-center gap-3">
                 <Compass size={20} className="text-purple-400" />
                 <h3 className="font-display text-xl text-ink">Rediscover</h3>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {rediscoveryError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-ink-muted"><span>Rediscovery couldn’t be loaded.</span><button type="button" onClick={loadRediscoveryData} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></div> : <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {rediscovery.map(({ reason, item }) => (
                   <div key={item.id} className="relative group">
                     <div className="absolute -top-3 left-4 px-3 py-1 bg-surface border border-purple-500/30 text-[9px] uppercase tracking-widest font-bold text-purple-400 rounded-lg shadow-lg z-10">
@@ -328,7 +355,7 @@ export default function Dashboard() {
                     <ItemCard item={item} onClick={() => navigate(`/item/${item.id}`)} />
                   </div>
                 ))}
-              </div>
+              </div>}
             </section>
           )}
 
@@ -343,6 +370,8 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {[...Array(6)].map((_, i) => <CardSkeleton key={i} />)}
               </div>
+            ) : itemsError ? (
+              <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-5 text-sm text-ink-muted"><span>Recent items couldn’t be loaded.</span><button type="button" onClick={loadData} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></div>
             ) : items.length > 0 ? (
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -364,50 +393,26 @@ export default function Dashboard() {
                 )}
               </>
             ) : (
-              <div className="h-48 rounded-2xl border-2 border-dashed border-white/5 flex flex-col items-center justify-center text-ink-muted gap-3 grayscale opacity-50">
-                <p className="text-sm italic">No items yet. Add something below!</p>
-                <button 
-                  onClick={() => setShowIngest(true)}
-                  className="text-xs bg-white/5 px-3 py-1.5 rounded-full hover:bg-white/10 transition-colors"
+              <div className="rounded-2xl border border-dashed border-white/10 bg-surface/40 px-5 py-10 flex flex-col items-center justify-center text-center text-ink-muted gap-3">
+                <p className="text-base font-medium text-ink">Your library is ready for its first item.</p>
+                <p className="text-sm">Capture a note, link, file, or voice memo to get started.</p>
+                <button type="button"
+                  onClick={() => window.dispatchEvent(new Event('memex:open-capture'))}
+                  className="mt-1 inline-flex min-h-10 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-bg hover:bg-accent/90"
                 >
-                  Quick Add
+                  <Plus size={16} />Add your first item
                 </button>
               </div>
             )}
           </section>
         </div>
 
-        {/* Overlays */}
-        {showSearch && <SearchModal onClose={() => setShowSearch(false)} />}
-        
-        {showIngest && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-bg/80 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="w-full max-w-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
-              <IngestPanel 
-                initialUrl={sharedUrl || (sharedText.startsWith('http') ? sharedText : undefined)}
-                initialText={sharedUrl ? undefined : sharedText || sharedTitle}
-                onSuccess={(newItem) => {
-                  setItems([newItem, ...items].slice(0, 12))
-                  setTotal(prev => prev + 1)
-                  setShowIngest(false)
-                  setSearchParams(new URLSearchParams())
-                  fetchStats().then(setStats).catch(console.error)
-                }} 
-                onCancel={() => {
-                  setShowIngest(false)
-                  setSearchParams(new URLSearchParams())
-                }} 
-              />
-            </div>
-          </div>
-        )}
-
         {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
 
         {/* Floating Action Button */}
         <button 
-          onClick={() => setShowIngest(true)}
-          className="fixed bottom-8 right-8 w-14 h-14 bg-accent hover:bg-accent-dark text-bg rounded-full shadow-2xl flex items-center justify-center transition-all hover:scale-110 active:scale-95 z-40 group"
+          onClick={() => window.dispatchEvent(new Event('memex:open-capture'))}
+          className="fixed bottom-8 right-8 hidden h-14 w-14 items-center justify-center rounded-full bg-accent text-bg shadow-2xl transition-all hover:scale-110 hover:bg-accent-dark active:scale-95 z-40 group md:flex"
           title="Add to Memex"
         >
           <Plus size={28} className="group-hover:rotate-90 transition-transform duration-300" />
@@ -419,10 +424,7 @@ export default function Dashboard() {
 
 function StatCard({ icon, label, value, sub, onClick, onSubClick }: { icon: React.ReactNode, label: string, value: number | string, sub?: string, onClick?: () => void, onSubClick?: () => void }) {
   return (
-    <div
-      onClick={onClick}
-      className={`bg-surface/50 border border-white/5 p-4 rounded-2xl flex flex-col gap-3 hover:border-white/10 transition-all group ${onClick ? 'cursor-pointer' : ''}`}
-    >
+    <article className="bg-surface/50 border border-white/5 p-4 rounded-2xl flex flex-col gap-3 hover:border-white/10 transition-all group">
        <div className="flex items-center gap-2">
           <div className="p-2 bg-white/5 rounded-lg group-hover:scale-110 transition-transform">
              {icon}
@@ -432,20 +434,18 @@ function StatCard({ icon, label, value, sub, onClick, onSubClick }: { icon: Reac
        <div className="flex items-end justify-between ml-1">
          <span className="text-2xl font-mono text-ink">{value}</span>
          {sub && (
-           <span
-             onClick={e => { e.stopPropagation(); onSubClick?.() }}
-             className={`text-[10px] text-accent font-medium pb-0.5 ${onSubClick ? 'hover:underline cursor-pointer' : ''}`}
-           >{sub}</span>
+          onSubClick ? <button type="button" onClick={onSubClick} className="text-left text-[10px] text-accent font-medium pb-0.5 hover:underline">{sub}</button> : <span className="text-[10px] text-ink-muted font-medium pb-0.5">{sub}</span>
          )}
        </div>
-    </div>
+       {onClick && <button type="button" onClick={onClick} className="mt-auto self-start text-xs font-medium text-ink-muted hover:text-accent">View {label.toLowerCase()} <span aria-hidden="true">→</span></button>}
+    </article>
   )
 }
 
 function ShortcutsModal({ onClose }: { onClose: () => void }) {
   const shortcuts = [
-    { keys: ['⌘', 'K'], label: 'Open Search' },
-    { keys: ['⌘', 'N'], label: 'Quick Ingest' },
+    { keys: ['/'], label: 'Open Search' },
+    { keys: ['N'], label: 'Quick Ingest' },
     { keys: ['?'], label: 'Show Shortcuts' },
     { keys: ['Esc'], label: 'Close Modals' },
   ];

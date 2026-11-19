@@ -29,6 +29,7 @@ import demoRouter from './routes/demo.js'
 import aiRouter from './routes/ai.js'
 import shareRouter from './routes/share.js'
 import mcpRouter from './routes/mcp.js'
+import { noStoreApiResponses } from './lib/apiCachePolicy.js'
 import { itemCategoriesHandler } from './routes/categories.js'
 import { itemTagsHandler } from './routes/tags.js'
 import { checkOllamaHealth } from './services/ollama.js'
@@ -145,6 +146,7 @@ if (shouldServeClient()) {
   else logger.warn('MEMEX_SERVE_CLIENT / production is on but the web app is not built (client/dist/index.html is missing)')
 }
 
+app.use('/api', noStoreApiResponses)
 app.use(authMiddleware)
 
 // ── Health ────────────────────────────────────────────────────────────────────

@@ -9,9 +9,11 @@ vi.mock('react-router-dom', () => ({
 }))
 
 const mockFetchSearch = vi.fn()
+const mockFetchTaggedItems = vi.fn()
 let mockSemantic = true
 vi.mock('../../lib/api', () => ({
   fetchSearchResult: async (q: string) => ({ items: await mockFetchSearch(q), semantic: mockSemantic }),
+  fetchItems: (...args: any[]) => mockFetchTaggedItems(...args),
 }))
 
 import SearchModal from './SearchModal'
@@ -27,6 +29,7 @@ describe('SearchModal Component', () => {
     vi.clearAllMocks()
     mockSemantic = true
     mockFetchSearch.mockResolvedValue(mockItems)
+    mockFetchTaggedItems.mockResolvedValue({ items: mockItems, total: mockItems.length })
   })
 
   it('renders input field and placeholder', () => {
@@ -98,7 +101,7 @@ describe('SearchModal Component', () => {
 
     // Wait for state and DOM updates to propagate
     await waitFor(() => {
-      const options = screen.getAllByRole('option')
+      const options = screen.getByRole('listbox', { name: 'Search results' }).querySelectorAll('[role="option"]')
       expect(options[1]).toHaveAttribute('aria-selected', 'true')
     })
 
@@ -122,6 +125,13 @@ describe('SearchModal Component', () => {
     fireEvent.change(screen.getByPlaceholderText('Search items, notes, recipes...'), { target: { value: 'coffee' } })
     await screen.findByText('Coffee Recipe')
     expect(screen.queryByText(/keyword matches only/i)).not.toBeInTheDocument()
+  })
+
+  it('opens a tag shortcut as an exact tag filter', async () => {
+    render(<SearchModal onClose={mockOnClose} initialTag="coffee" />)
+    expect(await screen.findByText('Coffee Recipe')).toBeInTheDocument()
+    expect(mockFetchTaggedItems).toHaveBeenCalledWith({ tag: 'coffee', type: undefined, limit: 20 })
+    expect(screen.getByText('Tag: coffee')).toBeInTheDocument()
   })
 
   it('supports Escape key to close modal', () => {

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Search, 
-  Command, 
   X, 
   Loader2, 
   ArrowRight,
@@ -15,23 +14,35 @@ import {
   Key
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { fetchSearchResult } from '../../lib/api';
-import type { Item } from '../../../../shared/types';
+import { fetchItems, fetchSearchResult } from '../../lib/api';
+import type { Item, ItemType } from '../../../../shared/types';
+
+const ITEM_TYPES: ItemType[] = ['note', 'link', 'recipe', 'media', 'book', 'place', 'spec', 'stock', 'password'];
 
 interface SearchModalProps {
   onClose: () => void;
+  initialQuery?: string;
+  initialTag?: string;
 }
 
-export default function SearchModal({ onClose }: SearchModalProps) {
-  const [query, setQuery] = useState('');
+export default function SearchModal({ onClose, initialQuery = '', initialTag = '' }: SearchModalProps) {
+  const [query, setQuery] = useState(initialQuery);
   const [results, setResults] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchError, setSearchError] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<ItemType | ''>('');
+  const [tagFilter, setTagFilter] = useState(initialTag);
+  const [retryKey, setRetryKey] = useState(0);
+  const requestSeq = useRef(0);
   // false when the server could only match keywords (the embedding model is unavailable or nothing is embedded yet)
   const [semantic, setSemantic] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setQuery(initialQuery) }, [initialQuery]);
+  useEffect(() => { setTagFilter(initialTag) }, [initialTag]);
 
   // Focus trap — keep Tab/Shift+Tab inside the dialog
   const handleDialogKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
@@ -79,27 +90,35 @@ export default function SearchModal({ onClose }: SearchModalProps) {
   }, []);
 
   useEffect(() => {
-    if (!query.trim()) {
+    const seq = ++requestSeq.current;
+    if (!query.trim() && !tagFilter.trim()) {
       setResults([]);
+      setSearchError(false);
+      setLoading(false);
       return;
     }
 
     const timeout = setTimeout(async () => {
       setLoading(true);
+      setSearchError(false);
+      setResults([]);
       try {
-        const found = await fetchSearchResult(query);
+        const found = tagFilter && !query.trim()
+          ? { ...(await fetchItems({ tag: tagFilter, type: typeFilter || undefined, limit: 20 })), semantic: true }
+          : await fetchSearchResult(query, { ...(typeFilter ? { type: typeFilter } : {}), ...(tagFilter ? { tag: tagFilter } : {}) });
+        if (seq !== requestSeq.current) return;
         setResults(found.items);
         setSemantic(found.semantic);
         setSelectedIndex(0);
-      } catch (err) {
-        console.error('Search error:', err);
+      } catch {
+        if (seq === requestSeq.current) { setSearchError(true); setResults([]); }
       } finally {
-        setLoading(false);
+        if (seq === requestSeq.current) setLoading(false);
       }
     }, 300);
 
-    return () => clearTimeout(timeout);
-  }, [query]);
+    return () => { clearTimeout(timeout); requestSeq.current += 1; };
+  }, [query, typeFilter, tagFilter, retryKey]);
 
   const handleSelect = (id: string) => {
     navigate(`/item/${id}`);
@@ -139,7 +158,7 @@ export default function SearchModal({ onClose }: SearchModalProps) {
               <Loader2 size={18} className="animate-spin text-ink-muted" aria-hidden="true" />
             ) : (
               <div className="flex items-center gap-1.5 px-2 py-1 bg-white/5 rounded border border-white/5 text-[10px] text-ink-muted font-mono uppercase" aria-hidden="true">
-                <Command size={10} /> K
+                /
               </div>
             )}
             <button onClick={onClose} aria-label="Close search" className="p-1 hover:bg-white/5 rounded-md text-ink-muted transition-colors">
@@ -148,22 +167,33 @@ export default function SearchModal({ onClose }: SearchModalProps) {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/5 px-5 py-2">
+          {tagFilter && <span className="inline-flex items-center gap-2 rounded-full bg-accent/10 px-3 py-1 text-xs text-accent">Tag: {tagFilter}<button type="button" aria-label="Remove tag filter" onClick={() => setTagFilter('')} className="rounded p-1 hover:bg-accent/10"><X size={12} aria-hidden="true" /></button></span>}
+          <label htmlFor="search-type-filter" className="text-xs text-ink-muted">Filter by type</label>
+          <select id="search-type-filter" value={typeFilter} onChange={e => setTypeFilter(e.target.value as ItemType | '')} className="rounded-lg border border-white/10 bg-surface px-3 py-2 text-xs text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <option value="">All types</option>
+            {ITEM_TYPES.map(type => <option key={type} value={type}>{type[0].toUpperCase() + type.slice(1)}</option>)}
+          </select>
+        </div>
+
         {/* Results Area */}
         <div
           role="listbox"
           aria-label="Search results"
           className="flex-1 overflow-y-auto max-h-[60vh]"
         >
-          {query.trim() && !semantic && (
+          {query.trim() && !loading && !searchError && results.length > 0 && !semantic && (
             <p role="status" className="mx-4 mt-3 text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
               Showing keyword matches only: semantic search is unavailable right now. Check Settings &rsaquo; AI &rsaquo; Search &amp; embeddings.
             </p>
           )}
-          {!query.trim() ? (
+          {!query.trim() && !tagFilter.trim() ? (
             <div className="p-12 text-center space-y-2">
               <p className="text-ink font-display text-lg">Start typing to search...</p>
               <p className="text-ink-muted text-sm">Semantic search finds meanings, not just keywords.</p>
             </div>
+          ) : searchError ? (
+            <div role="alert" className="p-12 text-center space-y-2"><p className="text-ink font-display text-lg">Search couldn’t be completed</p><p className="text-ink-muted text-sm">Check your connection and try again.</p><button type="button" onClick={() => setRetryKey(key => key + 1)} className="mt-2 rounded-lg px-3 py-2 text-sm font-medium text-accent hover:bg-accent/10">Retry search</button></div>
           ) : results.length > 0 ? (
             <div className="p-2">
               {results.map((item, i) => (
@@ -197,6 +227,7 @@ export default function SearchModal({ onClose }: SearchModalProps) {
                     <p className="text-ink-muted text-xs truncate mt-0.5">
                       {(item.structured as any)?.summary || item.content.slice(0, 100)}
                     </p>
+                    <p className="mt-1 text-[10px] text-ink-muted/70">{item.type} · {new Date(item.updatedAt || item.createdAt).toLocaleDateString()}</p>
                   </div>
 
                   <ArrowRight size={16} className={`text-accent transition-all ${selectedIndex === i ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-2'}`} />

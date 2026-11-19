@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { GlobalActions } from './components/GlobalActions'
 import { useAuthStore } from './store/authStore'
 import { fetchDueReminders, setReminder } from './lib/api'
 import Dashboard from './pages/Dashboard'
@@ -36,13 +37,8 @@ function ReminderPoller() {
   useEffect(() => {
     if (!isAuthenticated) return
 
-    // Request notification permission once on mount
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission()
-    }
-
     const fire = async () => {
-      if (!isAuthenticated || Notification.permission !== 'granted') return
+      if (!isAuthenticated || typeof Notification === 'undefined' || Notification.permission !== 'granted') return
       try {
         const due = await fetchDueReminders()
         for (const item of due) {
@@ -65,7 +61,11 @@ function ReminderPoller() {
 
     fire() // check immediately on mount
     const interval = setInterval(fire, 60_000) // then every minute
-    return () => clearInterval(interval)
+    window.addEventListener('memex:notification-permission-changed', fire)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('memex:notification-permission-changed', fire)
+    }
   }, [isAuthenticated])
 
   return null
@@ -95,6 +95,10 @@ export default function App() {
       <MondayDigestRedirect />
       <BrowserRouter>
         <div className="min-h-screen w-full bg-bg text-ink font-body">
+          <a href="#main-content" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-lg focus:bg-accent focus:px-4 focus:py-3 focus:font-semibold focus:text-bg">
+            Skip to main content
+          </a>
+          <GlobalActions />
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/share/:token" element={<PublicItem />} />

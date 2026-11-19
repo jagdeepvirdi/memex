@@ -61,6 +61,7 @@ export interface ListItemsOptions {
   q?: string
   deleted?: boolean
   unreviewed?: boolean
+  reviewed?: boolean
   pendingEnrichment?: boolean
   enriched?: boolean
   hasReminder?: boolean
@@ -166,7 +167,7 @@ export async function applyClassificationResult(
  * Queries the list of items based on filter criteria, returning items, count, limit, and offset.
  */
 export async function listItems(options: ListItemsOptions): Promise<{ items: Item[]; total: number }> {
-  const { type, category, tag, q, deleted, unreviewed, pendingEnrichment, enriched, hasReminder, maxConfidence, priority, limit, offset } = options
+  const { type, category, tag, q, deleted, unreviewed, reviewed, pendingEnrichment, enriched, hasReminder, maxConfidence, priority, limit, offset } = options
 
   const conditions: string[] = deleted ? ['i.deleted_at IS NOT NULL'] : ['i.deleted_at IS NULL']
   const params: unknown[] = []
@@ -179,6 +180,9 @@ export async function listItems(options: ListItemsOptions): Promise<{ items: Ite
 
   if (unreviewed) {
     conditions.push(`i.reviewed = FALSE`)
+  }
+  if (reviewed) {
+    conditions.push(`i.reviewed = TRUE`)
   }
 
   if (pendingEnrichment) {

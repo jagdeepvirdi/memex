@@ -4,11 +4,13 @@ import { Loader2, Mail, Lock, Sparkles, UserPlus, Brain, Check, AlertCircle } fr
 import { toast } from 'sonner';
 import { useAuthStore } from '../store/authStore';
 import { apiFetch } from '../lib/api';
+import { BrandMark } from '../components/Brand';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [isSetup, setIsSetup] = useState(false);
   const [aiStatus, setAiStatus] = useState<'checking' | 'ready' | 'missing_models' | 'offline'>('checking');
   
@@ -71,6 +73,7 @@ export default function LoginPage() {
     if (!email || !password) return;
 
     setLoading(true);
+    setFormError(null);
     try {
       const endpoint = isSetup ? '/auth/setup' : '/auth/login';
       const data = await apiFetch<any>(endpoint, {
@@ -83,7 +86,9 @@ export default function LoginPage() {
       toast.success(isSetup ? 'Account created' : 'Welcome back');
       navigate(isSetup ? '/welcome' : redirectTo);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Authentication failed');
+      const message = err instanceof Error ? err.message : 'Authentication failed';
+      setFormError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -95,13 +100,11 @@ export default function LoginPage() {
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-accent/5 rounded-full blur-3xl animate-pulse" />
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
 
-      <div className="w-full max-w-md space-y-12 relative z-10">
+      <div id="main-content" tabIndex={-1} className="w-full max-w-md space-y-12 relative z-10">
         <div className="text-center space-y-4">
-          <div className="w-16 h-16 bg-accent rounded-2xl flex items-center justify-center text-bg font-bold text-3xl mx-auto shadow-2xl shadow-accent/20">
-            M
-          </div>
+          <BrandMark size={64} className="mx-auto" />
           <div>
-            <h1 className="font-display text-4xl text-ink">Memex</h1>
+            <h1 className="font-body font-semibold text-4xl tracking-tight text-ink">Memex</h1>
             <p className="text-ink-muted text-sm mt-2 uppercase tracking-widest font-mono">Personal Knowledge OS</p>
           </div>
         </div>
@@ -145,6 +148,7 @@ export default function LoginPage() {
               <div className="relative group">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted group-focus-within:text-accent transition-colors" size={18} />
                 <input
+                  aria-label="Email address"
                   type="email"
                   placeholder="Email Address"
                   className="w-full bg-bg border border-white/10 rounded-xl py-3 pl-10 pr-4 text-ink outline-none focus:border-accent/50 transition-all placeholder:text-ink-muted/30"
@@ -157,6 +161,7 @@ export default function LoginPage() {
               <div className="relative group">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted group-focus-within:text-accent transition-colors" size={18} />
                 <input
+                  aria-label="Password"
                   type="password"
                   placeholder="Password"
                   autoComplete={isSetup ? 'new-password' : 'current-password'}
@@ -169,6 +174,7 @@ export default function LoginPage() {
               {isSetup && (
                 <p className="text-[11px] text-ink-muted mt-1.5 px-1">At least 10 characters. This signs you in to Memex; your vault has its own master password.</p>
               )}
+              {formError && <p role="alert" className="rounded-lg border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-400">{formError}</p>}
             </div>
 
             <button
@@ -207,7 +213,7 @@ export default function LoginPage() {
         )}
 
         <p className="text-[10px] text-ink-muted text-center max-w-[300px] mx-auto leading-relaxed">
-          Memex is private and local. Your credentials never leave your machine unless you've configured cloud synchronization.
+          Your account is hosted by your Memex instance. Optional cloud AI is configured separately in settings.
         </p>
       </div>
     </div>

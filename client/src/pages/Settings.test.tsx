@@ -56,9 +56,12 @@ vi.mock('../lib/crypto', () => ({
 
 import SettingsPage from './Settings'
 
-const renderTab = (tab?: string) => {
+const renderTab = async (tab?: string) => {
   mockTab = tab
-  return render(<SettingsPage />)
+  const result = render(<SettingsPage />)
+  const loadedTab = ['ai', 'privacy', 'library', 'vault', 'capture', 'appearance'].includes(tab || 'ai') ? tab || 'ai' : 'ai'
+  await screen.findByTestId(`settings-tab-${loadedTab}`)
+  return result
 }
 
 describe('SettingsPage', () => {
@@ -121,7 +124,7 @@ describe('SettingsPage', () => {
 
   describe('shell and navigation', () => {
     it('shows the header and one link per section, with the AI section open by default', async () => {
-      renderTab()
+      await renderTab()
       expect(screen.getByText('System Settings')).toBeInTheDocument()
       const nav = screen.getByRole('navigation', { name: 'Settings sections' })
       const links = within(nav).getAllByRole('link')
@@ -135,7 +138,7 @@ describe('SettingsPage', () => {
     it('lets you pick System, Light or Dark in the Appearance section, and remembers it', async () => {
       localStorage.clear()
       window.matchMedia = vi.fn().mockImplementation(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })) as unknown as typeof window.matchMedia
-      renderTab('appearance')
+      await renderTab('appearance')
       const group = screen.getByRole('radiogroup', { name: 'Theme' })
       const radios = within(group).getAllByRole('radio')
       expect(radios.map(r => r.textContent)).toEqual([
@@ -158,8 +161,8 @@ describe('SettingsPage', () => {
       const w = vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockImplementation(() => dims.scrollWidth)
       const c = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockImplementation(() => dims.clientWidth)
       try {
-        renderTab()
-        expect(screen.getByTestId('settings-tabs-more')).toBeInTheDocument()
+        await renderTab()
+        await waitFor(() => expect(screen.getByTestId('settings-tabs-more')).toBeInTheDocument())
         // Scrolled to the end: nothing left to reveal, so the fade goes away.
         const list = within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('list')
         list.scrollLeft = 300
@@ -172,7 +175,7 @@ describe('SettingsPage', () => {
     })
 
     it('shows no scroll hint when every section already fits', async () => {
-      renderTab()
+      await renderTab()
       expect(screen.queryByTestId('settings-tabs-more')).not.toBeInTheDocument()
     })
 
@@ -182,7 +185,7 @@ describe('SettingsPage', () => {
       ['vault', /Vault/],
       ['capture', /Capture/],
     ])('opens the %s section from the URL and marks it current', async (tab, label) => {
-      renderTab(tab)
+      await renderTab(tab)
       expect(screen.getByTestId(`settings-tab-${tab}`)).toBeInTheDocument()
       expect(within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('link', { name: label }))
         .toHaveAttribute('aria-current', 'page')
@@ -190,19 +193,19 @@ describe('SettingsPage', () => {
     })
 
     it('falls back to the AI section for an unknown tab', async () => {
-      renderTab('nonsense')
+      await renderTab('nonsense')
       expect(screen.getByTestId('settings-tab-ai')).toBeInTheDocument()
     })
 
     it('only renders the open section, so the page stays short', async () => {
-      renderTab('vault')
+      await renderTab('vault')
       expect(screen.queryByText('Categories')).toBeNull()
       expect(screen.queryByText('Bookmarklet')).toBeNull()
       expect(screen.queryByLabelText('AI provider')).toBeNull()
     })
 
     it('loads settings once for all sections', async () => {
-      renderTab('vault')
+      await renderTab('vault')
       await waitFor(() => expect(screen.getByDisplayValue('15 Minutes')).toBeInTheDocument())
       expect(mockApiFetch.mock.calls.filter(c => c[0] === '/settings')).toHaveLength(1)
     })
@@ -210,14 +213,14 @@ describe('SettingsPage', () => {
 
   describe('setup status strip', () => {
     it('says Ollama is answering by default', async () => {
-      renderTab()
+      await renderTab()
       await waitFor(() => expect(screen.getByTestId('setup-effective')).toHaveTextContent('Ollama (local) · llama3.2'))
       expect(screen.getByTestId('setup-status')).toHaveTextContent('Cloud AI off')
     })
 
     it('shows the cloud provider that will answer, and which keys exist', async () => {
       routes(undefined, { ...mockSettings, ai_provider: 'claude', allow_cloud: true })
-      renderTab()
+      await renderTab()
       await waitFor(() => expect(screen.getByTestId('setup-effective')).toHaveTextContent('Claude (cloud) · claude-sonnet-5-5'))
       expect(screen.getByTestId('setup-status')).toHaveTextContent('Cloud AI allowed')
       expect(screen.getByTestId('setup-status')).toHaveTextContent('Keys: Claude')
@@ -226,20 +229,20 @@ describe('SettingsPage', () => {
 
     it('explains a fallback to Ollama when the selected provider has no key', async () => {
       routes(undefined, { ...mockSettings, ai_provider: 'openai', allow_cloud: true })
-      renderTab()
+      await renderTab()
       await waitFor(() => expect(screen.getByTestId('setup-fallback')).toHaveTextContent(/OpenAI has no API key, so Ollama is used/))
       expect(screen.getByTestId('setup-effective')).toHaveTextContent('Ollama (local)')
     })
 
     it('explains a fallback to Ollama when cloud AI is not allowed', async () => {
       routes(undefined, { ...mockSettings, ai_provider: 'claude', allow_cloud: false })
-      renderTab()
+      await renderTab()
       await waitFor(() => expect(screen.getByTestId('setup-fallback')).toHaveTextContent(/cloud AI is not allowed/))
     })
 
     it('shows Strict Local Mode instead of the cloud chip', async () => {
       routes(undefined, { ...mockSettings, ai_provider: 'claude', allow_cloud: true, strict_local_mode: true })
-      renderTab()
+      await renderTab()
       await waitFor(() => expect(screen.getByTestId('setup-status')).toHaveTextContent('Strict Local Mode'))
       expect(screen.getByTestId('setup-effective')).toHaveTextContent('Ollama (local)')
       expect(screen.getByTestId('setup-status')).not.toHaveTextContent('Cloud AI')
@@ -247,7 +250,7 @@ describe('SettingsPage', () => {
 
     it('still renders from the settings alone when the provider list cannot load', async () => {
       mockFetchAiProviders.mockRejectedValue(new Error('down'))
-      renderTab()
+      await renderTab()
       expect(screen.getByTestId('setup-effective')).toHaveTextContent('Ollama (local)')
     })
   })
@@ -256,7 +259,7 @@ describe('SettingsPage', () => {
 
   describe('AI section', () => {
     it('shows the provider and model controls and the local Ollama card', async () => {
-      renderTab('ai')
+      await renderTab('ai')
       expect(screen.getByText('Provider & model')).toBeInTheDocument()
       expect(screen.getByText('Local AI (Ollama)')).toBeInTheDocument()
       expect(screen.getByLabelText('AI provider')).toBeInTheDocument()
@@ -265,7 +268,7 @@ describe('SettingsPage', () => {
     })
 
     it('keeps per-task providers and connection tests collapsed under "Advanced"', async () => {
-      renderTab('ai')
+      await renderTab('ai')
       const advanced = screen.getByTestId('ai-advanced') as HTMLDetailsElement
       expect(advanced.open).toBe(false)
       expect(within(advanced).getByText('Advanced')).toBeInTheDocument()
@@ -273,7 +276,7 @@ describe('SettingsPage', () => {
     })
 
     it('changes the local Ollama model from the installed-model list', async () => {
-      renderTab('ai')
+      await renderTab('ai')
       await waitFor(() => expect(screen.getByRole('option', { name: 'gemma3:4b' })).toBeInTheDocument())
 
       fireEvent.change(screen.getByLabelText('Model'), { target: { value: 'gemma3:4b' } })
@@ -282,7 +285,7 @@ describe('SettingsPage', () => {
     })
 
     it('selects a cloud provider via ai_provider (no longer the legacy use_claude flag)', async () => {
-      renderTab('ai')
+      await renderTab('ai')
       await waitFor(() => expect(screen.getByTestId('provider-row-claude')).toHaveTextContent('Key configured'))
 
       fireEvent.change(screen.getByLabelText('AI provider'), { target: { value: 'claude' } })
@@ -292,7 +295,7 @@ describe('SettingsPage', () => {
 
     it('sends you to the key screen when the chosen provider has no key', async () => {
       routes(undefined, { ...mockSettings, ai_provider: 'openai', allow_cloud: true })
-      renderTab('ai')
+      await renderTab('ai')
       const hint = await screen.findByTestId('missing-key-hint')
       expect(hint).toHaveTextContent('OpenAI has no API key yet')
       fireEvent.click(within(hint).getByRole('button', { name: 'Add a key' }))
@@ -301,7 +304,7 @@ describe('SettingsPage', () => {
 
     it('handles testing the Ollama connection', async () => {
       routes(url => (url === '/health/ollama' ? { status: 'ok' } : undefined))
-      renderTab('ai')
+      await renderTab('ai')
       fireEvent.click(screen.getByRole('button', { name: /test ollama connection/i }))
       await waitFor(() => expect(screen.getByText('Connected')).toBeInTheDocument())
       expect(mockApiFetch).toHaveBeenCalledWith('/health/ollama')
@@ -309,7 +312,7 @@ describe('SettingsPage', () => {
 
     it('handles Ollama connection failure', async () => {
       routes(url => { if (url === '/health/ollama') throw new Error('Unreachable') })
-      renderTab('ai')
+      await renderTab('ai')
       fireEvent.click(screen.getByRole('button', { name: /test ollama connection/i }))
       await waitFor(() => expect(screen.getByText('Ollama unreachable')).toBeInTheDocument())
     })
@@ -322,20 +325,20 @@ describe('SettingsPage', () => {
       mockFetchApiKeys.mockResolvedValue(['claude', 'gemini', 'openai', 'groq', 'youtube'].map(provider => ({
         provider, label: provider, configured: false, source: null, hasStored: false, undecryptable: false,
       })))
-      renderTab('privacy')
+      await renderTab('privacy')
       await waitFor(() => expect(screen.getByTestId('api-key-status-openai')).toHaveTextContent('Not set'))
       expect(screen.getByTestId('api-keys-panel')).toBeInTheDocument()
     })
 
     it('lists what always stays on this machine', async () => {
-      renderTab('privacy')
+      await renderTab('privacy')
       expect(screen.getByText('Always stays on this machine')).toBeInTheDocument()
       expect(screen.getByText(/Passwords and the vault/)).toBeInTheDocument()
       expect(screen.getByText(/tagged private, no-cloud or local-only/)).toBeInTheDocument()
     })
 
     it('toggles Strict Local Mode and saves it as a real boolean', async () => {
-      renderTab('privacy')
+      await renderTab('privacy')
       const toggle = screen.getByRole('switch', { name: 'Strict Local Mode' })
       expect(toggle).not.toBeChecked()
       fireEvent.click(toggle)
@@ -345,7 +348,7 @@ describe('SettingsPage', () => {
 
     it('reads an older string-valued Strict Local Mode', async () => {
       routes(undefined, { ...mockSettings, strict_local_mode: 'true' })
-      renderTab('privacy')
+      await renderTab('privacy')
       await waitFor(() => expect(screen.getByRole('switch', { name: 'Strict Local Mode' })).toBeChecked())
     })
   })
@@ -354,7 +357,7 @@ describe('SettingsPage', () => {
 
   describe('Library section', () => {
     it('lists categories with their item counts', async () => {
-      renderTab('library')
+      await renderTab('library')
       await waitFor(() => {
         expect(screen.getByText('Work')).toBeInTheDocument()
         expect(screen.getByText('5 items')).toBeInTheDocument()
@@ -367,7 +370,7 @@ describe('SettingsPage', () => {
 
     it('allows category deletion', async () => {
       routes((url, init) => (url === '/categories/cat1' && init?.method === 'DELETE' ? { success: true } : undefined))
-      renderTab('library')
+      await renderTab('library')
       await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument())
 
       fireEvent.click(screen.getByRole('button', { name: 'Delete Work' }))
@@ -378,7 +381,7 @@ describe('SettingsPage', () => {
 
     it('does not delete when the confirmation is declined', async () => {
       window.confirm = vi.fn().mockReturnValue(false)
-      renderTab('library')
+      await renderTab('library')
       await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument())
       fireEvent.click(screen.getByRole('button', { name: 'Delete Work' }))
       expect(mockApiFetch).not.toHaveBeenCalledWith('/categories/cat1', { method: 'DELETE' })
@@ -386,7 +389,7 @@ describe('SettingsPage', () => {
 
     it('allows category renaming', async () => {
       routes((url, init) => (url === '/categories/cat1' && init?.method === 'PUT' ? { success: true } : undefined))
-      renderTab('library')
+      await renderTab('library')
       await waitFor(() => expect(screen.getByText('Work')).toBeInTheDocument())
 
       fireEvent.click(screen.getByRole('button', { name: 'Rename Work' }))
@@ -400,7 +403,7 @@ describe('SettingsPage', () => {
 
     it('handles exporting workspace data as JSON', async () => {
       routes(url => (url === '/items' ? [{ id: '1', title: 'Exported Item' }] : undefined))
-      renderTab('library')
+      await renderTab('library')
 
       fireEvent.click(screen.getByRole('button', { name: /export json/i }))
 
@@ -415,7 +418,7 @@ describe('SettingsPage', () => {
         blob: async () => new Blob(['fake zip content'], { type: 'application/zip' }),
       })
       window.fetch = mockFetch
-      renderTab('library')
+      await renderTab('library')
 
       fireEvent.click(screen.getByRole('button', { name: /export obsidian/i }))
 
@@ -425,7 +428,7 @@ describe('SettingsPage', () => {
 
     it('shows an error when the Obsidian export fails', async () => {
       window.fetch = vi.fn().mockResolvedValue({ ok: false })
-      renderTab('library')
+      await renderTab('library')
       fireEvent.click(screen.getByRole('button', { name: /export obsidian/i }))
       await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Obsidian export failed'))
     })
@@ -436,7 +439,7 @@ describe('SettingsPage', () => {
         if (url === '/items/enrichment') return { pending: 3, total: 10 }
         return undefined
       })
-      renderTab('library')
+      await renderTab('library')
 
       const enrichBtn = await screen.findByRole('button', { name: /re-run enrichment/i })
       fireEvent.click(enrichBtn)
@@ -446,7 +449,7 @@ describe('SettingsPage', () => {
 
     it('reprocesses unreviewed items in bulk', async () => {
       mockReprocessBulk.mockResolvedValue({ queued: 4 })
-      renderTab('library')
+      await renderTab('library')
 
       fireEvent.click(await screen.findByRole('button', { name: /re-process/i }))
 
@@ -456,7 +459,7 @@ describe('SettingsPage', () => {
 
     it('shows how to install MarkItDown when it is missing', async () => {
       routes(url => (url === '/ingest/markitdown/health' ? { installed: false } : undefined))
-      renderTab('library')
+      await renderTab('library')
       await waitFor(() => expect(screen.getByText('Not installed')).toBeInTheDocument())
       expect(screen.getByText(/pip install 'markitdown\[all\]'/)).toBeInTheDocument()
     })
@@ -466,14 +469,14 @@ describe('SettingsPage', () => {
 
   describe('Vault section', () => {
     it('updates the auto-lock timeout', async () => {
-      renderTab('vault')
+      await renderTab('vault')
       const timeoutSelect = await screen.findByDisplayValue('15 Minutes')
       fireEvent.change(timeoutSelect, { target: { value: '60' } })
       expect(mockApiFetch).toHaveBeenCalledWith('/settings', { method: 'PUT', body: JSON.stringify({ auto_lock_timeout: '60' }) })
     })
 
     it('links to the vault for a password change', async () => {
-      renderTab('vault')
+      await renderTab('vault')
       expect(screen.getByRole('link', { name: /go to vault/i })).toHaveAttribute('href', '/vault')
     })
 
@@ -491,7 +494,7 @@ describe('SettingsPage', () => {
         }
         return undefined
       })
-      renderTab('vault')
+      await renderTab('vault')
 
       fireEvent.click(screen.getByRole('button', { name: /reset vault/i }))
       expect(screen.getByText('Reset Vault?')).toBeInTheDocument()
@@ -515,7 +518,7 @@ describe('SettingsPage', () => {
       mockDeriveKey.mockResolvedValue({})
       mockDecryptVaultItem.mockRejectedValue(new Error('bad decrypt'))
       routes(url => (url === '/vault/status' ? { hasSetup: true, salt: 's', verifier: 'v', verifierIv: 'i' } : undefined))
-      renderTab('vault')
+      await renderTab('vault')
 
       fireEvent.click(screen.getByRole('button', { name: /reset vault/i }))
       fireEvent.change(screen.getByPlaceholderText('Vault password'), { target: { value: 'wrong' } })
@@ -526,7 +529,7 @@ describe('SettingsPage', () => {
     })
 
     it('cancels the reset dialog', async () => {
-      renderTab('vault')
+      await renderTab('vault')
       fireEvent.click(screen.getByRole('button', { name: /reset vault/i }))
       fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
       expect(screen.queryByText('Reset Vault?')).toBeNull()
@@ -538,7 +541,7 @@ describe('SettingsPage', () => {
   describe('Capture section', () => {
     it('supports generating and copying bookmarklet key', async () => {
       routes((url, init) => (url === '/settings/bookmarklet-key' && init?.method === 'POST' ? { key: 'new-generated-key-999' } : undefined))
-      renderTab('capture')
+      await renderTab('capture')
 
       // The saved key arrives with the settings.
       const copyBtn = await screen.findByRole('button', { name: /copy bookmarklet link/i })
@@ -556,12 +559,12 @@ describe('SettingsPage', () => {
     it('offers to generate a bookmarklet when there is no key yet', async () => {
       const { bookmarklet_key: _omit, ...withoutKey } = mockSettings
       routes(undefined, withoutKey)
-      renderTab('capture')
+      await renderTab('capture')
       expect(await screen.findByRole('button', { name: /generate bookmarklet/i })).toBeInTheDocument()
     })
 
     it('includes the YouTube backfill', async () => {
-      renderTab('capture')
+      await renderTab('capture')
       expect(screen.getByText('YouTube backfill')).toBeInTheDocument()
     })
   })

@@ -1,248 +1,154 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
-  Home,
-  Folder,
-  Shield,
-  Tag as TagIcon,
-  ChevronRight,
-  ChevronDown,
-  Settings as SettingsIcon,
-  Trash2,
-  Table,
-  MapPin,
-  Clapperboard,
-  MessageSquare,
-  Newspaper,
-  FolderSync,
-} from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { fetchCategories, fetchTags } from '../../lib/api';
-import type { Category, Tag } from '../../../../shared/types';
+  Home, Shield, Tag as TagIcon, ChevronRight, ChevronDown, Settings as SettingsIcon,
+  Trash2, Table, MapPin, Clapperboard, MessageSquare, Newspaper, FolderSync,
+  Network, Inbox, Sparkles, Plus, Search, X, MoreHorizontal,
+} from 'lucide-react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { fetchCategories, fetchTags } from '../../lib/api'
+import { BrandLockup } from '../Brand'
+import type { Category, Tag } from '../../../../shared/types'
 
-interface SidebarProps {
-  activeSection: 'dashboard' | 'categories' | 'vault' | 'tags' | 'settings' | 'trash' | 'table' | 'places' | 'media' | 'ask' | 'category-review' | 'digest';
-}
+type Section = 'dashboard' | 'categories' | 'vault' | 'tags' | 'settings' | 'trash' | 'table' | 'places' | 'media' | 'ask' | 'category-review' | 'digest' | 'graph' | 'pending' | 'enriched'
+type LinkItem = { label: string; to: string; icon: ReactNode; section: Section; end?: boolean }
+
+const groups: Array<{ label: string; links: LinkItem[] }> = [
+  { label: 'Home', links: [{ label: 'Dashboard', to: '/', icon: <Home size={17} />, section: 'dashboard', end: true }] },
+  { label: 'Discover', links: [
+    { label: 'Ask Knowledge', to: '/ask', icon: <MessageSquare size={17} />, section: 'ask' },
+    { label: 'Knowledge Graph', to: '/graph', icon: <Network size={17} />, section: 'graph' },
+    { label: 'Weekly Digest', to: '/digest', icon: <Newspaper size={17} />, section: 'digest' },
+  ] },
+  { label: 'Library', links: [
+    { label: 'Table View', to: '/items/table', icon: <Table size={17} />, section: 'table' },
+    { label: 'Places', to: '/places', icon: <MapPin size={17} />, section: 'places' },
+    { label: 'Media & Books', to: '/media', icon: <Clapperboard size={17} />, section: 'media' },
+    { label: 'Vault', to: '/vault', icon: <Shield size={17} />, section: 'vault' },
+  ] },
+  { label: 'Review', links: [
+    { label: 'Pending Items', to: '/items/pending', icon: <Inbox size={17} />, section: 'pending' },
+    { label: 'Enriched Items', to: '/items/enriched', icon: <Sparkles size={17} />, section: 'enriched' },
+    { label: 'Category Review', to: '/categories/review', icon: <FolderSync size={17} />, section: 'category-review' },
+    { label: 'Trash', to: '/trash', icon: <Trash2 size={17} />, section: 'trash' },
+  ] },
+]
+
+interface SidebarProps { activeSection: Section }
 
 export default function Sidebar({ activeSection }: SidebarProps) {
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
-
-  const navigate = useNavigate();
+  const [categories, setCategories] = useState<Category[]>([])
+  const [tags, setTags] = useState<Tag[]>([])
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({})
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const mobileDialog = useRef<HTMLDivElement>(null)
+  const location = useLocation()
 
   const refreshCategoriesAndTags = () => {
-    fetchCategories().then(setCategories).catch(console.error);
-    fetchTags().then(setTags).catch(console.error);
-  };
+    fetchCategories().then(setCategories).catch(() => setCategories([]))
+    fetchTags().then(setTags).catch(() => setTags([]))
+  }
 
   useEffect(() => {
-    refreshCategoriesAndTags();
+    refreshCategoriesAndTags()
+    window.addEventListener('memex:categories-changed', refreshCategoriesAndTags)
+    return () => window.removeEventListener('memex:categories-changed', refreshCategoriesAndTags)
+  }, [])
 
-    // Re-fetch when the AI enrichment hook signals new items were classified
-    window.addEventListener('memex:categories-changed', refreshCategoriesAndTags);
-    return () => {
-      window.removeEventListener('memex:categories-changed', refreshCategoriesAndTags);
-    };
-  }, []);
+  useEffect(() => {
+    if (!mobileOpen) return
+    const previous = document.activeElement as HTMLElement | null
+    mobileDialog.current?.querySelector<HTMLElement>('a, button')?.focus()
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') { event.preventDefault(); setMobileOpen(false) }
+      if (event.key !== 'Tab') return
+      const items = mobileDialog.current?.querySelectorAll<HTMLElement>('a[href], button:not(:disabled)')
+      if (!items?.length) return
+      const first = items[0], last = items[items.length - 1]
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => { window.removeEventListener('keydown', onKeyDown); previous?.focus() }
+  }, [mobileOpen])
 
-  const toggleCat = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setExpandedCats(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+  useEffect(() => { setMobileOpen(false) }, [location.pathname])
+
+  const toggleCategory = (id: string) => setExpandedCats(previous => ({ ...previous, [id]: !previous[id] }))
 
   return (
-    <aside className="w-64 border-r border-white/5 bg-surface/50 hidden md:flex flex-col sticky top-0 h-screen overflow-hidden">
-      {/* Brand */}
-      <div className="p-6 flex items-center gap-3">
-         <div className="w-8 h-8 bg-accent rounded-lg flex items-center justify-center text-bg font-bold shadow-lg shadow-accent/20">M</div>
-         <h1 className="font-display text-2xl text-ink">Memex</h1>
-      </div>
-      
-      {/* Main Nav */}
-      <nav className="px-3 flex flex-col gap-1">
-        <NavItem
-          icon={<Home size={18} />}
-          label="Dashboard"
-          active={activeSection === 'dashboard'}
-          onClick={() => navigate('/')}
-        />
-        <NavItem
-          icon={<Newspaper size={18} />}
-          label="Weekly Digest"
-          active={activeSection === 'digest'}
-          onClick={() => navigate('/digest')}
-        />
-        <NavItem 
-          icon={<MessageSquare size={18} />} 
-          label="Ask Knowledge" 
-          active={activeSection === 'ask'} 
-          onClick={() => navigate('/ask')}
-        />
-        <NavItem 
-          icon={<Table size={18} />} 
-          label="Table View" 
-          active={activeSection === 'table'} 
-          onClick={() => navigate('/items/table')}
-        />
-        <NavItem 
-          icon={<MapPin size={18} />} 
-          label="Places" 
-          active={activeSection === 'places'} 
-          onClick={() => navigate('/places')}
-        />
-        <NavItem 
-          icon={<Clapperboard size={18} />} 
-          label="Media & Books" 
-          active={activeSection === 'media'} 
-          onClick={() => navigate('/media')}
-        />
-        <NavItem 
-          icon={<Shield size={18} />} 
-          label="Vault" 
-          active={activeSection === 'vault'} 
-          onClick={() => navigate('/vault')}
-        />
-        <NavItem 
-          icon={<Trash2 size={18} />} 
-          label="Trash" 
-          active={activeSection === 'trash'} 
-          onClick={() => navigate('/trash')}
-        />
-        <NavItem
-          icon={<FolderSync size={18} />}
-          label="Category Review"
-          active={activeSection === 'category-review'}
-          onClick={() => navigate('/categories/review')}
-        />
-        <NavItem
-          icon={<SettingsIcon size={18} />}
-          label="Settings"
-          active={activeSection === 'settings'}
-          onClick={() => navigate('/settings')}
-        />
+    <>
+      <aside aria-label="Primary navigation" className="hidden md:flex w-64 shrink-0 border-r border-white/5 bg-surface/50 sticky top-0 h-screen flex-col overflow-hidden">
+        <div className="px-5 py-5 border-b border-white/5"><BrandLockup size={30} wordmarkClassName="text-xl" /></div>
+        <div className="flex-1 overflow-y-auto px-3 py-3 custom-scrollbar">
+          <button type="button" onClick={() => window.dispatchEvent(new Event('memex:open-capture'))} className="mb-4 flex min-h-10 w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 text-sm font-semibold text-bg transition-colors hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+            <Plus size={16} aria-hidden="true" /> Capture something
+          </button>
+          <NavigationGroups activeSection={activeSection} categories={categories} tags={tags} expandedCats={expandedCats} toggleCategory={toggleCategory} currentPath={location.pathname} />
+        </div>
+        <div className="border-t border-white/5 p-3">
+          <AppLink item={{ label: 'Settings', to: '/settings', icon: <SettingsIcon size={17} />, section: 'settings' }} activeSection={activeSection} currentPath={location.pathname} />
+        </div>
+      </aside>
+
+      <nav aria-label="Mobile navigation" className="fixed inset-x-0 bottom-0 z-30 flex md:hidden border-t border-white/10 bg-surface/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl">
+        <MobileLink label="Home" to="/" icon={<Home size={19} />} active={location.pathname === '/'} />
+        <button type="button" onClick={() => window.dispatchEvent(new Event('memex:open-search'))} aria-label="Search" className="flex min-h-12 flex-1 flex-col items-center justify-center gap-1 rounded-lg text-ink-muted hover:bg-white/5 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Search size={19} /><span className="text-[10px]">Search</span></button>
+        <button type="button" onClick={() => window.dispatchEvent(new Event('memex:open-capture'))} aria-label="Capture something" className="-mt-5 mx-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-accent text-bg shadow-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Plus size={21} /></button>
+        <MobileLink label="Ask" to="/ask" icon={<MessageSquare size={19} />} active={location.pathname === '/ask'} />
+        <button type="button" onClick={() => setMobileOpen(true)} aria-label="Open navigation menu" aria-expanded={mobileOpen} className="flex min-h-12 flex-1 flex-col items-center justify-center gap-1 rounded-lg text-ink-muted hover:bg-white/5 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><MoreHorizontal size={19} /><span className="text-[10px]">More</span></button>
       </nav>
 
-      <div className="mt-8 flex-1 overflow-y-auto px-3 pb-8 custom-scrollbar">
-        {/* Categories Section */}
-        <div className="mb-8">
-          <div className="flex items-center justify-between px-3 mb-2">
-            <h3 className="text-[10px] text-ink-muted uppercase tracking-widest font-bold flex items-center gap-2">
-              <Folder size={12} />
-              Categories
-            </h3>
-          </div>
-          <div className="space-y-0.5">
-            {categories.map(cat => (
-              <CategoryItem 
-                key={cat.id} 
-                cat={cat} 
-                level={0} 
-                expanded={expandedCats} 
-                onToggle={toggleCat}
-                onSelect={(id) => navigate(`/category/${id}`)}
-              />
-            ))}
-          </div>
+      {mobileOpen && <div className="fixed inset-0 z-50 md:hidden">
+        <button type="button" aria-label="Close navigation menu" className="absolute inset-0 bg-bg/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
+        <div ref={mobileDialog} role="dialog" aria-modal="true" aria-label="Navigation menu" className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-2xl border border-white/10 bg-surface p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-raised">
+          <div className="mb-4 flex items-center justify-between"><BrandLockup size={28} wordmarkClassName="text-lg" /><button type="button" onClick={() => setMobileOpen(false)} aria-label="Close navigation menu" className="rounded-lg p-2 text-ink-muted hover:bg-white/5 hover:text-ink"><X size={18} /></button></div>
+          <NavigationGroups activeSection={activeSection} categories={categories} tags={tags} expandedCats={expandedCats} toggleCategory={toggleCategory} currentPath={location.pathname} onNavigate={() => setMobileOpen(false)} />
+          <div className="mt-3 border-t border-white/5 pt-3"><AppLink item={{ label: 'Settings', to: '/settings', icon: <SettingsIcon size={17} />, section: 'settings' }} activeSection={activeSection} currentPath={location.pathname} onNavigate={() => setMobileOpen(false)} /></div>
         </div>
-
-        {/* Tags Section */}
-        <div>
-          <div className="flex items-center justify-between px-3 mb-4">
-            <h3 className="text-[10px] text-ink-muted uppercase tracking-widest font-bold flex items-center gap-2">
-              <TagIcon size={12} />
-              Popular Tags
-            </h3>
-          </div>
-          <div className="flex flex-wrap gap-2 px-3">
-            {tags.slice(0, 15).map(tag => (
-              <button
-                key={tag.name}
-                className="text-[10px] bg-white/5 hover:bg-white/10 text-ink-muted hover:text-accent border border-white/5 rounded-full px-2.5 py-1 transition-all"
-                onClick={() => navigate(`/search?tag=${tag.name}`)}
-              >
-                {tag.name}
-                <span className="ml-1 opacity-40">({tag.itemCount})</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-    </aside>
-  );
+      </div>}
+    </>
+  )
 }
 
-function NavItem({ icon, label, active = false, onClick }: { icon: React.ReactNode, label: string, active?: boolean, onClick: () => void }) {
-  return (
-    <div 
-      onClick={onClick}
-      className={`flex items-center justify-between px-4 py-2.5 rounded-xl font-medium cursor-pointer transition-all group ${
-        active ? 'bg-accent/10 text-accent' : 'text-ink-muted hover:text-ink hover:bg-white/5'
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        {icon}
-        <span className="text-sm">{label}</span>
-      </div>
-      {active && <div className="w-1 h-1 bg-accent rounded-full" />}
-    </div>
-  );
-}
-
-function CategoryItem({ cat, level, expanded, onToggle, onSelect }: { 
-  cat: Category, 
-  level: number, 
-  expanded: Record<string, boolean>,
-  onToggle: (id: string, e: React.MouseEvent) => void,
-  onSelect: (id: string) => void
+function NavigationGroups({ activeSection, categories, tags, expandedCats, toggleCategory, currentPath, onNavigate }: {
+  activeSection: Section; categories: Category[]; tags: Tag[]; expandedCats: Record<string, boolean>; toggleCategory: (id: string) => void; currentPath: string; onNavigate?: () => void
 }) {
-  const isExpanded = expanded[cat.id];
-  const hasChildren = cat.children && cat.children.length > 0;
-
-  return (
-    <div className="flex flex-col">
-      <div 
-        onClick={() => onSelect(cat.id)}
-        className="flex items-center justify-between px-3 py-1.5 rounded-lg hover:bg-white/5 cursor-pointer group transition-colors"
-        style={{ paddingLeft: `${(level * 12) + 12}px` }}
-      >
-        <div className="flex items-center gap-2 min-w-0">
-          {hasChildren ? (
-            <button 
-              onClick={(e) => onToggle(cat.id, e)}
-              className="p-0.5 hover:bg-white/10 rounded transition-colors text-ink-muted group-hover:text-ink"
-            >
-              {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
-            </button>
-          ) : (
-            <div className="w-4 h-4 flex items-center justify-center shrink-0">
-               <div className="w-1 h-1 bg-ink-muted/30 rounded-full" />
-            </div>
-          )}
-          <span className="text-sm text-ink-muted group-hover:text-ink truncate transition-colors">
-            {cat.name}
-          </span>
-        </div>
-        <span className="text-[10px] text-ink-muted/40 font-mono group-hover:text-ink-muted transition-colors">
-          {cat.itemCount}
-        </span>
-      </div>
-      
-      {hasChildren && isExpanded && (
-        <div className="flex flex-col">
-          {cat.children!.map(child => (
-            <CategoryItem 
-              key={child.id} 
-              cat={child} 
-              level={level + 1} 
-              expanded={expanded} 
-              onToggle={onToggle}
-              onSelect={onSelect}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+  return <>
+    {groups.map(group => <section key={group.label} aria-label={group.label} className="mb-4">
+      <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint">{group.label}</h2>
+      <div className="grid gap-0.5">{group.links.map(item => <AppLink key={item.to} item={item} activeSection={activeSection} currentPath={currentPath} onNavigate={onNavigate} />)}</div>
+    </section>)}
+    <section aria-labelledby="sidebar-categories" className="mb-4">
+      <h2 id="sidebar-categories" className="flex items-center gap-2 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint"><span aria-hidden="true"><FolderSync size={12} /></span>Categories</h2>
+      {categories.length ? <div className="grid gap-0.5">{categories.map(category => <CategoryRow key={category.id} category={category} expanded={expandedCats} toggle={toggleCategory} currentPath={currentPath} onNavigate={onNavigate} />)}</div> : <p className="px-3 py-1 text-xs text-ink-faint">No categories yet</p>}
+    </section>
+    <section aria-labelledby="sidebar-tags">
+      <h2 id="sidebar-tags" className="flex items-center gap-2 px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint"><TagIcon size={12} aria-hidden="true" />Popular tags</h2>
+      <div className="flex flex-wrap gap-1.5 px-2">{tags.slice(0, 15).map(tag => <button key={tag.name} type="button" onClick={() => { window.dispatchEvent(new CustomEvent('memex:open-search', { detail: { tag: tag.name } })); onNavigate?.() }} aria-label={`Search items tagged ${tag.name}, ${tag.itemCount} items`} className="max-w-full truncate rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-ink-muted hover:border-accent/30 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{tag.name}<span className="ml-1 opacity-60">{tag.itemCount}</span></button>)}</div>
+    </section>
+  </>
 }
 
+function AppLink({ item, activeSection, currentPath, onNavigate }: { item: LinkItem; activeSection: Section; currentPath: string; onNavigate?: () => void }) {
+  const matchesCurrentRoute = activeSection === item.section && (item.to === '/' ? currentPath === '/' : currentPath === item.to || currentPath.startsWith(`${item.to}/`))
+  return <NavLink end={item.end} onClick={onNavigate} to={item.to} className={({ isActive }) => `flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${isActive || matchesCurrentRoute ? 'bg-accent/10 text-accent' : 'text-ink-muted hover:bg-white/5 hover:text-ink'}`}>
+    <span aria-hidden="true" className="shrink-0">{item.icon}</span><span className="truncate">{item.label}</span>
+  </NavLink>
+}
+
+function MobileLink({ label, to, icon, active }: { label: string; to: string; icon: ReactNode; active: boolean }) {
+  return <NavLink to={to} end={to === '/'} aria-current={active ? 'page' : undefined} className={`flex min-h-12 flex-1 flex-col items-center justify-center gap-1 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${active ? 'text-accent' : 'text-ink-muted hover:bg-white/5 hover:text-ink'}`}><span aria-hidden="true">{icon}</span><span className="text-[10px]">{label}</span></NavLink>
+}
+
+function CategoryRow({ category, expanded, toggle, currentPath, onNavigate }: { category: Category; expanded: Record<string, boolean>; toggle: (id: string) => void; currentPath: string; onNavigate?: () => void }) {
+  const children = category.children ?? []
+  const isExpanded = !!expanded[category.id]
+  const isCurrent = currentPath === `/category/${category.id}`
+  return <div>
+    <div className="flex items-center gap-1">
+      <NavLink onClick={onNavigate} to={`/category/${category.id}`} aria-current={isCurrent ? 'page' : undefined} className={`flex min-h-9 min-w-0 flex-1 items-center justify-between gap-2 rounded-lg px-3 text-sm ${isCurrent ? 'bg-accent/10 text-accent' : 'text-ink-muted hover:bg-white/5 hover:text-ink'}`}><span className="truncate">{category.name}</span><span className="shrink-0 text-[10px] font-mono opacity-60">{category.itemCount}</span></NavLink>
+      {children.length > 0 && <button type="button" onClick={() => toggle(category.id)} aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${category.name}`} aria-expanded={isExpanded} className="rounded-md p-2 text-ink-muted hover:bg-white/5 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</button>}
+    </div>
+    {children.length > 0 && isExpanded && <div className="ml-3 border-l border-white/10 pl-2">{children.map(child => <CategoryRow key={child.id} category={child} expanded={expanded} toggle={toggle} currentPath={currentPath} onNavigate={onNavigate} />)}</div>}
+  </div>
+}

@@ -47,6 +47,8 @@ export default function TableView() {
   const [items, setItems] = useState<Item[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   const [bulkReviewing, setBulkReviewing] = useState(false)
   const [migratingId, setMigratingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
@@ -72,10 +74,12 @@ export default function TableView() {
 
   useEffect(() => {
     setLoading(true)
+    setLoadError(false)
     setSelected(new Set())
     fetchItems({
       type: type === 'all' ? undefined : type,
       unreviewed: status === 'unreviewed' ? true : undefined,
+      reviewed: status === 'reviewed' ? true : undefined,
       pendingEnrichment: status === 'pendingEnrichment' ? true : undefined,
       enriched: status === 'enriched' ? true : undefined,
       hasReminder: hasReminder || undefined,
@@ -90,10 +94,13 @@ export default function TableView() {
       })
       .catch(err => {
         console.error(err)
+        setLoadError(true)
+        setItems([])
+        setTotal(0)
         toast.error('Failed to load items')
       })
       .finally(() => setLoading(false))
-  }, [type, status, q, hasReminder, priority, offset])
+  }, [type, status, q, hasReminder, priority, offset, reloadKey])
 
   const handleUpdateFilter = (key: string, value: string) => {
     const newParams = new URLSearchParams(searchParams)
@@ -261,15 +268,15 @@ export default function TableView() {
 
   return (
     <div className="min-h-screen bg-bg flex text-ink">
-      <Sidebar activeSection="dashboard" />
-      <main className="flex-1 flex flex-col min-w-0">
+      <Sidebar activeSection="table" />
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0">
         <AppHeader
           left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg">All Items Table</h1>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} items</span>}</div>}
           actions={<div className="flex items-center gap-3"><button onClick={handleExportCsv} className="text-xs flex items-center gap-2 bg-white/5 text-ink-muted hover:text-ink border border-white/10 px-3 py-1.5 rounded-lg transition-all"><Download size={14} />Export CSV</button><button onClick={handleBulkReview} disabled={bulkReviewing} className="text-xs flex items-center gap-2 bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50">{bulkReviewing ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}Mark All Reviewed</button></div>}
         />
         <AppHeader.Spacer />
 
-        <div className="p-8 flex-1 flex flex-col gap-6 overflow-hidden">
+        <div className="p-4 sm:p-6 lg:p-8 flex-1 flex flex-col gap-6 overflow-hidden">
           {/* Filters Bar */}
           <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/5">
@@ -279,6 +286,7 @@ export default function TableView() {
                 <Sparkles size={16} className="text-purple-400 shrink-0" />
                 <input
                   type="text"
+                  aria-label="Describe a filter in natural language"
                   autoFocus
                   placeholder={'e.g. "Thai restaurants I haven\'t visited" or "movies I want to watch"'}
                   value={nlQuery}
@@ -303,6 +311,7 @@ export default function TableView() {
                 <Search size={16} className="text-ink-muted" />
                 <input
                   type="text"
+                  aria-label="Search items by title or content"
                   placeholder="Search title or content..."
                   value={q}
                   onChange={(e) => handleUpdateFilter('q', e.target.value)}
@@ -316,6 +325,7 @@ export default function TableView() {
             <div className="flex items-center gap-3">
               <Filter size={16} className="text-ink-muted" />
               <select 
+                aria-label="Item type filter"
                 value={type} 
                 onChange={(e) => handleUpdateFilter('type', e.target.value)}
                 className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-accent/50 transition-colors"
@@ -324,6 +334,7 @@ export default function TableView() {
               </select>
 
               <select 
+                aria-label="Review status filter"
                 value={status} 
                 onChange={(e) => handleUpdateFilter('status', e.target.value)}
                 className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-xs outline-none focus:border-accent/50 transition-colors"
@@ -433,6 +444,7 @@ export default function TableView() {
           <div className="flex-1 bg-white/[0.02] border border-white/5 rounded-xl overflow-hidden flex flex-col">
             <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
               <table className="w-full text-left border-collapse table-fixed">
+                <caption className="sr-only">Saved items with type, priority, categories, tags, score, summary, and available actions</caption>
                 <thead className="sticky top-0 bg-bg/95 backdrop-blur-sm shadow-sm z-10">
                   <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-ink-muted font-semibold">
                     <th className="pl-6 pr-2 py-4 w-10">
@@ -470,6 +482,8 @@ export default function TableView() {
                         <td className="px-6 py-4"><div className="h-8 bg-white/5 rounded w-16 mx-auto" /></td>
                       </tr>
                     ))
+                  ) : loadError ? (
+                    <tr><td colSpan={9} role="alert" className="py-16 text-center text-sm text-ink-muted"><p>Couldn’t load items. Your filters are still selected.</p><button type="button" onClick={() => setReloadKey(value => value + 1)} className="mt-3 rounded-lg px-4 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></td></tr>
                   ) : items.length === 0 ? (
                     <tr>
                       <td colSpan={9} className="py-24 text-center text-ink-muted text-sm">

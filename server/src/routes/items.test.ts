@@ -279,6 +279,14 @@ describe('priority', () => {
     }
     expect((await request(app).get('/api/items?priority=bogus').set('Authorization', AUTH)).status).toBe(400)
   })
+
+  it('GET filters to reviewed items when requested', async () => {
+    const client = mockClient([{ rows: [{ total: '1' }] }, { rows: [ITEM_ROW] }])
+    const res = await request(app).get('/api/items?reviewed=true').set('Authorization', AUTH)
+    expect(res.status).toBe(200)
+    const sql = client.query.mock.calls.map(c => String(c[0])).join('\n')
+    expect(sql).toContain('i.reviewed = TRUE')
+  })
 })
 
 // ── PUT /api/items/:id ────────────────────────────────────────────────────────

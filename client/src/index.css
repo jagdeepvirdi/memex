@@ -13,6 +13,35 @@
 :root {
   color-scheme: dark;
 
+  /* Foundation tokens: components should use semantic roles rather than raw colors. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --type-xs: 12px;
+  --type-sm: 13px;
+  --type-md: 14.5px;
+  --type-lg: 16px;
+  --type-xl: 20px;
+  --type-2xl: 28px;
+  --type-display: clamp(30px, 4vw, 40px);
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.65;
+  --radius-sm: 6px;
+  --radius-control: 8px;
+  --radius-card: 12px;
+  --radius-panel: 16px;
+  --radius-pill: 999px;
+  --duration-fast: 120ms;
+  --duration-normal: 180ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
   --c-bg: 11 14 20;
   --c-bg-2: 15 19 27;
   --c-surface: 20 25 34;
@@ -26,7 +55,7 @@
   --c-ink: 233 238 246;
   --c-ink-soft: 197 206 219;
   --c-ink-muted: 136 149 167;
-  --c-ink-faint: 92 104 121;
+  --c-ink-faint: 120 132 148;
   --c-ink-primary: 245 247 250;
   --c-ink-dimmed: 156 168 184;
 
@@ -44,6 +73,9 @@
   --c-overlay: 255 255 255;
 
   --shadow-card: 0 1px 3px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.2);
+  --shadow-raised: 0 12px 36px rgb(0 0 0 / 0.3);
+  --border-subtle: rgb(var(--c-overlay) / 0.08);
+  --border-strong: rgb(var(--c-overlay) / 0.16);
   --shadow-glow: 0 0 24px rgb(124 131 255 / 0.2);
 
   /* Standard palette shades the app uses (Tailwind's own values in dark) */
@@ -77,7 +109,7 @@
   --c-ink: 18 24 38;
   --c-ink-soft: 47 58 77;
   --c-ink-muted: 91 104 124;
-  --c-ink-faint: 138 150 168;
+  --c-ink-faint: 100 112 130;
   --c-ink-primary: 18 24 38;
   --c-ink-dimmed: 91 104 124;
 
@@ -95,6 +127,9 @@
   --c-overlay: 18 24 38;
 
   --shadow-card: 0 1px 2px rgb(18 24 38 / 0.06), 0 6px 20px rgb(18 24 38 / 0.07);
+  --shadow-raised: 0 16px 40px rgb(18 24 38 / 0.14);
+  --border-subtle: rgb(var(--c-overlay) / 0.09);
+  --border-strong: rgb(var(--c-overlay) / 0.16);
   --shadow-glow: 0 0 24px rgb(85 88 232 / 0.16);
 
   /* Deeper shades so coloured text and tints keep their contrast on light surfaces */
@@ -128,6 +163,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
@@ -158,11 +194,7 @@
   ::selection { background: rgb(var(--c-accent) / 0.3); color: rgb(var(--c-ink)); }
 
   /* Focus — accent by default */
-  button:focus-visible,
-  a:focus-visible,
-  input:focus-visible,
-  textarea:focus-visible,
-  select:focus-visible {
+  :where(button, a, input, textarea, select, summary, [tabindex]):focus-visible {
     outline: 2px solid rgb(var(--c-accent));
     outline-offset: 2px;
   }
@@ -177,9 +209,24 @@
   }
 
   button { font-family: inherit; cursor: pointer; }
+  button, a { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
 }
 
 @layer utilities {
+  @supports (height: 100dvh) {
+    html, body, #root, .min-h-screen { min-height: 100dvh; }
+    .h-screen { height: 100dvh; }
+  }
+
   /* Typography helpers */
   .font-display { font-family: 'Playfair Display', Georgia, serif; }
   .font-display-italic {
@@ -193,7 +240,7 @@
   .paper {
     background: rgb(var(--c-surface-card));
     border: 1px solid rgb(var(--c-overlay) / 0.08);
-    border-radius: 12px;
+    border-radius: var(--radius-card);
   }
 
   /* Badge base */
@@ -211,4 +258,15 @@
     border: 1px solid currentColor;
     line-height: 1;
   }
+}
+
+@media (max-width: 767px) {
+  #root:has(nav[aria-label='Mobile navigation']) {
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  }
+}
+
+/* Keep text controls at 16px on touch devices to prevent browser auto-zoom on focus. */
+@media (pointer: coarse) {
+  input:not([type='checkbox']):not([type='radio']), textarea, select { font-size: 16px !important; }
 }

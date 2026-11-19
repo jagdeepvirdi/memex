@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic, ListPlus } from 'lucide-react';
 import { toast } from 'sonner';
-import { ingestUrl, createItem } from '../../lib/api';
+import { ingestUrl, createItem, apiFetch } from '../../lib/api';
 import type { SimilarItem } from '../../lib/api';
 import ItemCard from '../cards/ItemCard';
 import KeepImportPanel from './KeepImportPanel';
@@ -68,15 +68,10 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
     setSimilarItems([]);
 
     try {
-      const res = await fetch('/api/ingest/text', {
+      const data = await apiFetch<{ preview: IngestPreview; similarItems?: SimilarItem[] }>('/ingest/text', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: manualText }),
       });
-
-      if (!res.ok) throw new Error('Classification failed');
-
-      const data = await res.json();
       // Keep the server's source/sourceUrl: pasted Instagram captions and GitHub links are detected there.
       setPreview({ ...data.preview, content: manualText });
       setSimilarItems(data.similarItems ?? []);
@@ -128,8 +123,8 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-white/5">
-        <button
+      <div role="tablist" aria-label="Capture type" className="flex overflow-x-auto border-b border-white/5">
+        <button role="tab" aria-selected={activeTab === 'url'} type="button"
           onClick={() => setActiveTab('url')}
           className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
             activeTab === 'url' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
@@ -138,7 +133,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           <Globe size={16} />
           Single URL
         </button>
-        <button
+        <button role="tab" aria-selected={activeTab === 'manual'} type="button"
           onClick={() => setActiveTab('manual')}
           className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
             activeTab === 'manual' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
@@ -147,7 +142,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           <FileText size={16} />
           Manual Note
         </button>
-        <button
+        <button role="tab" aria-selected={activeTab === 'paste'} type="button"
           onClick={() => setActiveTab('paste')}
           className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
             activeTab === 'paste' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
@@ -156,7 +151,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           <ListPlus size={16} />
           Bulk Paste
         </button>
-        <button
+        <button role="tab" aria-selected={activeTab === 'keep'} type="button"
           onClick={() => setActiveTab('keep')}
           className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
             activeTab === 'keep' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
@@ -165,7 +160,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           <FolderArchive size={16} />
           Google Keep
         </button>
-        <button
+        <button role="tab" aria-selected={activeTab === 'file'} type="button"
           onClick={() => setActiveTab('file')}
           className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
             activeTab === 'file' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
@@ -174,7 +169,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           <Paperclip size={16} />
           File
         </button>
-        <button
+        <button role="tab" aria-selected={activeTab === 'voice'} type="button"
           onClick={() => setActiveTab('voice')}
           className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
             activeTab === 'voice' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'

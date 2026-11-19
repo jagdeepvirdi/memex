@@ -76,6 +76,7 @@ export default function PasteImportPanel() {
     try {
       const res = await startPasteImport(text)
       setResult(res)
+      if ((res.saved ?? 0) > 0) window.dispatchEvent(new Event('memex:item-captured'))
       if (!res.jobId) return
       const jobId = res.jobId
       setJob({ status: 'processing', progress: 0, total: res.saved ?? 0, completed: 0 })

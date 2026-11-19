@@ -11,22 +11,28 @@ import type { Item } from '../../../shared/types'
 export default function TrashPage() {
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   const [offset, setOffset] = useState(0)
   const [total, setTotal] = useState(0)
   const limit = 24 // 24 is ideal for 3-column card grid (3 * 8)
 
   useEffect(() => {
     loadTrash()
-  }, [offset])
+  }, [offset, reloadKey])
 
   const loadTrash = async () => {
     setLoading(true)
+    setLoadError(false)
     try {
-      const res = await fetchItems({ deleted: true, limit, offset } as any)
+      const res = await fetchItems({ deleted: true, limit, offset })
       setItems(res.items)
       setTotal(res.total)
     } catch (err) {
       console.error(err)
+      setLoadError(true)
+      setItems([])
+      setTotal(0)
       toast.error('Failed to load trash')
     } finally {
       setLoading(false)
@@ -37,7 +43,7 @@ export default function TrashPage() {
     try {
       await apiFetch(`/items/${id}`, {
         method: 'PUT',
-        body: JSON.stringify({ deleted: false }) // I need to make sure the backend handles this
+        body: JSON.stringify({ deleted: false })
       })
       setItems(items.filter(i => i.id !== id))
       toast.success('Item restored')
@@ -50,17 +56,19 @@ export default function TrashPage() {
     <div className="min-h-screen bg-bg flex">
       <Sidebar activeSection="trash" />
 
-      <main className="flex-1 flex flex-col relative overflow-y-auto">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative overflow-y-auto">
         <AppHeader
           left={<div className="flex items-center gap-6"><Link to="/" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></Link><div className="flex flex-col"><h1 className="font-display text-lg text-ink">Trash Bin</h1><p className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">Deleted items can be restored here</p></div></div>}
         />
         <AppHeader.Spacer />
 
-        <div className="p-12 max-w-7xl mx-auto w-full flex-1">
+        <div className="p-4 sm:p-6 lg:p-12 max-w-7xl mx-auto w-full flex-1">
           {loading ? (
             <div className="flex justify-center py-20">
                <Loader2 className="animate-spin text-accent" size={32} />
             </div>
+          ) : loadError ? (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-5 text-sm text-ink-muted"><span>Couldn’t load deleted items.</span><button type="button" onClick={() => setReloadKey(value => value + 1)} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></div>
           ) : items.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
               {items.map(item => (

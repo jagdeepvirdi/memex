@@ -34,6 +34,8 @@ export default function SettingsPage() {
     auto_lock_timeout: '15',
   })
   const [toast, setToast] = useState<Toast | null>(null)
+  const [settingsLoading, setSettingsLoading] = useState(true)
+  const [settingsError, setSettingsError] = useState(false)
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Is there more of the section strip to the right? (mobile only; the strip is a vertical list from md up)
@@ -47,10 +49,18 @@ export default function SettingsPage() {
     updateTabsHint()
     window.addEventListener('resize', updateTabsHint)
     return () => window.removeEventListener('resize', updateTabsHint)
-  }, [updateTabsHint])
+  }, [updateTabsHint, settingsLoading])
+
+  const loadSettings = async () => {
+    setSettingsLoading(true)
+    setSettingsError(false)
+    try { setSettings(await apiFetch<Record<string, any>>('/settings')) }
+    catch { setSettingsError(true) }
+    finally { setSettingsLoading(false) }
+  }
 
   useEffect(() => {
-    apiFetch<Record<string, any>>('/settings').then(setSettings).catch(console.error)
+    void loadSettings()
     return () => { if (toastTimer.current) clearTimeout(toastTimer.current) }
   }, [])
 
@@ -82,7 +92,7 @@ export default function SettingsPage() {
     <div className="min-h-screen bg-bg flex">
       <Sidebar activeSection="settings" />
 
-      <main className="flex-1 flex flex-col relative overflow-y-auto">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative overflow-y-auto">
         <AppHeader
           left={
             <div className="flex items-center gap-6">
@@ -97,6 +107,7 @@ export default function SettingsPage() {
         <AppHeader.Spacer />
 
         <div className="px-4 py-8 md:p-12 max-w-5xl mx-auto w-full flex flex-col gap-8">
+          {settingsLoading ? <div role="status" className="py-10 text-sm text-ink-muted">Loading your settings…</div> : settingsError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-5 text-sm text-ink-muted"><span>Couldn’t load settings. Changes are paused until your saved values can be read.</span><button type="button" onClick={loadSettings} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></div> : <>
           {/* Re-mounted per section so the strip re-reads provider status after, say, a key was saved. */}
           <SetupStatus key={active} settings={settings} />
 
@@ -148,6 +159,7 @@ export default function SettingsPage() {
               {active === 'appearance' && <AppearanceTab />}
             </div>
           </div>
+          </>}
         </div>
 
         {toast && (

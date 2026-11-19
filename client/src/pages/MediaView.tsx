@@ -15,14 +15,17 @@ export default function MediaView() {
   const [items, setItems] = useState<Item[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
-  const mode = searchParams.get('mode') || 'media' // 'media' (movies) or 'book'
+  const mode = searchParams.get('mode') === 'book' ? 'book' : 'media'
   const q = searchParams.get('q') || ''
   const offset = parseInt(searchParams.get('offset') || '0', 10)
   const limit = 50
 
   useEffect(() => {
     setLoading(true)
+    setLoadError(false)
     fetchItems({
       type: mode as any,
       q: q || undefined,
@@ -35,10 +38,13 @@ export default function MediaView() {
       })
       .catch(err => {
         console.error(err)
+        setLoadError(true)
+        setItems([])
+        setTotal(0)
         toast.error(`Failed to load ${mode === 'book' ? 'books' : 'media'}`)
       })
       .finally(() => setLoading(false))
-  }, [mode, q, offset])
+  }, [mode, q, offset, reloadKey])
 
   const handleUpdateRating = async (id: string, rating: number) => {
     const item = items.find(i => i.id === id)
@@ -78,19 +84,19 @@ export default function MediaView() {
   return (
     <div className="min-h-screen bg-bg flex text-ink">
       <Sidebar activeSection="media" />
-      <main className="flex-1 flex flex-col min-w-0">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0">
         <AppHeader
           left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg flex items-center gap-2">{mode === 'book' ? <Book size={20} className="text-accent" /> : <Clapperboard size={20} className="text-accent" />}{mode === 'book' ? 'Library (Books)' : 'Media & Movies'}</h1><div className="flex bg-white/5 p-1 rounded-lg"><button onClick={() => { const p = new URLSearchParams(searchParams); p.set('mode', 'media'); setSearchParams(p) }} className={`px-3 py-1 text-[10px] rounded-md transition-all ${mode === 'media' ? 'bg-accent text-bg font-bold' : 'text-ink-muted hover:text-ink'}`}>Movies</button><button onClick={() => { const p = new URLSearchParams(searchParams); p.set('mode', 'book'); setSearchParams(p) }} className={`px-3 py-1 text-[10px] rounded-md transition-all ${mode === 'book' ? 'bg-accent text-bg font-bold' : 'text-ink-muted hover:text-ink'}`}>Books</button></div>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} items</span>}</div>}
           actions={<button onClick={handleExportCsv} className="text-xs flex items-center gap-2 bg-white/5 text-ink-muted hover:text-ink border border-white/10 px-3 py-1.5 rounded-lg transition-all"><Download size={14} />Export CSV</button>}
         />
         <AppHeader.Spacer />
 
-        <div className="p-8 flex-1 flex flex-col gap-6 overflow-hidden">
+        <div className="p-4 sm:p-6 lg:p-8 flex-1 flex flex-col gap-6 overflow-hidden">
           {/* Filters Bar */}
           <div className="flex flex-wrap items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/5">
             <div className="flex items-center gap-2 flex-1 min-w-[200px]">
               <Search size={16} className="text-ink-muted" />
-              <input 
+              <input aria-label={`Search ${mode === 'book' ? 'books' : 'media'}`}
                 type="text" 
                 placeholder={`Search ${mode === 'book' ? 'authors, titles...' : 'movies, directors...'}`}
                 value={q}
@@ -115,7 +121,7 @@ export default function MediaView() {
           {/* Table Container */}
           <div className="flex-1 bg-white/[0.02] border border-white/5 rounded-xl overflow-hidden flex flex-col">
             <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-              <table className="w-full text-left border-collapse table-fixed">
+              <table className="w-full text-left border-collapse table-fixed"><caption className="sr-only">{mode === 'book' ? 'Saved books' : 'Saved movies and media'} with reading or watch status and personal ratings</caption>
                 <thead className="sticky top-0 bg-bg/95 backdrop-blur-sm shadow-sm z-10">
                   <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-ink-muted font-semibold">
                     <th className="px-6 py-4 w-[25%] min-w-[200px]">Title</th>
@@ -138,6 +144,8 @@ export default function MediaView() {
                         <td className="px-6 py-4"><div className="h-8 bg-white/5 rounded w-16 mx-auto" /></td>
                       </tr>
                     ))
+                  ) : loadError ? (
+                    <tr><td colSpan={6} role="alert" className="py-16 text-center text-ink-muted text-sm"><p>Couldn’t load {mode === 'book' ? 'books' : 'media'}.</p><button type="button" onClick={() => setReloadKey(value => value + 1)} className="mt-3 rounded-lg px-4 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></td></tr>
                   ) : items.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-24 text-center text-ink-muted text-sm">

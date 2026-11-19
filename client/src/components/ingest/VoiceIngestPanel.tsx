@@ -262,7 +262,7 @@ export default function VoiceIngestPanel({ onSuccess }: Props) {
       )}
 
       <p className="text-[10px] text-ink-muted text-center">
-        Transcribed locally by OpenAI Whisper · audio never leaves your machine
+        Audio is sent to your Memex server for Whisper transcription. Where processing runs depends on your server setup.
       </p>
     </div>
   );

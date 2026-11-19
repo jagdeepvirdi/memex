@@ -162,6 +162,19 @@ describe('Dashboard Component', () => {
     expect(screen.getByTestId('mock-item-card-2')).toBeInTheDocument()
   })
 
+  it('requests browser reminder permission only after the reminder opt-in is clicked', async () => {
+    const requestPermission = vi.fn().mockResolvedValue('granted')
+    Object.defineProperty(window, 'Notification', {
+      value: class { static permission = 'default'; static requestPermission = requestPermission },
+      configurable: true,
+    })
+    render(<Dashboard />)
+    const optIn = await screen.findByRole('button', { name: 'Enable browser notifications' })
+    expect(requestPermission).not.toHaveBeenCalled()
+    fireEvent.click(optIn)
+    await waitFor(() => expect(requestPermission).toHaveBeenCalledOnce())
+  })
+
   it('shows items and stats without waiting for slow LLM insights', async () => {
     // Insights never resolve (model cold / busy) - the rest of the page must not wait.
     mockFetchInsights.mockReturnValue(new Promise(() => {}))
@@ -198,28 +211,25 @@ describe('Dashboard Component', () => {
     render(<Dashboard />)
 
     await waitFor(() => expect(screen.getByTestId('mock-item-card-1')).toBeInTheDocument())
-    // Falls back to the empty-state message instead of a blank section
-    await waitFor(() => expect(screen.getByText(/Keep adding notes/)).toBeInTheDocument())
+    // Reports the failure instead of misrepresenting it as an empty result.
+    await waitFor(() => expect(screen.getByText(/Insights couldn’t be loaded/)).toBeInTheDocument())
   })
 
   it('navigates to intelligence map when CTA button is clicked', async () => {
     render(<Dashboard />)
-    await waitFor(() => expect(screen.getByText('Open Intelligence Map')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Explore connections')).toBeInTheDocument())
 
-    fireEvent.click(screen.getByText('Open Intelligence Map'))
+    fireEvent.click(screen.getByText('Explore connections'))
     expect(mockNavigate).toHaveBeenCalledWith('/graph')
   })
 
-  it('can open search modal by clicking search field', async () => {
+  it('dispatches the app-wide search action from the search field', async () => {
     render(<Dashboard />)
     await waitFor(() => expect(screen.getByText('Search everything...')).toBeInTheDocument())
-
-    fireEvent.click(screen.getByText('Search everything...'))
-    expect(screen.getByTestId('mock-search-modal')).toBeInTheDocument()
-
-    // Can close search modal
-    fireEvent.click(screen.getByText('Close Search'))
-    expect(screen.queryByTestId('mock-search-modal')).not.toBeInTheDocument()
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+    fireEvent.click(screen.getByRole('button', { name: /search everything/i }))
+    expect(dispatchSpy.mock.calls.some(([event]) => event.type === 'memex:open-search')).toBe(true)
+    dispatchSpy.mockRestore()
   })
 
   it('opens keyboard shortcuts guide when shortcuts button or "?" is clicked', async () => {
@@ -234,24 +244,13 @@ describe('Dashboard Component', () => {
     expect(screen.queryByText('Shortcuts')).not.toBeInTheDocument()
   })
 
-  it('handles keyboard shortcuts', async () => {
+  it('keeps dashboard help shortcut local and exposes global search and capture actions', async () => {
     render(<Dashboard />)
     await waitFor(() => expect(screen.getByText('Total Items')).toBeInTheDocument())
-
-    // Ctrl+N for Ingest panel
-    fireEvent.keyDown(window, { ctrlKey: true, key: 'n' })
-    expect(screen.getByTestId('mock-ingest-panel')).toBeInTheDocument()
-
-    // Ctrl+K for Search modal
-    fireEvent.keyDown(window, { ctrlKey: true, key: 'k' })
-    expect(screen.getByTestId('mock-search-modal')).toBeInTheDocument()
-    expect(screen.queryByTestId('mock-ingest-panel')).not.toBeInTheDocument()
-
-    // Escape to close search modal
-    fireEvent.keyDown(window, { key: 'Escape' })
-    expect(screen.queryByTestId('mock-search-modal')).not.toBeInTheDocument()
-
-    // "?" key to toggle shortcuts
+    const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+    fireEvent.click(screen.getByTitle('Add to Memex'))
+    expect(dispatchSpy.mock.calls.some(([event]) => event.type === 'memex:open-capture')).toBe(true)
+    dispatchSpy.mockRestore()
     fireEvent.keyDown(window, { key: '?' })
     expect(screen.getByText('Shortcuts')).toBeInTheDocument()
   })

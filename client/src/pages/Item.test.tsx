@@ -115,12 +115,13 @@ describe('ItemPage — loading state', () => {
 // ── Not found state ───────────────────────────────────────────────────────────
 
 describe('ItemPage — item not found', () => {
-  it('shows "Item not found" when fetch fails', async () => {
+  it('shows a recoverable load failure when fetch fails', async () => {
     mockApiFetch.mockRejectedValue(new Error('Not found'))
     render(<ItemPage />)
     await waitFor(() =>
-      expect(screen.getByText('Item not found')).toBeInTheDocument()
+      expect(screen.getByText('Couldn’t load this item')).toBeInTheDocument()
     )
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
   })
 
   it('shows link back to Dashboard on not found', async () => {

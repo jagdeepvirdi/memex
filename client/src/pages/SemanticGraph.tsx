@@ -43,6 +43,8 @@ export default function SemanticGraphPage() {
   const [nodeLimit, setNodeLimit] = useState(100);
   const [data, setData] = useState<{ nodes: GraphNode[], links: GraphLink[] }>({ nodes: [], links: [] });
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [semanticLinks, setSemanticLinks] = useState(true);
   const [fullscreen, setFullscreen] = useState(false);
   const navigate = useNavigate();
 
@@ -52,11 +54,14 @@ export default function SemanticGraphPage() {
 
   const loadGraph = async () => {
     setLoading(true);
+    setLoadError(false);
     try {
-      const res = await apiFetch<{ nodes: GraphNode[], links: GraphLink[] }>(`/search/graph?limit=${nodeLimit}`);
+      const res = await apiFetch<{ nodes: GraphNode[], links: GraphLink[]; semanticLinks?: boolean }>(`/search/graph?limit=${nodeLimit}`);
       setData(res);
+      setSemanticLinks(res.semanticLinks !== false);
     } catch (err) {
       console.error(err);
+      setLoadError(true);
       toast.error('Failed to load semantic graph');
     } finally {
       setLoading(false);
@@ -69,9 +74,9 @@ export default function SemanticGraphPage() {
 
   return (
     <div className="min-h-screen bg-bg flex">
-      {!fullscreen && <Sidebar activeSection="dashboard" />}
+      {!fullscreen && <Sidebar activeSection="graph" />}
 
-      <main className="flex-1 flex flex-col relative overflow-hidden bg-bg-2">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative overflow-hidden bg-bg-2">
         <AppHeader
           left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-2"><Sparkles className="text-accent" size={18} /><h1 className="font-display text-lg text-ink">Semantic Intelligence Map</h1></div></div>}
           actions={
@@ -96,10 +101,12 @@ export default function SemanticGraphPage() {
 
         <div className="flex-1 relative">
            {loading ? (
-             <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-ink-muted bg-bg/50 z-20">
+             <div role="status" aria-live="polite" className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-ink-muted bg-bg/50 z-20">
                 <Loader2 className="animate-spin text-accent" size={40} />
                 <p className="font-mono text-sm uppercase tracking-widest">Mapping semantic clusters...</p>
              </div>
+           ) : loadError ? (
+             <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 text-center"><h2 className="font-display text-xl text-ink">The map couldn’t load</h2><p className="text-sm text-ink-muted">Try again when the server is available.</p><button type="button" onClick={loadGraph} className="min-h-10 rounded-lg border border-white/10 px-4 text-sm text-accent hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Retry map</button></div>
            ) : data.nodes.length > 0 ? (
              <ForceGraph2D
                 graphData={data}
@@ -146,6 +153,9 @@ export default function SemanticGraphPage() {
                 </p>
              </div>
            )}
+
+           {!loading && !loadError && !semanticLinks && <p role="status" className="absolute left-4 top-4 z-10 max-w-sm rounded-lg bg-surface px-3 py-2 text-xs text-ink-muted shadow-card">Your notes are shown, but semantic links are unavailable until the active embedding profile has a measured similarity threshold.</p>}
+           {!loading && data.nodes.length > 0 && <nav aria-label="Items in the intelligence map" className="sr-only"><ul>{data.nodes.map(node => <li key={node.id}><a href={`/item/${node.id}`} onClick={event => { event.preventDefault(); navigate(`/item/${node.id}`) }}>{node.title}</a></li>)}</ul></nav>}
 
            {/* Legend */}
            <div className="absolute bottom-8 left-8 p-4 bg-surface/80 backdrop-blur-md border border-white/5 rounded-2xl flex flex-col gap-2 z-10 pointer-events-none">

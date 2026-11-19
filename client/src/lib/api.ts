@@ -198,16 +198,18 @@ export async function createItem(item: CreateItemRequest): Promise<Item> {
   })
 }
 
-export async function fetchItems(options: { type?: string, category?: string, tag?: string, limit?: number, offset?: number, pendingEnrichment?: boolean, enriched?: boolean, q?: string, unreviewed?: boolean, hasReminder?: boolean, maxConfidence?: number, priority?: ItemPriority | 'none' } = {}): Promise<{ items: Item[], total: number }> {
+export async function fetchItems(options: { type?: string, category?: string, tag?: string, deleted?: boolean, limit?: number, offset?: number, pendingEnrichment?: boolean, enriched?: boolean, q?: string, unreviewed?: boolean, reviewed?: boolean, hasReminder?: boolean, maxConfidence?: number, priority?: ItemPriority | 'none' } = {}): Promise<{ items: Item[], total: number }> {
   const params = new URLSearchParams()
   if (options.type) params.append('type', options.type)
   if (options.category) params.append('category', options.category)
   if (options.tag) params.append('tag', options.tag)
+  if (options.deleted) params.append('deleted', 'true')
   if (options.limit) params.append('limit', options.limit.toString())
   if (options.offset) params.append('offset', options.offset.toString())
   if (options.pendingEnrichment) params.append('pendingEnrichment', 'true')
   if (options.enriched) params.append('enriched', 'true')
   if (options.unreviewed) params.append('unreviewed', 'true')
+  if (options.reviewed) params.append('reviewed', 'true')
   if (options.hasReminder) params.append('hasReminder', 'true')
   if (options.maxConfidence !== undefined) params.append('maxConfidence', options.maxConfidence.toString())
   if (options.priority) params.append('priority', options.priority)
@@ -348,8 +350,8 @@ export async function fetchDueReminders(): Promise<Item[]> {
   return apiFetch<Item[]>('/items/reminders/due')
 }
 
-export async function shareItem(itemId: string): Promise<{ token: string }> {
-  return apiFetch<{ token: string }>(`/items/${itemId}/share`, { method: 'POST' })
+export async function shareItem(itemId: string): Promise<{ token: string; expiresAt: string }> {
+  return apiFetch<{ token: string; expiresAt: string }>(`/items/${itemId}/share`, { method: 'POST' })
 }
 
 export async function unshareItem(itemId: string): Promise<void> {

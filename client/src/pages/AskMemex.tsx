@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { ArrowLeft, Loader2, Send, Brain, Bot, User, ExternalLink, Bookmark } from 'lucide-react'
+import { ArrowLeft, Loader2, Send, Brain, Bot, User, ExternalLink, Bookmark, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import Sidebar from '../components/sidebar/Sidebar'
@@ -14,6 +14,8 @@ interface Message {
   sources?: Item[]
   /** The notes were found by keyword only (semantic search unavailable), so relevant ones may be missing. */
   keywordOnly?: boolean
+  error?: boolean
+  question?: string
 }
 
 export default function AskMemexPage() {
@@ -29,14 +31,12 @@ export default function AskMemexPage() {
     }
   }, [messages, loading])
 
-  const handleAsk = async (e?: React.FormEvent) => {
-    e?.preventDefault()
-    if (!input.trim() || loading) return
-
+  const submitQuestion = async (question: string) => {
+    if (!question.trim() || loading) return
     const userMessage: Message = {
       id: Date.now().toString(),
       type: 'user',
-      content: input.trim()
+      content: question.trim()
     }
 
     setMessages(prev => [...prev, userMessage])
@@ -51,6 +51,7 @@ export default function AskMemexPage() {
         content: res.answer,
         sources: res.sources,
         keywordOnly: res.semantic === false,
+        question: userMessage.content,
       }
       setMessages(prev => [...prev, aiMessage])
     } catch (err) {
@@ -59,17 +60,28 @@ export default function AskMemexPage() {
         type: 'ai',
         content: "I'm sorry, I encountered an error while searching your knowledge. Please check that your AI provider is available (Settings › AI)."
       }
+      errorMsg.error = true
+      errorMsg.question = userMessage.content
+      errorMsg.content = 'I couldn’t complete that search. Check your connection and AI provider settings, then retry.'
       setMessages(prev => [...prev, errorMsg])
     } finally {
       setLoading(false)
     }
   }
 
+  const handleAsk = (e?: React.FormEvent) => {
+    e?.preventDefault()
+    const question = input.trim()
+    if (!question || loading) return
+    setInput('')
+    void submitQuestion(question)
+  }
+
   return (
     <div className="min-h-screen bg-bg flex text-ink">
-      <Sidebar activeSection="dashboard" />
+      <Sidebar activeSection="ask" />
       
-      <main className="flex-1 flex flex-col relative max-w-4xl mx-auto w-full border-x border-white/5">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative max-w-4xl mx-auto w-full border-x border-white/5">
         <AppHeader
           left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg flex items-center gap-2"><Brain size={20} className="text-accent" />Ask My Knowledge</h1></div>}
         />
@@ -98,7 +110,7 @@ export default function AskMemexPage() {
                    ].map(suggestion => (
                      <button 
                        key={suggestion}
-                       onClick={() => { setInput(suggestion); setTimeout(() => handleAsk(), 0); }}
+                       onClick={() => { void submitQuestion(suggestion) }}
                        className="p-4 bg-white/5 border border-white/5 rounded-2xl text-xs text-ink-muted hover:text-accent hover:border-accent/30 transition-all text-left"
                      >
                        {suggestion}
@@ -122,12 +134,13 @@ export default function AskMemexPage() {
               )}
               
               <div className={`max-w-[80%] space-y-4`}>
-                <div className={`p-4 rounded-2xl text-sm leading-relaxed ${
+                <div role={msg.error ? 'alert' : undefined} className={`p-4 rounded-2xl text-sm leading-relaxed ${
                   msg.type === 'user' 
                     ? 'bg-accent text-bg font-medium' 
                     : 'bg-white/5 border border-white/10 text-ink'
                 }`}>
                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                   {msg.error && msg.question && <button type="button" onClick={() => void submitQuestion(msg.question!)} disabled={loading} className="mt-3 inline-flex items-center gap-2 text-xs font-medium text-accent hover:underline disabled:opacity-50"><RotateCcw size={13} />Retry question</button>}
                 </div>
 
                 {msg.keywordOnly && (
@@ -140,10 +153,10 @@ export default function AskMemexPage() {
                 {msg.sources && msg.sources.length > 0 && (
                   <div className="flex flex-col gap-2">
                     <p className="text-[10px] uppercase tracking-widest font-bold text-ink-muted flex items-center gap-2">
-                      <Bookmark size={10} /> Sources Found
+                      <Bookmark size={10} /> Sources ({msg.sources.length}) · open an item to read the original
                     </p>
                     <div className="flex flex-wrap gap-2">
-                      {msg.sources.slice(0, 4).map((source, i) => (
+                      {msg.sources.map((source, i) => (
                         <button 
                           key={source.id}
                           onClick={() => navigate(`/item/${source.id}`)}
@@ -157,6 +170,7 @@ export default function AskMemexPage() {
                     </div>
                   </div>
                 )}
+                {msg.sources && msg.sources.length === 0 && <p className="text-xs text-ink-muted">No matching notes were found for this question.</p>}
               </div>
 
               {msg.type === 'user' && (
@@ -169,6 +183,8 @@ export default function AskMemexPage() {
 
           {loading && (
             <motion.div 
+              role="status"
+              aria-live="polite"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               className="flex gap-4"
@@ -206,8 +222,8 @@ export default function AskMemexPage() {
               <Send size={18} />
             </button>
           </form>
-          <p className="text-[9px] text-center text-ink-muted mt-4 uppercase tracking-tighter opacity-50">
-            Synthesized answer using local Ollama. Citations refer to your actual notes.
+          <p className="text-[10px] text-center text-ink-muted mt-3">
+            Answers use your configured AI provider; private notes may use local processing. This conversation stays in this page and isn’t saved.
           </p>
         </div>
       </main>

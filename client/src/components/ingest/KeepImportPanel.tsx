@@ -81,6 +81,7 @@ export default function KeepImportPanel() {
       setSavedCount(data.saved);
       setJobId(data.jobId);
       setImportComplete(true);
+      window.dispatchEvent(new Event('memex:item-captured'));
       localStorage.setItem('memex-import-job', JSON.stringify({ jobId: data.jobId, total: data.saved }));
 
       // Poll progress in background so user can watch enrichment happen
@@ -134,10 +135,10 @@ export default function KeepImportPanel() {
         </div>
 
         <button
-          onClick={() => window.location.reload()}
+          onClick={() => window.dispatchEvent(new Event('memex:close-capture'))}
           className="bg-accent text-bg px-8 py-3 rounded-lg font-bold"
         >
-          Go to Dashboard
+          Return to Dashboard
         </button>
       </div>
     );

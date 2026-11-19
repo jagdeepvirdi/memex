@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 390 88" role="img" aria-labelledby="title">
+  <title id="title">Memex — Personal Knowledge OS</title>
+  <path d="M12 76V32c0-7 9-10 14-4l17 19 17-19c5-6 14-3 14 4v44" fill="none" stroke="#5558E8" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m36 52 7 7 7-7" fill="none" stroke="#0F766E" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="91" y="62" fill="#121826" font-family="DM Sans,Arial,sans-serif" font-size="43" font-weight="600" letter-spacing="-1.4">Memex</text>
+</svg>

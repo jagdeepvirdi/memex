@@ -31,6 +31,8 @@ export default function ItemPage() {
   const [item, setItem] = useState<Item | null>(null)
   const [related, setRelated] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [loadRetry, setLoadRetry] = useState(0)
   const [loadingRelated, setLoadingRelated] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [editedTitle, setEditedTitle] = useState('')
@@ -59,29 +61,38 @@ export default function ItemPage() {
   useEffect(() => {
     if (!id) return;
     setLoading(true)
+    setLoadError(false)
+    setItem(null)
+    setRelated([])
+    let cancelled = false
     apiFetch<Item>(`/items/${id}`)
       .then(res => {
+        if (cancelled) return
         setItem(res)
         setEditedTitle(res.title)
         setEditedContent(res.content)
         setEditedCategories(res.categories.join(' > '))
         setEditedTags(res.tags)
 
+        setLoading(false)
         setLoadingRelated(true)
-        return apiFetch<Item[]>(`/items/${id}/related`)
+        apiFetch<Item[]>(`/items/${id}/related`)
+          .then(rows => { if (!cancelled) setRelated(rows) })
+          .catch(() => { if (!cancelled) setRelated([]) })
+          .finally(() => { if (!cancelled) setLoadingRelated(false) })
       })
-      .then(setRelated)
       .catch(err => {
+        if (cancelled) return
+        setLoadError(true)
         console.error(err)
         toast.error('Failed to load item')
-      })
-      .finally(() => {
-        setLoading(false)
-        setLoadingRelated(false)
+      }).finally(() => {
+        if (!cancelled) setLoading(false)
       })
 
-    fetchItemExtractions(id).then(setExtractions).catch(() => {})
-  }, [id])
+    fetchItemExtractions(id).then(rows => { if (!cancelled) setExtractions(rows) }).catch(() => {})
+    return () => { cancelled = true }
+  }, [id, loadRetry])
 
   const handleApplyExtraction = async (extractionId: string) => {
     if (!id) return
@@ -241,9 +252,9 @@ export default function ItemPage() {
     if (!id) return
     setSharing(true)
     try {
-      const { token } = await shareItem(id)
-      setItem(prev => prev ? { ...prev, publicToken: token } : prev)
-      toast.success('Public link created')
+      const { token, expiresAt } = await shareItem(id)
+      setItem(prev => prev ? { ...prev, publicToken: token, shareExpiresAt: new Date(expiresAt) } : prev)
+      toast.success('Public link created · expires in 7 days')
     } catch {
       toast.error('Failed to create share link')
     } finally {
@@ -333,7 +344,7 @@ export default function ItemPage() {
     return (
       <div className="min-h-screen bg-bg flex">
         <Sidebar activeSection="dashboard" />
-        <div className="flex-1 flex flex-col items-center justify-center text-ink-muted gap-4">
+        <div role="status" aria-live="polite" className="flex-1 flex flex-col items-center justify-center text-ink-muted gap-4">
           <Loader2 className="animate-spin" size={40} />
           <p className="font-mono text-sm">Loading item details...</p>
         </div>
@@ -345,8 +356,9 @@ export default function ItemPage() {
     return (
       <div className="min-h-screen bg-bg flex">
         <Sidebar activeSection="dashboard" />
-        <div className="flex-1 flex flex-col items-center justify-center text-ink-muted gap-6">
-          <h2 className="font-display text-2xl text-ink">Item not found</h2>
+        <div className="flex-1 flex flex-col items-center justify-center text-ink-muted gap-6 p-6 text-center">
+          <h2 className="font-display text-2xl text-ink">{loadError ? 'Couldn’t load this item' : 'Item not found'}</h2>
+          {loadError && <button type="button" onClick={() => setLoadRetry(value => value + 1)} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-accent hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Retry</button>}
           <Link to="/" className="text-accent hover:underline flex items-center gap-2">
             <ArrowLeft size={16} /> Back to Dashboard
           </Link>
@@ -359,14 +371,14 @@ export default function ItemPage() {
     <div className="min-h-screen bg-bg flex">
       <Sidebar activeSection="dashboard" />
 
-      <main className="flex-1 flex flex-col relative overflow-y-auto">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative overflow-y-auto">
         <AppHeader
           left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="w-1 h-1 bg-white/20 rounded-full" /><span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">{item.type}</span></div>}
-          actions={<div className="flex items-center gap-3">{!isEditing ? (<><button onClick={handleMoveToVault} disabled={migrating} className="p-2 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all" title="Move to Secure Vault">{migrating ? <Loader2 size={18} className="animate-spin" /> : <Shield size={18} />}</button><button onClick={startEditing} className="p-2 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all" title="Edit Item"><Edit2 size={18} /></button><button onClick={handleDelete} className="p-2 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all" title="Delete Item"><Trash2 size={18} /></button></>) : (<><button onClick={() => { setIsEditing(false); setEditedTitle(item.title); setEditedContent(item.content); setEditedCategories(item.categories.join(' > ')); setEditedTags(item.tags); }} className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all" title="Cancel"><X size={18} /></button><button onClick={handleSave} disabled={saving} className="bg-accent text-bg px-4 py-1.5 rounded-lg font-bold flex items-center gap-2 text-sm shadow-lg shadow-accent/20">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}Save</button></>)}</div>}
+          actions={<div className="flex items-center gap-1 sm:gap-2">{!isEditing ? (<><button type="button" onClick={handleMoveToVault} disabled={migrating} aria-label="Move to secure vault" className="p-2 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Move to Secure Vault">{migrating ? <Loader2 size={18} className="animate-spin" /> : <Shield size={18} />}</button><button type="button" onClick={startEditing} aria-label="Edit item" className="p-2 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Edit Item"><Edit2 size={18} /></button><button type="button" onClick={handleDelete} aria-label="Delete item" className="p-2 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Delete Item"><Trash2 size={18} /></button></>) : (<><button type="button" onClick={() => { setIsEditing(false); setEditedTitle(item.title); setEditedContent(item.content); setEditedCategories(item.categories.join(' > ')); setEditedTags(item.tags); }} aria-label="Cancel editing" className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Cancel"><X size={18} /></button><button type="button" onClick={handleSave} disabled={saving} className="bg-accent text-bg px-4 py-2 rounded-lg font-semibold flex items-center gap-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{saving ? 'Saving' : 'Save'}</button></>)}</div>}
         />
         <AppHeader.Spacer />
 
-        <div className="p-12 max-w-4xl mx-auto w-full flex flex-col gap-12">
+        <div className="p-5 sm:p-8 lg:p-12 max-w-4xl mx-auto w-full flex flex-col gap-8 sm:gap-12">
           {/* Title Area */}
           <div className="flex flex-col gap-6">
             {isEditing ? (
@@ -378,7 +390,7 @@ export default function ItemPage() {
                 autoFocus
               />
             ) : (
-              <h1 className="font-display text-4xl text-ink leading-tight">{item.title}</h1>
+              <h1 className="font-display text-3xl sm:text-4xl text-ink leading-tight break-words">{item.title}</h1>
             )}
 
             <div className="flex flex-wrap gap-4 text-xs">
@@ -570,14 +582,8 @@ export default function ItemPage() {
               </h3>
               <div className="flex flex-wrap gap-2 items-center">
                 {(isEditing ? editedTags : item.tags).map(tag => (
-                  <span key={tag} className="flex items-center gap-1 px-3 py-1 bg-white/5 border border-white/5 rounded-full text-xs text-ink-muted group">
-                    #{tag}
-                    {isEditing && (
-                      <button onClick={() => removeTag(tag)} className="text-ink-muted/50 hover:text-red-400 transition-colors ml-0.5">
-                        <X size={10} />
-                      </button>
-                    )}
-                  </span>
+                  isEditing ? <span key={tag} className="flex items-center gap-1 px-3 py-1 bg-white/5 border border-white/5 rounded-full text-xs text-ink-muted group">#{tag}<button type="button" aria-label={`Remove tag ${tag}`} onClick={() => removeTag(tag)} className="rounded p-1 text-ink-muted/70 hover:text-red-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><X size={11} /></button></span>
+                    : <button key={tag} type="button" onClick={() => window.dispatchEvent(new CustomEvent('memex:open-search', { detail: { tag } }))} className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-ink-muted hover:border-accent/30 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">#{tag}</button>
                 ))}
                 {isEditing && (
                   <div className="flex items-center gap-1">
@@ -620,6 +626,7 @@ export default function ItemPage() {
                       {copiedShare ? 'Copied' : 'Copy'}
                     </button>
                   </div>
+                  {item.shareExpiresAt && <p className="text-xs text-ink-muted">Public link expires {new Date(item.shareExpiresAt).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}.</p>}
                   <button
                     onClick={handleUnshare}
                     disabled={sharing}
@@ -636,7 +643,7 @@ export default function ItemPage() {
                   className="self-start flex items-center gap-2 text-xs bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border border-sky-500/20 px-3 py-1.5 rounded-lg font-semibold transition-all disabled:opacity-40"
                 >
                   {sharing ? <Loader2 size={12} className="animate-spin" /> : <Share2 size={12} />}
-                  Create public link
+                  Create 7-day public link
                 </button>
               )}
             </div>

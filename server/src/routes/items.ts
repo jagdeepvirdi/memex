@@ -85,6 +85,7 @@ const listQuerySchema = z.object({
   q: z.string().optional(),
   deleted: z.coerce.boolean().default(false),
   unreviewed: z.coerce.boolean().default(false),
+  reviewed: z.coerce.boolean().optional(),
   pendingEnrichment: z.coerce.boolean().default(false),
   enriched: z.coerce.boolean().default(false),
   hasReminder: z.coerce.boolean().default(false),

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { apiFetch, fetchInsights } from '../lib/api';
 import type { Insight } from '../../../shared/types';
 import { AiSetupStep } from '../components/setup/AiSetupStep';
+import { BrandMark } from '../components/Brand';
 
 type Persona = 'productivity' | 'creative';
 
@@ -50,7 +51,7 @@ export default function WelcomePage() {
       <div className="absolute top-[-10%] left-[-10%] w-96 h-96 bg-accent/5 rounded-full blur-3xl animate-pulse" />
       <div className="absolute bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-500/5 rounded-full blur-3xl" />
 
-      <div className="w-full max-w-2xl relative z-10">
+      <div id="main-content" tabIndex={-1} className="w-full max-w-2xl relative z-10">
         <AnimatePresence mode="wait">
           {step === 0 && (
             <motion.div
@@ -71,13 +72,11 @@ export default function WelcomePage() {
               exit={{ opacity: 0, y: -20 }}
               className="bg-surface p-10 rounded-3xl border border-white/5 shadow-2xl text-center space-y-6"
             >
-              <div className="w-20 h-20 bg-accent rounded-3xl flex items-center justify-center text-bg font-bold text-4xl mx-auto shadow-2xl shadow-accent/20">
-                M
-              </div>
+              <BrandMark size={80} className="mx-auto" />
               <div className="space-y-4">
                 <h1 className="font-display text-5xl text-ink">Hello, World.</h1>
                 <p className="text-lg text-ink-muted leading-relaxed max-w-lg mx-auto">
-                  I am Memex, your personal knowledge OS. I've connected to your data and am ready to help you organize, explore, and discover.
+                  Memex helps you capture, organize, and revisit your saved information. Choose how AI should assist, then you can start building your library.
                 </p>
               </div>
               <button
@@ -164,12 +163,12 @@ export default function WelcomePage() {
                   <Brain size={32} className={loadingInsights ? "animate-pulse" : ""} />
                 </div>
                 <h2 className="font-display text-3xl text-ink">
-                  {loadingInsights ? 'Analyzing Your Brain...' : 'I found some things.'}
+                  {loadingInsights ? 'Looking for useful patterns' : insights.length > 0 ? 'A first look at your library' : 'Your workspace is ready'}
                 </h2>
                 <p className="text-ink-muted text-sm">
                   {loadingInsights 
-                    ? 'Running initial embedding sweeps and discovering connections...' 
-                    : 'Here is a glimpse of what I can surface from your data.'}
+                    ? 'Loading a preview of patterns from your saved items…'
+                    : 'You can return to insights and rediscovery from the dashboard.'}
                 </p>
               </div>
 
@@ -200,7 +199,7 @@ export default function WelcomePage() {
                 ) : (
                   <div className="text-center text-ink-muted">
                     <CheckCircle2 size={32} className="mx-auto text-green-500 mb-2" />
-                    <p>Database indexed and ready.</p>
+                    <p>No insights to show yet. They may appear as your library grows.</p>
                   </div>
                 )}
               </div>

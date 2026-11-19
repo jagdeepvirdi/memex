@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 
 // ── Mocks ─────────────────────────────────────────────────────────────────────
 
@@ -57,7 +57,7 @@ describe('PublicItemPage — error state', () => {
     mockFetchSharedItem.mockRejectedValue(new Error('Link expired'))
     render(<PublicItemPage />)
     await waitFor(() =>
-      expect(screen.getByText('Item not found')).toBeInTheDocument()
+      expect(screen.getByText('This shared item is unavailable')).toBeInTheDocument()
     )
   })
 
@@ -65,8 +65,15 @@ describe('PublicItemPage — error state', () => {
     mockFetchSharedItem.mockRejectedValue(new Error('expired'))
     render(<PublicItemPage />)
     await waitFor(() =>
-      expect(screen.getByText(/expired or sharing may have been revoked/i)).toBeInTheDocument()
+      expect(screen.getByText(/link may have expired, been revoked, or the item may have been removed/i)).toBeInTheDocument()
     )
+  })
+
+  it('offers a retry when a shared link is unavailable', async () => {
+    mockFetchSharedItem.mockRejectedValueOnce(new Error('expired')).mockResolvedValueOnce(makeItem())
+    render(<PublicItemPage />)
+    fireEvent.click(await screen.findByRole('button', { name: /try again/i }))
+    expect(await screen.findByText('Shared Thai Recipe')).toBeInTheDocument()
   })
 })
 

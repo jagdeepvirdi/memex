@@ -64,13 +64,13 @@ export default function DigestPage() {
     <div className="flex h-screen bg-bg overflow-hidden">
       <Sidebar activeSection="digest" />
 
-      <main className="flex-1 overflow-y-auto">
+      <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto">
         <AppHeader
           left={<div className="flex items-center gap-3"><Newspaper size={18} className="text-ink-muted" /><h1 className="font-display text-lg text-ink">Weekly Digest</h1></div>}
           actions={!loading ? <button onClick={load} className="flex items-center gap-2 text-xs text-ink-muted hover:text-ink bg-white/5 hover:bg-white/10 px-3 py-2 rounded-lg transition-all"><RefreshCw size={13} /> Regenerate</button> : undefined}
         />
         <AppHeader.Spacer />
-        <div className="max-w-4xl mx-auto px-8 py-10">
+        <div className="max-w-4xl mx-auto px-4 py-6 sm:px-6 sm:py-10">
 
           {/* Period subtitle */}
           {digest && (
@@ -85,7 +85,7 @@ export default function DigestPage() {
           )}
 
           {error && (
-            <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm">{error}</div>
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm"><span>{error}</span><button type="button" onClick={load} className="min-h-10 rounded-lg px-3 font-medium hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Retry</button></div>
           )}
 
           {digest && !loading && (

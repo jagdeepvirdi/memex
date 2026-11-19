@@ -1,3 +1,5 @@
+![Memex — Personal Knowledge OS](brand/memex-lockup-dark.svg)
+
 # Memex — Personal Knowledge OS
 
 A self-hosted knowledge management app that ingests, auto-classifies, and organizes everything you save — notes, recipes, movies, books, places, links, files, voice memos, and more. Runs on your machine with local AI (Ollama) by default. Gemini, OpenAI, Claude or Groq are optional and used only with your key, your choice and your consent.
@@ -32,7 +34,7 @@ Everything is reachable from this computer only by default. More detail, local A
 - **Entity graph** — directors, authors, and cities are extracted as relational entities; query connections across all your notes
 - **Rediscovery** — "On this day" and forgotten-item widgets surface things you've saved and forgotten
 - **Actionable insights** — AI scans recent notes and surfaces events, habits, and suggestions on the dashboard
-- **Reminders** — attach a date to any item; PWA pushes a browser notification when it's due
+- **Reminders** — attach a date to any item; opt in from the dashboard to receive browser notifications when reminders are due
 - **Sharing** — generate a public link for any item (expires in 7 days by default); revokable at any time
 - **Obsidian export** — download your entire library as a ZIP of Markdown files with YAML frontmatter
 - **Bookmarklet** — one-click "Save to Memex" from any browser page; warns if a duplicate already exists
@@ -41,7 +43,7 @@ Everything is reachable from this computer only by default. More detail, local A
 - **Password vault** — AES-256-GCM client-side encryption; master password never leaves the browser
 - **Move to Vault** — one-click encryption of sensitive plain-text notes
 - **Data provenance** — every AI extraction is logged; roll back or apply any past extraction to an item
-- **PWA** — installable, works offline with cached API responses; share-target support
+- **PWA** — installable with an offline app shell and share-target support; viewing and changing library data requires a connection to your Memex instance
 
 **Monthly cost: $0 with local AI.** Cloud providers are optional and billed by them, not by Memex.
 

@@ -221,8 +221,7 @@ describe('PlacesView — interactions', () => {
     mockFetchItems.mockResolvedValue({ items: [makePlaceItem('p1', 'Sukiyabashi Jiro')], total: 1 })
     render(<PlacesView />)
     await waitFor(() => expect(screen.getByText('Sukiyabashi Jiro')).toBeInTheDocument())
-    const starButtons = document.querySelectorAll('td button')
-    fireEvent.click(starButtons[0])
+    fireEvent.click(screen.getByRole('button', { name: 'Rate Sukiyabashi Jiro 1 out of 5 stars' }))
     await waitFor(() => expect(mockUpdateItem).toHaveBeenCalled())
   })
 

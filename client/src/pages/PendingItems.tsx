@@ -16,6 +16,8 @@ export default function PendingItemsPage() {
   const [items, setItems] = useState<Item[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [deleting, setDeleting] = useState(false)
 
@@ -24,11 +26,12 @@ export default function PendingItemsPage() {
 
   useEffect(() => {
     setLoading(true)
+    setLoadError(false)
     fetchItems({ pendingEnrichment: true, limit, offset })
       .then(res => { setItems(res.items); setTotal(res.total) })
-      .catch(console.error)
+      .catch(() => { setLoadError(true); setItems([]); setTotal(0) })
       .finally(() => setLoading(false))
-  }, [offset])
+  }, [offset, reloadKey])
 
   const toggleSelect = (id: string) => {
     const next = new Set(selectedIds)
@@ -72,15 +75,15 @@ export default function PendingItemsPage() {
 
   return (
     <div className="min-h-screen bg-bg flex">
-      <Sidebar activeSection="dashboard" />
-      <main className="flex-1 flex flex-col">
+      <Sidebar activeSection="pending" />
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col">
         <AppHeader
           left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-3"><Zap size={20} className="text-yellow-400" /><h1 className="font-display text-lg text-ink">Pending AI Enrichment</h1></div>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} notes waiting</span>}</div>}
           actions={selectedIds.size > 0 ? <button onClick={handleBulkDelete} disabled={deleting} className="flex items-center gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-all text-xs font-bold disabled:opacity-50">{deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}Delete Selected ({selectedIds.size})</button> : undefined}
         />
         <AppHeader.Spacer />
 
-        <div className="p-8 max-w-7xl mx-auto w-full flex flex-col gap-6">
+        <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full flex flex-col gap-6">
           {items.length > 0 && (
             <div className="flex items-center gap-4 px-2">
               <button 
@@ -97,11 +100,13 @@ export default function PendingItemsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {[...Array(8)].map((_, i) => <CardSkeleton key={i} />)}
             </div>
+          ) : loadError ? (
+            <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-5 text-sm text-ink-muted"><span>Couldn’t load pending items.</span><button type="button" onClick={() => setReloadKey(value => value + 1)} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></div>
           ) : items.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-24 gap-4 text-ink-muted">
               <Zap size={40} className="text-green-400" />
               <p className="font-display text-xl text-ink">All notes are enriched!</p>
-              <p className="text-sm">Ollama has classified everything in your library.</p>
+              <p className="text-sm">No items are waiting for AI enrichment.</p>
             </div>
           ) : (
             <>

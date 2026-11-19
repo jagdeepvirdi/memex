@@ -10,6 +10,16 @@
   var buttons = Array.prototype.slice.call(document.querySelectorAll('.switch .opt'))
   var items = Array.prototype.slice.call(document.querySelectorAll('#notes li'))
   var tally = document.getElementById('tally')
+  var brandMark = document.querySelector('[data-brand-mark]')
+
+  function updateBrandMark() {
+    if (!brandMark) return
+    var override = document.documentElement.getAttribute('data-theme')
+    var light = override === 'light' || (!override && window.matchMedia('(prefers-color-scheme: light)').matches)
+    brandMark.src = light ? 'brand/memex-mark-light.svg' : 'brand/memex-mark.svg'
+  }
+  updateBrandMark()
+  window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', updateBrandMark)
 
   function render(mode) {
     var sent = 0
@@ -80,6 +90,7 @@
         if (next === 'auto') { document.documentElement.removeAttribute('data-theme'); localStorage.removeItem('memex-site-theme') }
         else { document.documentElement.setAttribute('data-theme', next); localStorage.setItem('memex-site-theme', next) }
       } catch (e) {}
+      updateBrandMark()
       label()
     })
     label()

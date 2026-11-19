@@ -15,6 +15,8 @@ export default function PlacesView() {
   const [items, setItems] = useState<Item[]>([])
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState(false)
+  const [reloadKey, setReloadKey] = useState(0)
 
   const city = searchParams.get('city') || ''
   const q = searchParams.get('q') || ''
@@ -23,6 +25,7 @@ export default function PlacesView() {
 
   useEffect(() => {
     setLoading(true)
+    setLoadError(false)
     fetchItems({
       type: 'place',
       q: q || undefined,
@@ -40,10 +43,13 @@ export default function PlacesView() {
       })
       .catch(err => {
         console.error(err)
+        setLoadError(true)
+        setItems([])
+        setTotal(0)
         toast.error('Failed to load places')
       })
       .finally(() => setLoading(false))
-  }, [city, q, offset])
+  }, [city, q, offset, reloadKey])
 
   const handleUpdateRating = async (id: string, rating: number) => {
     const item = items.find(i => i.id === id)
@@ -79,19 +85,19 @@ export default function PlacesView() {
   return (
     <div className="min-h-screen bg-bg flex text-ink">
       <Sidebar activeSection="places" />
-      <main className="flex-1 flex flex-col min-w-0">
+      <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0">
         <AppHeader
           left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg flex items-center gap-2"><MapPin size={20} className="text-accent" />Places & Travel</h1>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} entries</span>}</div>}
           actions={<button onClick={handleExportCsv} className="text-xs flex items-center gap-2 bg-white/5 text-ink-muted hover:text-ink border border-white/10 px-3 py-1.5 rounded-lg transition-all"><Download size={14} />Export CSV</button>}
         />
         <AppHeader.Spacer />
 
-        <div className="p-8 flex-1 flex flex-col gap-6 overflow-hidden">
+        <div className="p-4 sm:p-6 lg:p-8 flex-1 flex flex-col gap-6 overflow-hidden">
           {/* Filters Bar */}
           <div className="flex flex-wrap items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/5">
             <div className="flex items-center gap-2 flex-1 min-w-[200px]">
               <Search size={16} className="text-ink-muted" />
-              <input 
+              <input aria-label="Search saved places"
                 type="text" 
                 placeholder="Search places, cuisines, or notes..."
                 value={q}
@@ -116,7 +122,7 @@ export default function PlacesView() {
           {/* Table Container */}
           <div className="flex-1 bg-white/[0.02] border border-white/5 rounded-xl overflow-hidden flex flex-col">
             <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-              <table className="w-full text-left border-collapse table-fixed">
+              <table className="w-full text-left border-collapse table-fixed"><caption className="sr-only">Saved places with visit status and personal ratings</caption>
                 <thead className="sticky top-0 bg-bg/95 backdrop-blur-sm shadow-sm z-10">
                   <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-ink-muted font-semibold">
                     <th className="px-6 py-4 w-[25%] min-w-[200px]">Name</th>
@@ -139,6 +145,8 @@ export default function PlacesView() {
                         <td className="px-6 py-4"><div className="h-8 bg-white/5 rounded w-16 mx-auto" /></td>
                       </tr>
                     ))
+                  ) : loadError ? (
+                    <tr><td colSpan={6} role="alert" className="py-16 text-center text-ink-muted text-sm"><p>Couldn’t load places.</p><button type="button" onClick={() => setReloadKey(value => value + 1)} className="mt-3 rounded-lg px-4 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></td></tr>
                   ) : items.length === 0 ? (
                     <tr>
                       <td colSpan={6} className="py-24 text-center text-ink-muted text-sm">
@@ -150,8 +158,8 @@ export default function PlacesView() {
                       const data = item.structured as PlaceData
                       return (
                         <tr key={item.id} className="hover:bg-white/[0.03] transition-colors group">
-                          <td className="px-6 py-4 truncate font-medium text-ink/90 group-hover:text-ink cursor-pointer" onClick={() => navigate(`/item/${item.id}`)}>
-                            {data.name || item.title}
+                          <td className="px-6 py-4 truncate font-medium text-ink/90 group-hover:text-ink">
+                            <button type="button" onClick={() => navigate(`/item/${item.id}`)} className="text-left hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{data.name || item.title}</button>
                             {data.cuisine && <span className="block text-[10px] text-ink-muted font-normal uppercase tracking-tighter mt-0.5">{data.cuisine}</span>}
                           </td>
                           <td className="px-4 py-4">
@@ -163,7 +171,8 @@ export default function PlacesView() {
                             {[data.city, data.country].filter(Boolean).join(', ') || '—'}
                           </td>
                           <td className="px-4 py-4">
-                            <select 
+                            <select
+                              aria-label={`Visit status for ${item.title}`}
                               value={data.visitStatus} 
                               onChange={(e) => handleUpdateStatus(item.id, e.target.value)}
                               className="bg-transparent border-none text-xs text-ink-muted focus:text-accent outline-none cursor-pointer"
@@ -178,7 +187,7 @@ export default function PlacesView() {
                               {[1, 2, 3, 4, 5].map(star => (
                                 <button 
                                   key={star} 
-                                  onClick={() => handleUpdateRating(item.id, star)}
+                                  onClick={() => handleUpdateRating(item.id, star)} aria-label={`Rate ${item.title} ${star} out of 5 stars`} aria-pressed={star === (data.userRating || 0)}
                                   className={`transition-colors ${star <= (data.userRating || 0) ? 'text-accent' : 'text-white/10 hover:text-accent/40'}`}
                                 >
                                   <Star size={12} fill={star <= (data.userRating || 0) ? 'currentColor' : 'none'} />

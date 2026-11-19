@@ -379,6 +379,7 @@ export default function CategoryReviewPage() {
   const [stagedItems, setStagedItems] = useState<Item[]>([])
   const [stagedLoading, setStagedLoading] = useState(true)
   const [stagedError, setStagedError] = useState<string | null>(null)
+  const [stagedRetry, setStagedRetry] = useState(0)
   const [accepted, setAccepted] = useState<Set<string>>(new Set())
   const [acceptingAll, setAcceptingAll] = useState(false)
 
@@ -386,6 +387,7 @@ export default function CategoryReviewPage() {
   const [anomalies, setAnomalies] = useState<CategoryAnomaly[]>([])
   const [anomaliesLoading, setAnomaliesLoading] = useState(true)
   const [anomaliesError, setAnomaliesError] = useState<string | null>(null)
+  const [anomaliesRetry, setAnomaliesRetry] = useState(0)
   const [targets, setTargets] = useState<Record<string, string[]>>({})
   const [remapping, setRemapping] = useState<Record<string, boolean>>({})
   const [done, setDone] = useState<Record<string, boolean>>({})
@@ -400,10 +402,12 @@ export default function CategoryReviewPage() {
       .then(({ items }) => setStagedItems(items))
       .catch(err => setStagedError(err.message))
       .finally(() => setStagedLoading(false))
-  }, [threshold])
+  }, [threshold, stagedRetry])
 
   // Load anomalies once
   useEffect(() => {
+    setAnomaliesLoading(true)
+    setAnomaliesError(null)
     fetchCategoryAnomalies()
       .then(data => {
         setAnomalies(data)
@@ -415,7 +419,7 @@ export default function CategoryReviewPage() {
       })
       .catch(err => setAnomaliesError(err.message))
       .finally(() => setAnomaliesLoading(false))
-  }, [])
+  }, [anomaliesRetry])
 
   const handleAccept = useCallback(async (id: string) => {
     await updateItem(id, { reviewed: true })
@@ -481,7 +485,7 @@ export default function CategoryReviewPage() {
     <div className="flex h-screen bg-bg overflow-hidden">
       <Sidebar activeSection="category-review" />
 
-      <main className="flex-1 overflow-y-auto p-8">
+      <main id="main-content" tabIndex={-1} className="flex-1 overflow-y-auto p-8">
         <AppHeader
           left={
             <div className="flex items-center gap-3">
@@ -563,8 +567,8 @@ export default function CategoryReviewPage() {
               )}
 
               {stagedError && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm">
-                  {stagedError}
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm">
+                  <span>{stagedError}</span><button type="button" onClick={() => setStagedRetry(value => value + 1)} className="rounded-lg px-3 py-2 font-medium hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Retry</button>
                 </div>
               )}
 
@@ -618,8 +622,8 @@ export default function CategoryReviewPage() {
               )}
 
               {anomaliesError && (
-                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm">
-                  {anomaliesError}
+                <div role="alert" className="flex flex-wrap items-center justify-between gap-3 bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-red-400 text-sm">
+                  <span>{anomaliesError}</span><button type="button" onClick={() => setAnomaliesRetry(value => value + 1)} className="rounded-lg px-3 py-2 font-medium hover:bg-red-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">Retry</button>
                 </div>
               )}
 

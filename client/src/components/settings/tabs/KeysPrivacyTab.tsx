@@ -22,7 +22,7 @@ export function KeysPrivacyTab({ settings, onUpdate }: Props) {
       <SettingsSection
         icon={<KeyRound size={20} className="text-amber-400" />}
         title="Cloud keys"
-        description="Optional. Memex works fully offline with Ollama; add a key only if you want to use a cloud provider."
+        description="Optional. Local Ollama keeps AI requests on your instance; cloud provider keys are only needed if you choose a cloud model. Your browser still needs a connection to the Memex instance."
       >
         <ApiKeysPanel />
       </SettingsSection>

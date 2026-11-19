@@ -6,6 +6,7 @@ const shades = (name: string, levels: number[]) =>
   Object.fromEntries(levels.map(l => [l, `rgb(var(--${name}-${l}) / <alpha-value>)`]))
 
 export default {
+  future: { hoverOnlyWhenSupported: true },
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
@@ -77,23 +78,23 @@ export default {
       },
 
       fontSize: {
-        // Design system base
-        xs: ['10.5px', { lineHeight: '1.4', letterSpacing: '0.06em' }],
-        sm: ['12px', { lineHeight: '1.5' }],
-        base: ['14.5px', { lineHeight: '1.5' }],
-        md: ['16px', { lineHeight: '1.5' }],
+        xs: ['var(--type-xs)', { lineHeight: '1.4' }],
+        sm: ['var(--type-sm)', { lineHeight: '1.5' }],
+        base: ['var(--type-md)', { lineHeight: '1.5' }],
+        md: ['var(--type-lg)', { lineHeight: '1.5' }],
         lg: ['18px', { lineHeight: '1.4' }],
-        xl: ['22px', { lineHeight: '1.3' }],
-        '2xl': ['28px', { lineHeight: '1.2' }],
-        '3xl': ['36px', { lineHeight: '1.15' }],
+        xl: ['var(--type-xl)', { lineHeight: '1.3' }],
+        '2xl': ['var(--type-2xl)', { lineHeight: '1.2' }],
+        '3xl': ['var(--type-display)', { lineHeight: '1.15' }],
       },
 
       borderRadius: {
-        card: '12px',
-        input: '8px',
-        badge: '999px',
-        btn: '9px',
-        sm: '7px',
+        card: 'var(--radius-card)',
+        input: 'var(--radius-control)',
+        badge: 'var(--radius-pill)',
+        btn: 'var(--radius-control)',
+        sm: 'var(--radius-sm)',
+        panel: 'var(--radius-panel)',
       },
 
       boxShadow: {
@@ -101,6 +102,7 @@ export default {
         'accent-glow': 'var(--shadow-glow)',
         'vault-glow': '0 0 24px rgb(var(--c-vault) / 0.16)',
         'card': 'var(--shadow-card)',
+        'raised': 'var(--shadow-raised)',
       },
 
       borderColor: {
@@ -141,6 +143,9 @@ export default {
         'slide-in-right': 'slideInRight 0.24s cubic-bezier(0.2, 0.7, 0.2, 1)',
         'pulse-soft': 'pulse 2s ease-in-out infinite',
         'shimmer': 'shimmer 1.8s linear infinite',
+      },
+      transitionTimingFunction: {
+        standard: 'var(--ease-standard)',
       },
     },
   },

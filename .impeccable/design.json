@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-19T07:00:00Z",
+  "title": "Design System: Memex",
+  "extensions": {
+    "colorMeta": {
+      "midnight": { "role": "neutral", "displayName": "Midnight Graphite", "tonalRamp": ["#0B0E14", "#141922", "#19202B"] },
+      "porcelain": { "role": "neutral", "displayName": "Porcelain", "tonalRamp": ["#F5F7FB", "#EEF1F7", "#FFFFFF"] },
+      "iris-dark": { "role": "primary", "displayName": "Iris on dark", "tonalRamp": ["#A5AAFF", "#7C83FF", "#4C51D9"] },
+      "iris-light": { "role": "primary", "displayName": "Iris on light", "tonalRamp": ["#7C83FF", "#5558E8", "#3A3DB8"] },
+      "jade-dark": { "role": "secondary", "displayName": "Jade on dark", "tonalRamp": ["#5EEAD4", "#2DD4BF", "#0F766E"] },
+      "jade-light": { "role": "secondary", "displayName": "Jade on light", "tonalRamp": ["#2DD4BF", "#0F766E", "#115E59"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Editorial display", "purpose": "Existing application headings; use selectively." },
+      "body": { "displayName": "UI sans", "purpose": "Application and site interface text." },
+      "mono": { "displayName": "Technical mono", "purpose": "Code, identifiers, and technical metadata." }
+    },
+    "shadows": [
+      { "name": "card-dark", "value": "0 1px 3px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.2)", "purpose": "Card separation in dark mode." },
+      { "name": "card-light", "value": "0 1px 2px rgb(18 24 38 / 0.06), 0 6px 20px rgb(18 24 38 / 0.07)", "purpose": "Card separation in light mode." },
+      { "name": "raised", "value": "0 12px 36px rgb(0 0 0 / 0.3)", "purpose": "Overlays and floating menus; light mode uses a softer ink shadow." }
+    ],
+    "motion": [
+      { "name": "fast", "value": "120ms", "purpose": "Small interaction feedback." },
+      { "name": "standard", "value": "180ms cubic-bezier(0.2, 0, 0, 1)", "purpose": "Standard state transitions." },
+      { "name": "reduced", "value": "0.01ms", "purpose": "Reduced-motion preference fallback." }
+    ],
+    "spacing": [
+      { "name": "1", "value": "4px" }, { "name": "2", "value": "8px" },
+      { "name": "3", "value": "12px" }, { "name": "4", "value": "16px" },
+      { "name": "5", "value": "20px" }, { "name": "6", "value": "24px" },
+      { "name": "8", "value": "32px" }, { "name": "10", "value": "40px" },
+      { "name": "12", "value": "48px" }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Brand lockup",
+      "kind": "custom",
+      "refersTo": "brand-lockup",
+      "description": "Theme-aware Memory Ribbon symbol paired with the Memex wordmark.",
+      "html": "<span class=\"ds-brand\"><img src=\"/brand/memex-mark.svg\" alt=\"\"><span>Memex</span></span>",
+      "css": ".ds-brand { display: inline-flex; align-items: center; gap: 12px; color: #E9EEF6; font: 600 20px/1.2 'DM Sans', system-ui, sans-serif; letter-spacing: -0.03em; } .ds-brand img { width: 32px; height: 32px; flex: none; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Connected memory, kept in your hands.",
+    "overview": "Memex is a self-hosted Personal Knowledge OS. Its continuous folded ribbon forms an abstract M: capture and recall are joined through one clear crease. The UI uses dark graphite and light porcelain surfaces, restrained iris and jade accents, a 4px spacing rhythm, 6–16px component radii, clear focus, and reduced-motion support.",
+    "keyCharacteristics": ["Calm and precise", "Local-first and user-controlled", "Distinct at small icon sizes", "Grounded in capture, connection, and recall"],
+    "rules": [
+      { "name": "One folded ribbon", "body": "Keep the M as one continuous rounded stroke with a single inner fold; do not add effects or decorative framing.", "section": "components" },
+      { "name": "Theme-correct mark", "body": "Use the light iris/jade pair on dark surfaces and the dark iris/jade pair on light surfaces; use a single inherited color for monochrome contexts.", "section": "colors" }
+    ],
+    "dos": ["Use approved light, dark, and monochrome variants.", "Preserve the mark's proportions and fold detail."],
+    "donts": ["Do not use the plain M tile as the final logo.", "Do not invent product or privacy claims in brand materials."]
+  }
+}

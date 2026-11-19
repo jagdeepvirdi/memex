@@ -18,6 +18,11 @@ const mockIngestUrl = vi.fn()
 vi.mock('../../lib/api', () => ({
   createItem: (...a: any[]) => mockCreateItem(...a),
   ingestUrl: (...a: any[]) => mockIngestUrl(...a),
+  apiFetch: async (path: string, options: RequestInit) => {
+    const response = await fetch(`/api${path}`, options)
+    if (!response.ok) throw new Error('Request failed')
+    return response.json()
+  },
 }))
 
 import IngestPanel from './IngestPanel'
@@ -52,7 +57,7 @@ beforeEach(() => {
 })
 
 async function classifyManual(text: string) {
-  fireEvent.click(screen.getByRole('button', { name: /Manual Note/i }))
+  fireEvent.click(screen.getByRole('tab', { name: /Manual Note/i }))
   fireEvent.change(screen.getByTestId('editor'), { target: { value: text } })
   fireEvent.click(screen.getByRole('button', { name: /Classify & Add/i }))
   await screen.findByRole('button', { name: /Save to Memex/i })
@@ -145,7 +150,7 @@ describe('IngestPanel — bulk paste tab', () => {
   it('offers a Bulk Paste tab that shows the paste import panel', () => {
     render(<IngestPanel />)
     expect(screen.queryByTestId('paste-panel')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Bulk Paste/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /Bulk Paste/i }))
     expect(screen.getByTestId('paste-panel')).toBeInTheDocument()
   })
 })

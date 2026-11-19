@@ -104,7 +104,7 @@ describe('SemanticGraphPage Component', () => {
     expect(screen.getByText('Links')).toBeInTheDocument()
 
     // Verify sidebar active section
-    expect(screen.getByTestId('mock-sidebar')).toHaveTextContent('Sidebar: dashboard')
+    expect(screen.getByTestId('mock-sidebar')).toHaveTextContent('Sidebar: graph')
   })
 
   it('handles clicking a node to navigate to the item detail page', async () => {

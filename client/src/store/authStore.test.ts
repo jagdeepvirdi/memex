@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { useAuthStore } from './authStore'
 
 beforeEach(() => {
@@ -55,6 +55,17 @@ describe('authStore — setToken', () => {
 })
 
 describe('authStore — logout', () => {
+  it('removes the legacy API response cache on logout', async () => {
+    const deleteCache = vi.fn().mockResolvedValue(true)
+    vi.stubGlobal('caches', { delete: deleteCache })
+
+    useAuthStore.getState().logout()
+    await Promise.resolve()
+
+    expect(deleteCache).toHaveBeenCalledWith('api-cache')
+    vi.unstubAllGlobals()
+  })
+
   it('clears user, token, and sets isAuthenticated=false', () => {
     useAuthStore.getState().login({ id: 'u1', email: 'a@b.com' }, 'tok-xyz')
     useAuthStore.getState().logout()

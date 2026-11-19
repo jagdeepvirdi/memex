@@ -126,7 +126,7 @@ describe('AskMemexPage — form submission', () => {
     render(<AskMemexPage />)
     fireEvent.change(screen.getByPlaceholderText('Ask anything about your data...'), { target: { value: 'A question?' } })
     fireEvent.submit(document.querySelector('form')!)
-    expect(await screen.findByText(/check that your AI provider is available/i)).toBeInTheDocument()
+    expect(await screen.findByText(/check your connection and AI provider settings/i)).toBeInTheDocument()
     expect(screen.queryByText(/Ollama is running/i)).not.toBeInTheDocument()
   })
 
@@ -137,7 +137,7 @@ describe('AskMemexPage — form submission', () => {
     fireEvent.change(input, { target: { value: 'A question?' } })
     fireEvent.submit(document.querySelector('form')!)
     await waitFor(() =>
-      expect(screen.getByText(/encountered an error/i)).toBeInTheDocument()
+      expect(screen.getByText(/couldn’t complete that search/i)).toBeInTheDocument()
     )
   })
 })

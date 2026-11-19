@@ -17,6 +17,7 @@ export default function Vault() {
   const { isLocked, lock, unlock, vaultKey, updateActivity, checkAutoLock } = useVaultStore();
   const [items, setItems] = useState<VaultItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [vaultError, setVaultError] = useState(false);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingItem, setEditingItem] = useState<VaultItem | null>(null);
@@ -81,11 +82,14 @@ export default function Vault() {
 
   const fetchVault = async () => {
     setLoading(true);
+    setVaultError(false);
     try {
       const data = await apiFetch<VaultItem[]>('/vault');
       setItems(data);
     } catch (error) {
       console.error('Fetch vault error:', error);
+      setVaultError(true);
+      setItems([]);
     } finally {
       setLoading(false);
     }
@@ -98,6 +102,7 @@ export default function Vault() {
       setItems(items.filter(i => i.id !== id));
     } catch (error) {
       console.error('Delete vault item error:', error);
+      toast.error('Failed to delete vault item');
     }
   };
 
@@ -117,12 +122,14 @@ export default function Vault() {
       <AppHeader.Spacer />
 
       {/* Vault Content */}
-      <main className="p-12 max-w-7xl mx-auto w-full flex-1">
+      <main id="main-content" tabIndex={-1} className="p-4 sm:p-6 lg:p-12 max-w-7xl mx-auto w-full flex-1">
         {loading ? (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-ink-muted">
             <Loader2 className="animate-spin" size={40} />
             <p className="font-mono text-sm">Decrypting vault data...</p>
           </div>
+        ) : vaultError ? (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-5 text-sm text-ink-muted"><span>Vault items couldn’t be loaded. Your encrypted data has not been changed.</span><button type="button" onClick={fetchVault} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></div>
         ) : filteredItems.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in duration-500">
             {filteredItems.map(item => (
@@ -140,7 +147,7 @@ export default function Vault() {
             <div className="text-center">
               <h3 className="font-display text-xl text-ink">Your vault is empty</h3>
               <p className="text-ink-muted text-sm max-w-xs mt-2">
-                Store your passwords and sensitive information securely with local encryption.
+                Vault entries are encrypted in your browser before they are stored on your Memex server.
               </p>
             </div>
             <button 

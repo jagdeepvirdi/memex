@@ -69,6 +69,18 @@ describe('AppHeader Component', () => {
     expect(mockNavigate).toHaveBeenCalledWith('/login')
   })
 
+  it('labels account controls and dismisses the profile menu with Escape', () => {
+    render(<AppHeader left={<div>Title</div>} />)
+    const trigger = screen.getByRole('button', { name: 'Account menu for testuser@example.com' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('menu', { name: 'Account' })).toBeInTheDocument()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(screen.queryByRole('menu', { name: 'Account' })).not.toBeInTheDocument()
+    expect(trigger).toHaveFocus()
+  })
+
   it('shows correct network status online vs offline', () => {
     // Online state
     const { rerender } = render(<AppHeader left={<div>Title</div>} />)
@@ -83,6 +95,14 @@ describe('AppHeader Component', () => {
     })
     rerender(<AppHeader left={<div>Title</div>} />)
     expect(screen.getByText('OFFLINE')).toBeInTheDocument()
+  })
+
+  it('provides an AI status summary and a direct setup path on compact layouts', () => {
+    render(<AppHeader left={<div>Title</div>} />)
+    const localAi = screen.getByRole('button', { name: /local ollama available\. open ai settings/i })
+    expect(localAi).toBeInTheDocument()
+    fireEvent.click(localAi)
+    expect(mockNavigate).toHaveBeenCalledWith('/settings/ai')
   })
 
   it('shows correct AI (Ollama) status indicators', () => {
@@ -122,6 +142,7 @@ describe('AppHeader Component', () => {
 
     expect(screen.getByText('6/10')).toBeInTheDocument()
     expect(screen.getByText('1m 20s')).toBeInTheDocument()
+    expect(screen.getByRole('progressbar', { name: 'Items classified' })).toHaveAttribute('aria-valuenow', '6')
   })
 
   it('shows checkmark when all items are successfully enriched', () => {
@@ -163,10 +184,10 @@ describe('AppHeader Component', () => {
   it('makes the spacer taller on a phone only while the actions row is showing', () => {
     const { container, rerender } = render(<><AppHeader left={<div>Title</div>} /><AppHeader.Spacer /></>)
     const spacer = () => container.lastElementChild as HTMLElement
-    expect(spacer().className).not.toContain('max-md:h-28')
+    expect(spacer().className).not.toContain('max-md:h-[calc(7rem+env(safe-area-inset-top))]')
     rerender(<><AppHeader left={<div>Title</div>} actions={<button>Go</button>} /><AppHeader.Spacer /></>)
-    expect(spacer().className).toContain('max-md:h-28')
+    expect(spacer().className).toContain('max-md:h-[calc(7rem+env(safe-area-inset-top))]')
     rerender(<><AppHeader left={<div>Title</div>} /><AppHeader.Spacer /></>)
-    expect(spacer().className).not.toContain('max-md:h-28')
+    expect(spacer().className).not.toContain('max-md:h-[calc(7rem+env(safe-area-inset-top))]')
   })
 })

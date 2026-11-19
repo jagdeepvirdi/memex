@@ -9,29 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
-      workbox: {
-        runtimeCaching: [
-          {
-            urlPattern: /^\/api\//,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              // If the API hasn't answered in 3s, serve the cached copy (when one
-              // exists) instead of leaving the page blank until the request ends.
-              // With nothing cached yet, the request just keeps waiting for the network.
-              networkTimeoutSeconds: 3,
-              expiration: {
-                maxEntries: 500,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
-          }
-        ]
-      },
+      includeAssets: ['apple-touch-icon.png', 'brand/favicon.svg', 'brand/masked-icon.svg'],
       manifest: {
         name: 'Memex',
         short_name: 'Memex',
@@ -40,9 +18,9 @@ export default defineConfig({
         background_color: '#0B0E14',
         display: 'standalone',
         icons: [
-          { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
-          { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/pwa-maskable-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' }
         ],
         share_target: {
           action: '/?share=true',

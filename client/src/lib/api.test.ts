@@ -248,6 +248,13 @@ describe('fetchItems', () => {
     expect(url).toContain('pendingEnrichment=true')
   })
 
+  it('appends reviewed=true for reviewed item filtering', async () => {
+    mockFetch(200, { items: [], total: 0 })
+    await fetchItems({ reviewed: true })
+    const url = (fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string
+    expect(url).toContain('reviewed=true')
+  })
+
   it('appends limit and offset params', async () => {
     mockFetch(200, { items: [], total: 0 })
     await fetchItems({ limit: 10, offset: 20 })
