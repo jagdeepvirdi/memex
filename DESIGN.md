@@ -117,7 +117,7 @@ The mark is a rounded folded ribbon with one cream page-fold. Do not redraw it a
 
 ### Do
 
-- Do use the supplied dark, light, or monochrome logo for its matching background.
+- Do use the supplied dark or light lockup for its matching background (the dark lockup's white wordmark disappears on light surfaces).
 - Do preserve the cream fold at icon sizes; increase the whole mark proportionally when a reproduction loses it.
 - Do use the mark and wordmark together at first brand contact, and the symbol alone only where space is constrained or the name is already clear.
 - Do keep public claims grounded in the product and its actual privacy controls.

@@ -349,6 +349,7 @@ Phase-level criteria are stated at each phase heading above. A phase is not DONE
 - Phase 6 removed Workbox API response caching, purges the legacy `api-cache` at startup and logout, and marks API responses `private, no-store`. Browser cache seeding/reload confirmed the legacy cache was deleted. Reminder notifications now require an explicit dashboard opt-in.
 - Phase 6 headless Chrome swept 14 routes at 360, 390, 768, and 1280 CSS px with no document-level horizontal overflow. API-backed routes used an authenticated synthetic session without a configured backend; vault/item detail and real content-density cases could not be fully exercised. Physical handset and screen-reader validation remain outstanding.
 - Phase 6 verification passed: server tests 1,802 passed/17 skipped; client tests 941 passed; MCP tests 32 passed; client and server TypeScript checks; Vite production build. The generated manifest/share target/icons and app-shell-only service worker were inspected. Existing >500 kB bundle and Vite/esbuild advisory warnings remain.
+- Logo replaced (post Phase 6): the user supplied dark and light raster logos, which replaced the vector Memory Ribbon family. `brand/generate-assets.py` (pillow/numpy/scipy) replaces `generate-assets.ps1` and rebuilds lockups, marks, icons, favicon, PWA/touch icons and the social preview from `brand/source/`. `brand/README.md` and `DESIGN.md` were updated; the old SVGs and concept sketches were deleted.
 
 ## 15. Deferred and outstanding work
 
@@ -359,6 +360,8 @@ Phase-level criteria are stated at each phase heading above. A phase is not DONE
 - The browser-generated screenshots of app/site integration could not be captured: Chrome and Edge headless both failed during GPU initialization. The logo raster exports were inspected directly; UI integration was checked by tests, source, and build.
 - Identity and design foundation are complete. Broader screen redesign, security review/remediation, new capabilities, and deployment remain outstanding and gated by their phases.
 - Confirm whether referenced screenshot assets exist and whether any current deployment details have changed before using them as evidence.
+- The supplied logo is raster only: there is no vector or monochrome version, so Phase 1's monochrome/vector acceptance items (P1-003) are not met until one is supplied. The mark is wider than tall and sits on a square canvas, so it renders about 25% shorter than the old square mark at the same size.
+- The section 6 milestone table still shows Phases 1-3 as NOT STARTED and Phase 6 as IN PROGRESS; section 13 and the completed-work log are authoritative.
 
 ## 16. Product improvement recommendations (initial hypotheses)
 

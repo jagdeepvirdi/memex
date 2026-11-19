@@ -6,6 +6,14 @@ All notable changes to Memex are documented here.
 
 ## [Unreleased]
 
+### Changed
+- **New brand identity.** The supplied folded-ribbon "M" logo replaces the earlier mark in the app, login/onboarding, landing page, README, favicon, PWA and touch icons and the social preview. Assets are built from the two master PNGs by `python brand/generate-assets.py` (see `brand/README.md`).
+- **Interface redesign (phases 1-6).** Navigation is grouped into Home, Discover, Library and Review with a mobile quick-nav; search (`/`) and capture (`N`) are available app-wide; the dashboard leads with capture and search and shows load failures with a retry instead of looking empty; shared UI primitives, a documented design foundation (`DESIGN.md`, `PRODUCT.md`), skip links, reduced-motion support, safe-area handling and larger touch targets.
+- The table's Reviewed filter now reaches the server query (`reviewed=true`), Trash explicitly requests deleted items, the item page offers Retry when loading fails, and a new public link states that it expires after 7 days.
+
+### Security
+- **The PWA no longer caches API responses.** Every `/api` response is now `Cache-Control: private, no-store`, and the old `api-cache` is deleted at startup and on logout, so library data no longer survives logout in the browser. The app shell still works offline; reading items offline no longer does.
+
 ---
 
 ## [1.2.0] — 2026-11-18

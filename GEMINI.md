@@ -11,7 +11,7 @@ Memex is a local-first personal knowledge management system. It uses local AI (O
 | Frontend | React 18 + Vite + TypeScript (strict) |
 | Styling | Tailwind CSS + custom design tokens |
 | Animation | framer-motion |
-| PWA | vite-plugin-pwa + Workbox (NetworkFirst for `/api/*`) |
+| PWA | vite-plugin-pwa + Workbox (app shell only; `/api/*` is never cached) |
 | State | Zustand |
 | Backend | Node.js + Express (TypeScript) |
 | Database | PostgreSQL 16 + pgvector (Docker) |
