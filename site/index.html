@@ -134,7 +134,7 @@
       <dl class="rows">
         <div class="row">
           <dt>Capture</dt>
-          <dd>Paste a link, drop a PDF or a photo, record a voice memo, import Google Keep, or press the bookmarklet in your browser. Saving is instant; the AI does its work in the background and shows how long it will take. PDFs and Office files, photos and voice memos each need a small optional local tool, listed in the README.</dd>
+          <dd>Paste a link, drop a PDF or a photo, record a voice memo, import Google Keep, or press the bookmarklet in your browser. Saving is instant; the AI does its work in the background and shows how long it will take. Photos need an Ollama vision model. PDFs, Office files and voice memos need extra local tools that the Docker image does not include, so they work when you run Memex from source; the README has a table.</dd>
         </div>
         <div class="row">
           <dt>Organize</dt>
@@ -317,7 +317,7 @@ cp .env.example .env     # set JWT_SECRET: the file shows how to make one
 docker compose up -d</code></pre>
       </div>
       <p class="steps-after">Then open <code>http://localhost:3002</code>, create your account, and choose local AI or paste a cloud key. Settings has a button that loads sample data so you can look around first.</p>
-      <p class="fine">The Docker install is tested automatically on Linux with every change. On one Windows machine with Docker Desktop the first image build stopped with an npm error ("Exit handler never called"); running it again may help, and a report is welcome if it does not. macOS has not been tried by hand yet.</p>
+      <p class="fine">The Docker install is tested automatically on Linux with every change. On a network that re-signs HTTPS (some antivirus scanners and company proxies) the image build stops with a certificate error; the README explains the fix. It has been run by hand on Windows with Docker Desktop; macOS has not been tried yet.</p>
     </section>
   </main>
 

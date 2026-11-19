@@ -12,7 +12,9 @@ COPY client/package.json client/package-lock.json client/
 COPY server/package.json server/package-lock.json server/
 # `npm install`, not `npm ci`: the lock files were generated on Windows and omit Linux-only optional packages (esbuild's
 # platform binaries), so `npm ci` fails here. CI uses the same workaround.
-RUN cd client && npm install --no-audit --no-fund && cd ../server && npm install --no-audit --no-fund
+# Optional: certs/*.crt (see certs/README.md) lets the build trust a network that re-signs HTTPS (antivirus scanning, proxies).
+# It is mounted for this step only and never lands in an image layer.
+RUN --mount=type=bind,source=certs,target=/certs sh -c 'cat /certs/*.crt > /tmp/extra-ca.pem 2>/dev/null; [ -s /tmp/extra-ca.pem ] && export NODE_EXTRA_CA_CERTS=/tmp/extra-ca.pem; cd client && npm install --no-audit --no-fund && cd ../server && npm install --no-audit --no-fund'
 
 COPY shared shared
 COPY client client
@@ -29,7 +31,7 @@ ENV NODE_ENV=production \
 WORKDIR /app/server
 
 COPY server/package.json server/package-lock.json ./
-RUN npm install --omit=dev --no-audit --no-fund && npm cache clean --force
+RUN --mount=type=bind,source=certs,target=/certs sh -c 'cat /certs/*.crt > /tmp/extra-ca.pem 2>/dev/null; [ -s /tmp/extra-ca.pem ] && export NODE_EXTRA_CA_CERTS=/tmp/extra-ca.pem; npm install --omit=dev --no-audit --no-fund && npm cache clean --force && rm -f /tmp/extra-ca.pem'
 
 COPY --from=build /app/server/dist ./dist
 # tsc does not copy .sql files; the migrator reads them next to the compiled code.

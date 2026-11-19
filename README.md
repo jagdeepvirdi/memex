@@ -92,6 +92,19 @@ Open [http://localhost:3002](http://localhost:3002), create your account, and fo
 - **Cloud-only**: skip Ollama entirely (see "Path B" below).
 - **Stop / start**: `docker compose down` keeps your data (the `pg_data` volume); `docker compose up -d` brings it back. `docker compose down -v` deletes the data.
 - **Check it**: `http://localhost:3002/api/health` (alive?) and `http://localhost:3002/api/health/status` (database, pending migrations, Ollama).
+- **The build fails with `UNABLE_TO_VERIFY_LEAF_SIGNATURE` or npm's `Exit handler never called!`**: something on your network (often antivirus "HTTPS scanning" or a company proxy) re-signs HTTPS and the build container does not trust it. Turn that scanning off for Docker, or drop its root certificate into `certs/` and run `docker compose up -d --build`. [certs/README.md](certs/README.md) has the steps.
+
+**What works with the Docker install, and what needs more**
+
+| Capture or feature | Docker one-command install | What it needs |
+|---|---|---|
+| Text, links, YouTube, Google Keep ZIP, bulk paste, bookmarklet, share target | works | nothing extra (classification needs local Ollama or a cloud key) |
+| Photos and screenshots | works with a vision model | native Ollama with `ollama pull llama3.2-vision:11b` (or `llava:7b`) |
+| PDF, Word, PowerPoint, Excel, CSV, EPUB uploads | **not in the image** | MarkItDown (Python 3.10+): run Memex from source (Option 2) and `pip install 'markitdown[all]'` |
+| Voice memos and audio files | **not in the image** | Whisper (Python): run from source and `pip install openai-whisper` |
+| Search and Ask | works | an embedding model: Ollama `nomic-embed-text`, or a Gemini/OpenAI key |
+
+The upload and voice routes answer with a clear "not installed" message instead of failing silently. Adding these tools to the Docker image is possible but not provided.
 
 ### Option 2: from source (development)
 
@@ -251,12 +264,12 @@ New and curious? Settings > Library > **Sample data** loads about forty made-up 
 
 | | Windows | macOS | Linux |
 |---|---|---|---|
-| Docker one-command start | **tested** (Docker Desktop) | not tested yet | not tested yet |
+| Docker one-command start | tested by hand (Docker Desktop); fails behind HTTPS-scanning antivirus until its root certificate is added to `certs/` | not tested yet | built and started in CI on every change |
 | What you need | Docker Desktop (WSL2 backend), Node 22 for development, PowerShell 7 for `memex.ps1` | Docker Desktop, Node 22 for development | Docker Engine + compose plugin, Node 22 for development |
 | Reaching native Ollama from the container | `host.docker.internal` works out of the box | same | works through the `host-gateway` mapping in `docker-compose.yml` (untested) |
 | GPU for Ollama | automatic with native Ollama (NVIDIA/AMD) | automatic with native Ollama (Apple silicon); Docker cannot pass the GPU through, so use native Ollama | native Ollama uses the GPU; for Ollama in Docker you need the NVIDIA container toolkit and a GPU reservation (not included) |
 
-Only the Windows column has been run. The macOS and Linux paths use standard Docker features and should work, but they have not been tried: please report anything that does not.
+Windows was run by hand; Linux is exercised by the CI Docker job (build, start, first-run checks) on every change; macOS has not been tried. Please report anything that does not work.
 
 ---
 

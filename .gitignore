@@ -82,3 +82,6 @@ sessions/
 /.edge-app-profile/
 /.edge-app-profile-2/
 /.impeccable-cache/
+# Local CA certificates for the Docker build (certs/README.md explains)
+certs/*
+!certs/README.md

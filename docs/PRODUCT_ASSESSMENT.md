@@ -99,7 +99,7 @@ Priority: P0 before announcing; P1 next; P2 later; P3 only on demand. Complexity
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | R9-01 | No way to bring existing notes in (E-07); switching is one-way. | Adoption path for the likeliest switchers. | Import a Markdown folder or Obsidian vault ZIP: one item per file, frontmatter to tags/title, wikilinks kept as text, duplicates skipped, classification in the background, nothing sent anywhere. | Try Memex with real notes in minutes. | M | P1 | none | frontmatter variety; large vaults need batching; keep AI off until the user chooses | E-07, E-08, E-01 | high (gap), medium (demand) | ask 3-5 Obsidian users |
 | R9-02 | No measure of retrieval or Ask quality (E-11). | Retrieval is the central promise; AI changes are unjudged. | Synthetic fixture library with labelled questions; script reporting top-k hit rate and abstention rate; run in CI as a regression gate. | Safe model, threshold and prompt changes. | M | P1 | none | fixture bias; thresholds per embedding model differ | E-11 | high | none |
-| R9-03 | Windows Docker build failed locally (F-8-004); optional tools are a setup maze. | First-run success decides adoption. | Reproduce on a second Windows machine; if confirmed, pin npm or add retry/`--network` guidance; add a one-screen "what you get with each optional tool" matrix to the install section. | Fewer failed installs. | S-M | **P0** | another machine | may only be local | E-14 | medium | test elsewhere |
+| R9-03 **(done 2026-11-20)** | Windows Docker build failed locally (F-8-004); optional tools are a setup maze. | First-run success decides adoption. | Reproduce on a second Windows machine; if confirmed, pin npm or add retry/`--network` guidance; add a one-screen "what you get with each optional tool" matrix to the install section. | Fewer failed installs. | S-M | **P0** | another machine | may only be local | E-14 | medium | test elsewhere |
 
 ### UX improvements
 
@@ -144,6 +144,8 @@ Priority: P0 before announcing; P1 next; P2 later; P3 only on demand. Complexity
 ### 1-2 year opinion
 
 Lean into one promise: a private, organized, askable library you own. In order: make install reliable (R9-03), make retrieval measurable (R9-02), lower the cost of arriving (R9-01), then add capture surfaces only where users ask. Do not chase feature parity with Notion or Obsidian plugins; the surveyed products spend their effort on sync, collaboration and ecosystems that Memex deliberately does not have.
+
+**R9-03 outcome (2026-11-20).** Cause: antivirus HTTPS scanning (AVG) re-signs registry.npmjs.org and the build container does not trust the AVG root. Delivered: optional `certs/*.crt` hook in the Dockerfile (tested here: build succeeds with the root exported, certificate absent from the image), `certs/README.md`, a README troubleshooting bullet and platform-notes correction, and a capability table for the Docker install. The table surfaced a larger fact: the image has no Python, MarkItDown, Whisper or ffmpeg, so PDF/Office/CSV/EPUB uploads and voice memos do not work in the one-command install, only from source (the site and README now say so). Open question for the owner: add those tools to the image (larger image, more upkeep) or keep them source-only.
 
 ## 8. Disposition of the initial hypotheses (REC-001 to REC-008)
 
