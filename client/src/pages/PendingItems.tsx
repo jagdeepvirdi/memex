@@ -78,7 +78,7 @@ export default function PendingItemsPage() {
       <Sidebar activeSection="pending" />
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col">
         <AppHeader
-          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-3"><Zap size={20} className="text-yellow-400" /><h1 className="font-display text-lg text-ink">Pending AI Enrichment</h1></div>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} notes waiting</span>}</div>}
+          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-3"><Zap size={20} className="text-yellow-400" /><h1 className="font-display text-lg text-ink">Pending AI Enrichment</h1></div>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} notes waiting</span>}</div>}
           actions={selectedIds.size > 0 ? <button onClick={handleBulkDelete} disabled={deleting} className="flex items-center gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-all text-xs font-bold disabled:opacity-50">{deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}Delete Selected ({selectedIds.size})</button> : undefined}
         />
         <AppHeader.Spacer />

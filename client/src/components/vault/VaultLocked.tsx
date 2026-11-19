@@ -131,7 +131,7 @@ export default function VaultLocked() {
   const isSetup = screen === 'setup';
 
   return (
-    <div className="min-h-screen bg-bg flex items-center justify-center p-6">
+    <div id="main-content" role="main" tabIndex={-1} className="min-h-screen bg-bg flex items-center justify-center p-6">
       <div className="w-full max-w-md bg-surface rounded-2xl border border-white/5 shadow-2xl flex flex-col overflow-hidden">
 
         {/* Card header with back button */}
@@ -158,9 +158,9 @@ export default function VaultLocked() {
 
           {/* Title */}
           <div className="text-center space-y-1.5">
-            <h2 className="font-display text-2xl text-ink">
+            <h1 className="font-display text-2xl text-ink">
               {isSetup ? 'Set Vault Password' : 'Unlock Vault'}
-            </h2>
+            </h1>
             <p className="text-ink-muted text-sm leading-relaxed">
               {isSetup
                 ? 'This password protects your encrypted secrets. It is separate from your login password and cannot be recovered if lost.'
@@ -187,6 +187,7 @@ export default function VaultLocked() {
               <button
                 type="button"
                 onClick={() => setShowPassword(p => !p)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink transition-colors"
                 tabIndex={-1}
               >

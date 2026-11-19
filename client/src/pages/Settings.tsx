@@ -96,7 +96,7 @@ export default function SettingsPage() {
         <AppHeader
           left={
             <div className="flex items-center gap-6">
-              <Link to="/" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></Link>
+              <Link to="/" aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></Link>
               <div className="flex items-center gap-3">
                 <SettingsIcon size={20} className="text-accent" />
                 <h1 className="font-display text-lg text-ink">System Settings</h1>

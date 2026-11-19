@@ -489,7 +489,7 @@ export default function CategoryReviewPage() {
         <AppHeader
           left={
             <div className="flex items-center gap-3">
-              <button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors">
+              <button onClick={() => navigate('/')} aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors">
                 <ArrowLeft size={20} />
               </button>
               <FolderSync size={18} className="text-ink-muted" />

@@ -83,7 +83,7 @@ export default function AskMemexPage() {
       
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative max-w-4xl mx-auto w-full border-x border-white/5">
         <AppHeader
-          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg flex items-center gap-2"><Brain size={20} className="text-accent" />Ask My Knowledge</h1></div>}
+          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg flex items-center gap-2"><Brain size={20} className="text-accent" />Ask My Knowledge</h1></div>}
         />
         <AppHeader.Spacer />
 
@@ -216,6 +216,7 @@ export default function AskMemexPage() {
             />
             <button 
               type="submit"
+              aria-label="Send question"
               disabled={!input.trim() || loading}
               className="w-10 h-10 bg-accent hover:bg-accent-dark disabled:opacity-30 disabled:hover:bg-accent rounded-xl flex items-center justify-center text-bg shadow-lg transition-all active:scale-95"
             >

@@ -188,7 +188,7 @@ export default function Dashboard() {
           <section className="flex flex-col gap-8 animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
               <div className="space-y-2">
-                <h2 className="font-display text-3xl md:text-4xl text-ink">Welcome back</h2>
+                <h1 className="font-display text-3xl md:text-4xl text-ink">Welcome back</h1>
                 <p className="text-ink-muted max-w-lg">
                   Capture what matters, then find and revisit it when you need it. AI organization follows your configured provider and privacy settings.
                 </p>

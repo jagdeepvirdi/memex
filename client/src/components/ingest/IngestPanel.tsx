@@ -115,6 +115,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
         {onCancel && (
           <button 
             onClick={onCancel}
+            aria-label="Close"
             className="text-ink-muted hover:text-ink transition-colors"
           >
             <X size={20} />

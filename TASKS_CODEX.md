@@ -254,7 +254,7 @@ Findings:
 - **F-8-003 (low, hardened):** `jwt.verify` now pins HS256 (`index.ts`, `routes/auth.ts`); auth/session tests pass.
 - **F-8-004 (open):** the Docker image build failed twice locally with an npm-internal error; rely on CI `docker-smoke` or retry before release.
 
-The regression matrix, migration-from-empty and dump/restore rehearsal are recorded in `docs/RELEASE_READINESS.md`. Site accessibility checks are done (768 px, contrast in both themes, focus, semantics, links; see the matrix). Still to do: the same review of app screens (P8-004), the claim-to-code trace (Phase 7), and the final release summary. No external provider call was made.
+The regression matrix, migration-from-empty and dump/restore rehearsal are recorded in `docs/RELEASE_READINESS.md`. Site accessibility checks are done (768 px, contrast in both themes, focus, semantics, links; see the matrix). - **F-8-005 (low, fixed):** the app-screen sweep (19 routes, 3 widths, both themes) found no console errors, overflow or contrast failures, but icon-only controls without accessible names and missing `h1`/`main` on the dashboard and locked vault; fixed and re-verified. Still to do: keyboard order and reduced motion inside the app, the claim-to-code trace (Phase 7), and the final release summary. No external provider call was made.
 
 | ID | Priority | Description and reason/outcome | Dependencies | Acceptance criteria | Verification | Status |
 |---|---|---|---|---|---|---|

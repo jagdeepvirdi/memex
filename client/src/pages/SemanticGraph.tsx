@@ -78,7 +78,7 @@ export default function SemanticGraphPage() {
 
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative overflow-hidden bg-bg-2">
         <AppHeader
-          left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-2"><Sparkles className="text-accent" size={18} /><h1 className="font-display text-lg text-ink">Semantic Intelligence Map</h1></div></div>}
+          left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} aria-label="Go back" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-2"><Sparkles className="text-accent" size={18} /><h1 className="font-display text-lg text-ink">Semantic Intelligence Map</h1></div></div>}
           actions={
             <div className="flex items-center gap-3">
               <span className="text-xs text-ink-muted hidden sm:inline">Nodes:</span>

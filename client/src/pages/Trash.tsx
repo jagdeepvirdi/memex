@@ -58,7 +58,7 @@ export default function TrashPage() {
 
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative overflow-y-auto">
         <AppHeader
-          left={<div className="flex items-center gap-6"><Link to="/" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></Link><div className="flex flex-col"><h1 className="font-display text-lg text-ink">Trash Bin</h1><p className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">Deleted items can be restored here</p></div></div>}
+          left={<div className="flex items-center gap-6"><Link to="/" aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></Link><div className="flex flex-col"><h1 className="font-display text-lg text-ink">Trash Bin</h1><p className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">Deleted items can be restored here</p></div></div>}
         />
         <AppHeader.Spacer />
 

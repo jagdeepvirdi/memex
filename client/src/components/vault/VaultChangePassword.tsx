@@ -121,6 +121,7 @@ export function VaultChangePassword({ items, vaultKey, onSuccess, onCancel }: Pr
             <button
               type="button"
               onClick={() => setShowPassword(p => !p)}
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-muted hover:text-ink transition-colors"
               tabIndex={-1}
             >

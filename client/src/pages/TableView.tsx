@@ -271,7 +271,7 @@ export default function TableView() {
       <Sidebar activeSection="table" />
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0">
         <AppHeader
-          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg">All Items Table</h1>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} items</span>}</div>}
+          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg">All Items Table</h1>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} items</span>}</div>}
           actions={<div className="flex items-center gap-3"><button onClick={handleExportCsv} className="text-xs flex items-center gap-2 bg-white/5 text-ink-muted hover:text-ink border border-white/10 px-3 py-1.5 rounded-lg transition-all"><Download size={14} />Export CSV</button><button onClick={handleBulkReview} disabled={bulkReviewing} className="text-xs flex items-center gap-2 bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50">{bulkReviewing ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}Mark All Reviewed</button></div>}
         />
         <AppHeader.Spacer />
@@ -301,7 +301,7 @@ export default function TableView() {
                 >
                   {nlLoading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                 </button>
-                <button onClick={clearNLMode} className="shrink-0 p-1.5 text-ink-muted hover:text-ink transition-colors">
+                <button onClick={clearNLMode} aria-label="Clear search" className="shrink-0 p-1.5 text-ink-muted hover:text-ink transition-colors">
                   <X size={16} />
                 </button>
               </div>

@@ -373,7 +373,7 @@ export default function ItemPage() {
 
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative overflow-y-auto">
         <AppHeader
-          left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="w-1 h-1 bg-white/20 rounded-full" /><span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">{item.type}</span></div>}
+          left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} aria-label="Go back" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="w-1 h-1 bg-white/20 rounded-full" /><span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">{item.type}</span></div>}
           actions={<div className="flex items-center gap-1 sm:gap-2">{!isEditing ? (<><button type="button" onClick={handleMoveToVault} disabled={migrating} aria-label="Move to secure vault" className="p-2 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Move to Secure Vault">{migrating ? <Loader2 size={18} className="animate-spin" /> : <Shield size={18} />}</button><button type="button" onClick={startEditing} aria-label="Edit item" className="p-2 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Edit Item"><Edit2 size={18} /></button><button type="button" onClick={handleDelete} aria-label="Delete item" className="p-2 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Delete Item"><Trash2 size={18} /></button></>) : (<><button type="button" onClick={() => { setIsEditing(false); setEditedTitle(item.title); setEditedContent(item.content); setEditedCategories(item.categories.join(' > ')); setEditedTags(item.tags); }} aria-label="Cancel editing" className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Cancel"><X size={18} /></button><button type="button" onClick={handleSave} disabled={saving} className="bg-accent text-bg px-4 py-2 rounded-lg font-semibold flex items-center gap-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{saving ? 'Saving' : 'Save'}</button></>)}</div>}
         />
         <AppHeader.Spacer />
@@ -684,6 +684,7 @@ export default function ItemPage() {
                 <div className="flex items-center gap-2">
                   <input
                     type="datetime-local"
+                    aria-label="Reminder date and time"
                     value={reminderInput}
                     onChange={e => setReminderInput(e.target.value)}
                     min={new Date().toISOString().slice(0, 16)}

@@ -55,6 +55,7 @@ export default function ItemCard({ item, onClick, selectable, selected, onToggle
         <div className="absolute top-2 right-2 z-10">
           <input 
             type="checkbox"
+            aria-label={`Select ${item.title}`}
             checked={selected}
             onChange={() => onToggleSelection?.(item.id)}
             className="w-4 h-4 rounded bg-surface border-white/20 text-accent focus:ring-accent cursor-pointer transition-all accent-accent"
