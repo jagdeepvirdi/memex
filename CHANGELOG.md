@@ -6,6 +6,17 @@ All notable changes to Memex are documented here.
 
 ## [Unreleased]
 
+### Added
+- **Markdown / Obsidian import.** Add > Markdown takes a zipped folder of `.md` notes (or one file), previews what will be saved and skipped, keeps titles, front matter and inline tags and dates, skips hidden folders and duplicates, and classifies in the background. `POST /api/ingest/markdown`.
+- **Retrieval benchmark.** A synthetic library and labelled questions score search hit rates in CI against a throwaway Postgres (`retrievalBenchmark.realdb.test.ts`), so ranking changes are measured instead of judged by eye.
+- **Phone guide.** README section on using Memex from a phone or another computer over HTTPS (Tailscale Serve or a reverse proxy) without opening the port to the network.
+- **Docker builds behind HTTPS-scanning networks.** Optional `certs/*.crt` lets the image build trust an antivirus or proxy root certificate; the README documents what the Docker install does and does not include.
+
+### Fixed
+- **File and voice panels tell Docker users the truth.** The Docker image has no Python tools, so the panels now say so (instead of a `pip install` that cannot work there).
+- **Keyword-only search finds natural-language questions.** When no embedding model is available, search used to require every word to match (55% of the benchmark questions found their note); terms are now OR-ed and ranked by how many match (100%).
+- **Batch imports respect the privacy guard.** Notes saved by Keep, bulk paste and Markdown import are now checked for tags such as `private` and for sensitive text before the first AI classification, so a cloud provider is not used for them.
+
 ### Changed
 - **New brand identity.** The supplied folded-ribbon "M" logo replaces the earlier mark in the app, login/onboarding, landing page, README, favicon, PWA and touch icons and the social preview. Assets are built from the two master PNGs by `python brand/generate-assets.py` (see `brand/README.md`).
 - **Interface redesign (phases 1-6).** Navigation is grouped into Home, Discover, Library and Review with a mobile quick-nav; search (`/`) and capture (`N`) are available app-wide; the dashboard leads with capture and search and shows load failures with a retry instead of looking empty; shared UI primitives, a documented design foundation (`DESIGN.md`, `PRODUCT.md`), skip links, reduced-motion support, safe-area handling and larger touch targets.

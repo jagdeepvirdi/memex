@@ -373,7 +373,7 @@ Phase-level criteria are stated at each phase heading above. A phase is not DONE
 - **Last completed phase:** Phase 6.
 - **Active tasks:** none. P0-001–P0-005, P1-001–P1-004, P2-001–P2-004, P3-001–P3-004, P4-001–P4-005, P5-001–P5-005, and P6-001–P6-004 are DONE.
 - **Blockers:** none. Handset/screen-reader testing, data-heavy visual stress cases, and installed-device offline verification remain documented release-QA limits.
-- **Next recommended action:** owner review of `docs/PRODUCT_ASSESSMENT.md`; choose which of R9-01 to R9-14 to schedule (suggested order: R9-03, R9-02, R9-01). R9-03 is done (cause of F-8-004 found and fixed, see `docs/PRODUCT_ASSESSMENT.md`); next suggested: R9-02, then R9-01. Decision needed: put MarkItDown/Whisper in the Docker image or keep them source-only.
+- **Next recommended action:** owner review of `docs/PRODUCT_ASSESSMENT.md`; choose which of R9-01 to R9-14 to schedule (suggested order: R9-03, R9-02, R9-01). R9-03 is done (cause of F-8-004 found and fixed, see `docs/PRODUCT_ASSESSMENT.md`); R9-01, R9-02, R9-03, R9-05 and R9-06 are done (Markdown import, retrieval benchmark, Docker certificate hook, Docker-aware tool notices, phone guide); R9-04 and R9-07 need a usability test first and R9-08 to R9-14 are demand-first, so none of those were started. Decision needed: put MarkItDown/Whisper in the Docker image or keep them source-only.
 - **Last updated:** 2026-11-19.
 
 ## 14. Completed work

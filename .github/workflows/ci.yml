@@ -13,6 +13,21 @@ jobs:
     defaults:
       run:
         working-directory: server
+    # A throwaway database for the retrieval benchmark below. The ordinary tests mock the database and never touch it.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: memex
+          POSTGRES_PASSWORD: memex
+          POSTGRES_DB: memex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U memex -d memex"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - uses: actions/checkout@v7
@@ -34,6 +49,16 @@ jobs:
         env:
           JWT_SECRET: ci-test-secret-do-not-use-in-prod
           DATABASE_URL: postgresql://memex:memex@localhost:5432/memex
+          NODE_ENV: test
+
+      - name: Retrieval benchmark (synthetic notes, rolled back)
+        run: |
+          npm run migrate
+          npx vitest --run retrievalBenchmark
+        env:
+          JWT_SECRET: ci-test-secret-do-not-use-in-prod
+          DATABASE_URL: postgresql://memex:memex@localhost:5432/memex
+          MEMEX_REALDB_TEST: '1'
           NODE_ENV: test
 
       - name: Coverage (with threshold gate)

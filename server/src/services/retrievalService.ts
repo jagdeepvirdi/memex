@@ -77,12 +77,18 @@ async function run(opts: RetrieveOptions, vector: string | null): Promise<Item[]
   const q = add(opts.query)
 
   const fts = `to_tsvector('english', i.title || ' ' || i.content)`
-  const ftsRank = `ts_rank_cd(${fts}, plainto_tsquery('english', ${q}))`
+  // Semantic mode: the vector decides, full text only adds a bonus, so a strict AND query is fine. Keyword-only mode
+  // has nothing else to go on, and a natural-language question ("olive oil cake recipe") must not need every word to
+  // appear, so the terms are OR-ed and notes that match more of them rank higher.
+  const tsq = semantic
+    ? `plainto_tsquery('english', ${q})`
+    : `replace(plainto_tsquery('english', ${q})::text, ' & ', ' | ')::tsquery`
+  const ftsRank = `ts_rank_cd(${fts}, ${tsq})`
 
   const conditions: string[] = ['i.deleted_at IS NULL']
   if (semantic && opts.requireVector) conditions.push(`i.embedding IS NOT NULL AND i.embedding_model = ${model}`)
   if (!semantic) {
-    conditions.push(`(${fts} @@ plainto_tsquery('english', ${q}) OR position(lower(${q}) in lower(i.title)) > 0)`)
+    conditions.push(`(${fts} @@ ${tsq} OR position(lower(${q}) in lower(i.title)) > 0)`)
   }
   if (opts.type) conditions.push(`i.type = ${add(opts.type)}`)
   if (opts.category) {

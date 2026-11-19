@@ -7,6 +7,7 @@
 import pLimit from 'p-limit'
 import { pool } from '../db/client.js'
 import { classify } from './classifier.js'
+import { cloudSafe } from './cloudSafe.js'
 import { setItemCategories, setItemTags, createItem } from '../db/helpers.js'
 import { extractAndLinkEntities } from './entityService.js'
 import { updateJobProgress, completeJob, failJob } from './ingestJobs.js'
@@ -70,7 +71,10 @@ export async function classifyAndUpdateBatch(
     }
 
     try {
-      const result = entry?.sourceUrl ? await classify(text, { sourceUrl: entry.sourceUrl }) : await classify(text)
+      // The privacy guard needs to see what the note says and how it is labelled (imported tags such as `private`),
+      // otherwise a cloud provider could classify a note the user marked as staying on this machine.
+      const safe = cloudSafe({ title: entry?.title, content: entry?.content, tags: entry?.labels })
+      const result = await classify(text, { ...(entry?.sourceUrl ? { sourceUrl: entry.sourceUrl } : {}), cloudSafe: safe })
 
       const client = await pool.connect()
       try {

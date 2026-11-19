@@ -68,8 +68,23 @@ describe('classifyAndUpdateBatch', () => {
   it('passes the source URL to the classifier as a hint, and only when there is one', async () => {
     mockClient()
     await classifyAndUpdateBatch(['i1', 'i2'], [entry({ sourceUrl: 'https://github.com/a/b' }), entry()], 'j')
-    expect(vi.mocked(classify).mock.calls[0]).toEqual(['some text', { sourceUrl: 'https://github.com/a/b' }])
-    expect(vi.mocked(classify).mock.calls[1]).toEqual(['some text'])
+    expect(vi.mocked(classify).mock.calls[0]).toEqual(['some text', { sourceUrl: 'https://github.com/a/b', cloudSafe: true }])
+    expect(vi.mocked(classify).mock.calls[1]).toEqual(['some text', { cloudSafe: true }])
+  })
+
+  it('tells the classifier a note must stay local when its tags or its text say so', async () => {
+    mockClient()
+    await classifyAndUpdateBatch(
+      ['i1', 'i2', 'i3'],
+      [
+        entry({ labels: ['Private'] }),
+        entry({ labels: ['travel'] }),
+        entry({ content: 'My bank account number is 0012 3456 7890 123' }),
+      ],
+      'j',
+    )
+    const hints = vi.mocked(classify).mock.calls.map(c => (c[1] as { cloudSafe?: boolean }).cloudSafe)
+    expect(hints).toEqual([false, true, false])
   })
 
   it('records but does not apply the extraction for a reviewed item', async () => {

@@ -60,7 +60,7 @@ describe('retrieveItems — keyword fallback', () => {
     expect(pool.query).toHaveBeenCalledTimes(1)
     const { sql, params } = lastCall()
     expect(sql).not.toMatch(/::vector/)
-    expect(sql).toMatch(/@@ plainto_tsquery/)
+    expect(sql).toMatch(/@@ replace\(plainto_tsquery\('english', \$\d+\)::text, ' & ', ' \| '\)::tsquery/) // terms are OR-ed in keyword-only mode
     expect(params).toEqual(['thai food', 5]) // no vector and no model id are bound
   })
 
