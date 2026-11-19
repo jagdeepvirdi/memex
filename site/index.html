@@ -11,7 +11,10 @@
   <meta name="theme-color" content="#F5F7FB" media="(prefers-color-scheme: light)" />
   <meta property="og:title" content="Memex: your notes, organized on your own machine" />
   <meta property="og:description" content="Save anything. Memex files it and answers questions about it. The AI runs on your computer." />
+  <link rel="canonical" href="https://memex.jagdeepsinghvirdi.com/" />
   <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://memex.jagdeepsinghvirdi.com/" />
+  <meta property="og:site_name" content="Memex" />
   <link rel="icon" href="brand/favicon.ico" sizes="48x48" />
   <link rel="icon" href="brand/favicon-32.png" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="brand/apple-touch-icon.png" />
@@ -20,6 +23,11 @@
   <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="Memex — Everything you save. Ready when you need it." />
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Memex: your notes, organized on your own machine" />
+  <meta name="twitter:description" content="Save anything. Memex files it and answers questions about it. The AI runs on your computer." />
+  <meta name="twitter:image" content="https://memex.jagdeepsinghvirdi.com/brand/social-preview.png" />
+  <meta name="twitter:image:alt" content="Memex: Everything you save. Ready when you need it." />
+  <script type="application/ld+json">{"@context":"https://schema.org","@type":"SoftwareApplication","name":"Memex","applicationCategory":"ProductivityApplication","operatingSystem":"Any (self-hosted with Docker)","description":"A self-hosted personal knowledge app that files the notes, links and files you save and answers questions about them. Local AI by default; cloud AI optional.","license":"https://opensource.org/licenses/MIT","url":"https://memex.jagdeepsinghvirdi.com/","codeRepository":"https://github.com/jagdeepvirdi/memex","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"}}</script>
   <link rel="preload" href="fonts/playfair-display-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="preload" href="fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
   <link rel="stylesheet" href="style.css" />
@@ -29,13 +37,13 @@
 
   <header class="top">
     <div class="wrap bar">
-      <a class="mark" href="#top" aria-label="Memex, back to the top"><img data-brand-mark src="brand/memex-mark.png" alt="" />Memex</a>
+      <a class="mark" href="#top" aria-label="Memex, back to the top"><img data-brand-mark src="brand/memex-mark-96.png" width="27" height="27" alt="" />Memex</a>
       <nav aria-label="Main">
-        <a href="#how">How it works</a>
-        <a href="#new">What is new</a>
-        <a href="#where">Local or cloud</a>
-        <a href="#privacy">Privacy</a>
-        <a href="#assistants">AI assistants</a>
+        <a class="hide-sm" href="#how">How it works</a>
+        <a class="hide-sm" href="#where">Local or cloud</a>
+        <a class="hide-sm" href="#privacy">Privacy</a>
+        <a class="hide-sm" href="#assistants">AI assistants</a>
+        <a class="hide-sm" href="#new">What is new</a>
         <a href="#install">Install</a>
         <a href="https://github.com/jagdeepvirdi/memex">GitHub</a>
         <button type="button" class="theme" id="theme">Theme: auto</button>
@@ -52,7 +60,7 @@
           <a class="btn primary" href="#install">Install with Docker</a>
           <a class="btn" href="https://github.com/jagdeepvirdi/memex">View the source</a>
         </p>
-        <p class="fine">Free, MIT licensed, no account, no telemetry. Light and dark, like the app.</p>
+        <p class="fine">Free, MIT licensed, no sign-up with anyone, no telemetry. Light and dark, like the app.</p>
       </div>
 
       <figure class="ledger" aria-labelledby="ledger-title">
@@ -106,6 +114,21 @@
       </figure>
     </section>
 
+    <section class="band wrap" id="see" aria-labelledby="see-h">
+      <h2 id="see-h">See it before you install it</h2>
+      <p class="intro">Real screens from Memex v1.2, captured on a scratch install loaded with the built-in sample data. Every note shown is made up.</p>
+      <div class="shots">
+        <figure>
+          <img src="img/app-dashboard.webp" width="1440" height="838" loading="lazy" decoding="async" alt="The Memex dashboard in dark mode: a sidebar with Dashboard, Ask Knowledge, Knowledge Graph, Table View, Places and Vault; counts of items, enriched and reviewed notes; and recent recipe cards such as Chicken Tikka Masala and Pad Thai." />
+          <figcaption>The dashboard: what you saved recently, and where to ask, browse and review.</figcaption>
+        </figure>
+        <figure>
+          <img src="img/app-privacy.webp" width="1440" height="838" loading="lazy" decoding="async" alt="Memex Settings, Keys and Privacy tab in dark mode. A banner says answers come from Ollama running locally, with Cloud AI off and no cloud keys. Below are empty key fields for Anthropic, Google Gemini, OpenAI, Groq and YouTube." />
+          <figcaption>Settings: local AI is the default, and a cloud provider stays off until you add a key and agree.</figcaption>
+        </figure>
+      </div>
+    </section>
+
     <section class="band wrap" id="how" aria-labelledby="how-h">
       <h2 id="how-h">Save it now, find it later</h2>
       <dl class="rows">
@@ -122,35 +145,6 @@
           <dd>Ask in plain words, such as "which Thai place did I want to try near the harbour?", and get an answer with the notes it came from. Search finds meaning, not just matching words.</dd>
         </div>
       </dl>
-    </section>
-
-    <section class="band wrap new" id="new" aria-labelledby="new-h">
-      <h2 id="new-h">What is new, and why it helps</h2>
-
-      <h3 class="ver">v1.2: your notes, in your AI assistant</h3>
-      <ul class="plain two">
-        <li><strong>Use your notes from Claude Desktop, Cursor and other AI apps.</strong> A small server on your computer lets an assistant search Memex, read an item, and save a note or a web page. Ask "what did I save about the harbour restaurants?" in the app you already use. <span class="why">Why it helps: your notes become useful everywhere you work, not just inside Memex.</span></li>
-        <li><strong>A key that can do very little.</strong> It can search, read and save. It cannot delete, edit, export, or touch settings, keys or the vault. You see it once, Memex keeps only a fingerprint, and you can revoke it in one click. <span class="why">Why it helps: you can try an assistant without handing it the keys to everything.</span></li>
-        <li><strong>Private items stay private.</strong> The vault, Passwords and Personal, anything tagged private, and text that looks like account details are never shown to the assistant, and Strict Local Mode turns the whole thing off. <span class="why">Why it helps: the same safety rules as for a cloud AI, applied to the assistant too.</span></li>
-        <li><strong>Light and dark, your choice.</strong> A fresh palette that follows your system, with System, Light and Dark in Settings and a button in the header. This page uses the same one. <span class="why">Why it helps: comfortable by day and by night.</span></li>
-        <li><strong>Fits a phone.</strong> Headers, page actions and settings were reworked for small screens. <span class="why">Why it helps: save and search from anywhere.</span></li>
-        <li><strong>No known dependency issues.</strong> The audit of both the server and the web app is clean (checked November 2026). <span class="why">Why it helps: fewer known holes in the software you run.</span></li>
-      </ul>
-
-      <h3 class="ver">v1.1: easy to start, easy to trust</h3>
-      <ul class="plain two">
-        <li><strong>Install with one command.</strong> <code>docker compose up -d</code> starts the database and the app together. If something is wrong, Memex says what and how to fix it. <span class="why">Why it helps: no setup puzzle, and no stack trace to decode.</span></li>
-        <li><strong>A first-run screen.</strong> It walks you through choosing local or cloud AI and tests the choice before you save anything. <span class="why">Why it helps: you know it works before your first note.</span></li>
-        <li><strong>Works without Ollama.</strong> A cloud key is enough; running a local model is optional. <span class="why">Why it helps: a modest laptop is fine.</span></li>
-        <li><strong>Five AI providers.</strong> Ollama, Gemini, OpenAI, Claude and Groq, each switched on by you, with a different one allowed per job. Gemini and Groq have been checked against the live services. <span class="why">Why it helps: use whichever key or free tier you already have, and change your mind later.</span></li>
-        <li><strong>Choose your search model.</strong> Search and Ask can use Ollama, Gemini or OpenAI embeddings. Memex shows what it would send first, works in the background, can be cancelled and resumed, and never sends private items. <span class="why">Why it helps: better search without a graphics card, and the change is reversible.</span></li>
-        <li><strong>See which AI answered.</strong> Every item names the model that classified it, shows a "stays on this machine" note when that is true, and can be redone with another model. <span class="why">Why it helps: you can see, check and compare.</span></li>
-        <li><strong>A smarter privacy guard.</strong> Besides vault items and private tags, text that looks like account numbers, PINs or an address is held back from a cloud AI. <span class="why">Why it helps: a safety net for the note you forgot to tag.</span></li>
-        <li><strong>Look around first.</strong> About forty made-up items load with one click and clear with one click, leaving your own notes alone. <span class="why">Why it helps: see the app working before you trust it with real notes.</span></li>
-        <li><strong>Backups you can trust.</strong> One command to back up and one to restore; a restore refuses a file that is not a complete backup and keeps a safety copy first. <span class="why">Why it helps: you can upgrade or switch models without worry.</span></li>
-        <li><strong>Closed by default.</strong> The app and the database listen on your own computer only, other websites cannot talk to it, and new passwords must be 10 characters or more. Security reports can be sent privately. <span class="why">Why it helps: a personal knowledge base should not be reachable from the cafe Wi-Fi.</span></li>
-      </ul>
-      <p class="more"><a href="https://github.com/jagdeepvirdi/memex/releases/tag/v1.2.0">Read the v1.2.0 release notes</a></p>
     </section>
 
     <section class="band wrap" id="where" aria-labelledby="where-h">
@@ -207,6 +201,7 @@
           <h3>What it does not</h3>
           <ul class="plain">
             <li>It does not encrypt the rest of your database or your backups. Use disk encryption and keep backups private.</li>
+            <li>Saving a link is not offline. Memex sends the address to a free reader service to fetch the page. Pasted text never does, and Strict Local Mode blocks it.</li>
             <li>It has one account and is not built for sharing a server with other people.</li>
             <li>A cloud AI you enable does see what you send it. The guard above reduces that; it cannot promise it.</li>
             <li>It cannot recover a lost vault password. That is what makes the vault private.</li>
@@ -281,6 +276,35 @@
         </div>
       </div>
       <p class="more"><a href="https://github.com/jagdeepvirdi/memex#use-memex-from-an-ai-assistant-mcp">Read the full setup guide</a></p>
+    </section>
+
+    <section class="band wrap new" id="new" aria-labelledby="new-h">
+      <h2 id="new-h">What is new, and why it helps</h2>
+
+      <h3 class="ver">v1.2: your notes, in your AI assistant</h3>
+      <ul class="plain two">
+        <li><strong>Use your notes from Claude Desktop, Cursor and other AI apps.</strong> A small server on your computer lets an assistant search Memex, read an item, and save a note or a web page. Ask "what did I save about the harbour restaurants?" in the app you already use. <span class="why">Why it helps: your notes become useful everywhere you work, not just inside Memex.</span></li>
+        <li><strong>A key that can do very little.</strong> It can search, read and save. It cannot delete, edit, export, or touch settings, keys or the vault. You see it once, Memex keeps only a fingerprint, and you can revoke it in one click. <span class="why">Why it helps: you can try an assistant without handing it the keys to everything.</span></li>
+        <li><strong>Private items stay private.</strong> The vault, Passwords and Personal, anything tagged private, and text that looks like account details are never shown to the assistant, and Strict Local Mode turns the whole thing off. <span class="why">Why it helps: the same safety rules as for a cloud AI, applied to the assistant too.</span></li>
+        <li><strong>Light and dark, your choice.</strong> A fresh palette that follows your system, with System, Light and Dark in Settings and a button in the header. This page uses the same one. <span class="why">Why it helps: comfortable by day and by night.</span></li>
+        <li><strong>Fits a phone.</strong> Headers, page actions and settings were reworked for small screens. <span class="why">Why it helps: save and search from anywhere.</span></li>
+        <li><strong>No known dependency issues.</strong> The audit of both the server and the web app is clean (checked November 2026). <span class="why">Why it helps: fewer known holes in the software you run.</span></li>
+      </ul>
+
+      <h3 class="ver">v1.1: easy to start, easy to trust</h3>
+      <ul class="plain two">
+        <li><strong>Install with one command.</strong> <code>docker compose up -d</code> starts the database and the app together. If something is wrong, Memex says what and how to fix it. <span class="why">Why it helps: no setup puzzle, and no stack trace to decode.</span></li>
+        <li><strong>A first-run screen.</strong> It walks you through choosing local or cloud AI and tests the choice before you save anything. <span class="why">Why it helps: you know it works before your first note.</span></li>
+        <li><strong>Works without Ollama.</strong> A cloud key is enough; running a local model is optional. <span class="why">Why it helps: a modest laptop is fine.</span></li>
+        <li><strong>Five AI providers.</strong> Ollama, Gemini, OpenAI, Claude and Groq, each switched on by you, with a different one allowed per job. Gemini and Groq have been checked against the live services. <span class="why">Why it helps: use whichever key or free tier you already have, and change your mind later.</span></li>
+        <li><strong>Choose your search model.</strong> Search and Ask can use Ollama, Gemini or OpenAI embeddings. Memex shows what it would send first, works in the background, can be cancelled and resumed, and never sends private items. <span class="why">Why it helps: better search without a graphics card, and the change is reversible.</span></li>
+        <li><strong>See which AI answered.</strong> Every item names the model that classified it, shows a "stays on this machine" note when that is true, and can be redone with another model. <span class="why">Why it helps: you can see, check and compare.</span></li>
+        <li><strong>A smarter privacy guard.</strong> Besides vault items and private tags, text that looks like account numbers, PINs or an address is held back from a cloud AI. <span class="why">Why it helps: a safety net for the note you forgot to tag.</span></li>
+        <li><strong>Look around first.</strong> About forty made-up items load with one click and clear with one click, leaving your own notes alone. <span class="why">Why it helps: see the app working before you trust it with real notes.</span></li>
+        <li><strong>Backups you can trust.</strong> One command to back up and one to restore; a restore refuses a file that is not a complete backup and keeps a safety copy first. <span class="why">Why it helps: you can upgrade or switch models without worry.</span></li>
+        <li><strong>Closed by default.</strong> The app and the database listen on your own computer only, other websites cannot talk to it, and new passwords must be 10 characters or more. Security reports can be sent privately. <span class="why">Why it helps: a personal knowledge base should not be reachable from the cafe Wi-Fi.</span></li>
+      </ul>
+      <p class="more"><a href="https://github.com/jagdeepvirdi/memex/releases/tag/v1.2.0">Read the v1.2.0 release notes</a></p>
     </section>
 
     <section class="band wrap" id="install" aria-labelledby="install-h">

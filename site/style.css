@@ -244,7 +244,7 @@ tr:last-child th, tr:last-child td { border-bottom: 1px solid var(--line); }
 }
 @media (max-width: 38rem) {
   .top nav { gap: 1.1rem; min-width: 0; }
-  .top nav a:not(:last-child):not(:nth-last-child(2)) { display: none; }
+  .top nav a.hide-sm { display: none; }
   .bar { gap: 1rem; }
   .switch { display: grid; grid-auto-flow: row; width: 100%; }
 }
@@ -284,3 +284,10 @@ tr:last-child th, tr:last-child td { border-bottom: 1px solid var(--line); }
 #assistants .ver { margin-top: 1.8rem; }
 #assistants .split { margin-top: 2rem; }
 #assistants .split h3 { margin: 0 0 0.5rem; }
+
+/* App screenshots */
+.shots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+.shots figure { margin: 0; }
+.shots img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--surface); }
+.shots figcaption { margin-top: 0.6rem; color: var(--muted); font-size: 0.9rem; }
+@media (max-width: 56rem) { .shots { grid-template-columns: minmax(0, 1fr); } }
