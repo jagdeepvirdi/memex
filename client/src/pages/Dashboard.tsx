@@ -363,7 +363,7 @@ export default function Dashboard() {
           <section className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-xl text-ink">Recent Additions</h3>
-              <button onClick={() => navigate('/items/table')} className="text-xs text-accent hover:underline font-medium">View All (Table)</button>
+              <button onClick={() => navigate('/items/table')} className="inline-flex min-h-[24px] items-center text-xs text-accent hover:underline font-medium">View All (Table)</button>
             </div>
             
             {loading ? (
@@ -437,7 +437,7 @@ function StatCard({ icon, label, value, sub, onClick, onSubClick }: { icon: Reac
           onSubClick ? <button type="button" onClick={onSubClick} className="text-left text-[10px] text-accent font-medium pb-0.5 hover:underline">{sub}</button> : <span className="text-[10px] text-ink-muted font-medium pb-0.5">{sub}</span>
          )}
        </div>
-       {onClick && <button type="button" onClick={onClick} className="mt-auto self-start text-xs font-medium text-ink-muted hover:text-accent">View {label.toLowerCase()} <span aria-hidden="true">→</span></button>}
+       {onClick && <button type="button" onClick={onClick} className="mt-auto inline-flex min-h-[24px] items-center self-start text-xs font-medium text-ink-muted hover:text-accent">View {label.toLowerCase()} <span aria-hidden="true">→</span></button>}
     </article>
   )
 }

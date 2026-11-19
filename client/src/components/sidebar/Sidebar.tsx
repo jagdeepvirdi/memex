@@ -124,7 +124,7 @@ function NavigationGroups({ activeSection, categories, tags, expandedCats, toggl
     </section>
     <section aria-labelledby="sidebar-tags">
       <h2 id="sidebar-tags" className="flex items-center gap-2 px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint"><TagIcon size={12} aria-hidden="true" />Popular tags</h2>
-      <div className="flex flex-wrap gap-1.5 px-2">{tags.slice(0, 15).map(tag => <button key={tag.name} type="button" onClick={() => { window.dispatchEvent(new CustomEvent('memex:open-search', { detail: { tag: tag.name } })); onNavigate?.() }} aria-label={`Search items tagged ${tag.name}, ${tag.itemCount} items`} className="max-w-full truncate rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-ink-muted hover:border-accent/30 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{tag.name}<span className="ml-1 opacity-60">{tag.itemCount}</span></button>)}</div>
+      <div className="flex flex-wrap gap-1.5 px-2">{tags.slice(0, 15).map(tag => <button key={tag.name} type="button" onClick={() => { window.dispatchEvent(new CustomEvent('memex:open-search', { detail: { tag: tag.name } })); onNavigate?.() }} aria-label={`Search items tagged ${tag.name}, ${tag.itemCount} items`} className="max-w-full min-h-[24px] truncate rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-ink-muted hover:border-accent/30 hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{tag.name}<span className="ml-1 opacity-60">{tag.itemCount}</span></button>)}</div>
     </section>
   </>
 }

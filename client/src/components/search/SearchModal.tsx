@@ -41,6 +41,14 @@ export default function SearchModal({ onClose, initialQuery = '', initialTag = '
   const inputRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
 
+  // Give focus back to whatever opened the dialog, so keyboard users keep their place
+  // (read during the first render: the input's autoFocus moves focus before any effect runs)
+  const openerRef = useRef<HTMLElement | null>(document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  useEffect(() => {
+    const opener = openerRef.current;
+    return () => { if (opener && opener.isConnected && opener !== document.body) opener.focus(); };
+  }, []);
+
   useEffect(() => { setQuery(initialQuery) }, [initialQuery]);
   useEffect(() => { setTagFilter(initialTag) }, [initialTag]);
 
