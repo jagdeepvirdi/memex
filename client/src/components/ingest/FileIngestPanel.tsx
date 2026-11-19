@@ -26,14 +26,15 @@ export default function FileIngestPanel({ onSuccess }: Props) {
   const [preview, setPreview] = useState<Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'embedding'> | null>(null);
   const [similarItems, setSimilarItems] = useState<SimilarItem[]>([]);
   const [markitdownOk, setMarkitdownOk] = useState<boolean | null>(null);
+  const [inDocker, setInDocker] = useState(false);
   const [visionModel, setVisionModel] = useState<string | null>(null);
   const [visionChecked, setVisionChecked] = useState(false);
   const [dragging, setDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    apiFetch<{ installed: boolean }>('/ingest/markitdown/health')
-      .then(r => setMarkitdownOk(r.installed))
+    apiFetch<{ installed: boolean; inDocker?: boolean }>('/ingest/markitdown/health')
+      .then(r => { setMarkitdownOk(r.installed); setInDocker(!!r.inDocker); })
       .catch(() => setMarkitdownOk(false));
 
     fetchVisionHealth()
@@ -183,15 +184,23 @@ export default function FileIngestPanel({ onSuccess }: Props) {
           <AlertCircle size={18} className="text-yellow-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm text-ink font-medium">MarkItDown is not installed</p>
-            <p className="text-xs text-ink-muted mt-1">
-              Document conversion requires the <code className="bg-white/10 px-1 rounded">markitdown</code> Python package.
-            </p>
-            <code className="block mt-2 text-xs bg-bg text-accent px-3 py-2 rounded-lg border border-white/10 font-mono">
-              pip install 'markitdown[all]'
-            </code>
-            <p className="text-xs text-ink-muted mt-2">
-              Requires Python 3.10+. After installing, restart the Memex server.
-            </p>
+            {inDocker ? (
+              <p data-testid="docker-tool-notice" className="text-xs text-ink-muted mt-1">
+                The Docker install does not include document conversion (PDF, Word, PowerPoint, Excel, CSV, EPUB). Run Memex from source to use it; the README's &ldquo;What works with the Docker install&rdquo; table has the steps.
+              </p>
+            ) : (
+              <>
+                <p className="text-xs text-ink-muted mt-1">
+                  Document conversion requires the <code className="bg-white/10 px-1 rounded">markitdown</code> Python package.
+                </p>
+                <code className="block mt-2 text-xs bg-bg text-accent px-3 py-2 rounded-lg border border-white/10 font-mono">
+                  pip install 'markitdown[all]'
+                </code>
+                <p className="text-xs text-ink-muted mt-2">
+                  Requires Python 3.10+. After installing, restart the Memex server.
+                </p>
+              </>
+            )}
             <p className="text-xs text-ink-muted mt-3 flex items-center gap-1">
               <ImageIcon size={11} className="text-accent" />
               <span>Images work without MarkItDown — just drop an image to use Vision AI.</span>

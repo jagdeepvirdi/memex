@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic, ListPlus } from 'lucide-react';
+import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic, ListPlus, BookText } from 'lucide-react';
 import { toast } from 'sonner';
 import { ingestUrl, createItem, apiFetch } from '../../lib/api';
 import type { SimilarItem } from '../../lib/api';
 import ItemCard from '../cards/ItemCard';
 import KeepImportPanel from './KeepImportPanel';
 import PasteImportPanel from './PasteImportPanel';
+import MarkdownImportPanel from './MarkdownImportPanel';
 import FileIngestPanel from './FileIngestPanel';
 import VoiceIngestPanel from './VoiceIngestPanel';
 import Editor from '../Editor';
@@ -21,7 +22,7 @@ interface IngestPanelProps {
 }
 
 export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialText }: IngestPanelProps) {
-  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual' | 'paste' | 'file' | 'voice'>(
+  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual' | 'paste' | 'markdown' | 'file' | 'voice'>(
     initialUrl ? 'url' : initialText ? 'manual' : 'url'
   );
   const [url, setUrl] = useState(initialUrl || '');
@@ -161,6 +162,15 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           <FolderArchive size={16} />
           Google Keep
         </button>
+        <button role="tab" aria-selected={activeTab === 'markdown'} type="button"
+          onClick={() => setActiveTab('markdown')}
+          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
+            activeTab === 'markdown' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
+          }`}
+        >
+          <BookText size={16} />
+          Markdown
+        </button>
         <button role="tab" aria-selected={activeTab === 'file'} type="button"
           onClick={() => setActiveTab('file')}
           className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
@@ -251,6 +261,8 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           <PasteImportPanel />
         ) : activeTab === 'keep' ? (
           <KeepImportPanel />
+        ) : activeTab === 'markdown' ? (
+          <MarkdownImportPanel />
         ) : activeTab === 'voice' ? (
           <VoiceIngestPanel onSuccess={onSuccess} />
         ) : (

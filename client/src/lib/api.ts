@@ -84,6 +84,8 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }
+  // A multipart upload needs the browser to set its own Content-Type (with the boundary).
+  if (typeof FormData !== 'undefined' && init?.body instanceof FormData) delete headers['Content-Type']
 
   const res = await fetch(`${BASE}${path}`, {
     ...init,
@@ -308,8 +310,8 @@ export async function fetchVisionHealth(): Promise<{ available: boolean; model: 
   return apiFetch<{ available: boolean; model: string | null }>('/ingest/vision/health')
 }
 
-export async function fetchWhisperHealth(): Promise<{ installed: boolean }> {
-  return apiFetch<{ installed: boolean }>('/ingest/whisper/health')
+export async function fetchWhisperHealth(): Promise<{ installed: boolean; inDocker?: boolean }> {
+  return apiFetch<{ installed: boolean; inDocker?: boolean }>('/ingest/whisper/health')
 }
 
 export async function fetchCategoryAnomalies(): Promise<CategoryAnomaly[]> {
@@ -442,6 +444,50 @@ export interface PasteImportResponse {
   saved?: number
   jobId?: string | null
   entries: PasteEntryResult[]
+}
+
+// ── Markdown / Obsidian import ───────────────────────────────
+
+export type MarkdownSkipReason = 'empty' | 'too-long' | 'duplicate-in-zip' | 'already-saved' | 'limit-reached'
+
+export interface MarkdownEntryResult {
+  index: number
+  path: string
+  title: string
+  tags: string[]
+  status: 'saved' | 'skipped'
+  reason?: MarkdownSkipReason
+  itemId?: string
+  existingId?: string
+}
+
+export interface MarkdownImportResponse {
+  dryRun: boolean
+  total: number
+  new: number
+  skipped: number
+  otherFilesIgnored: number
+  max: number
+  saved?: number
+  jobId?: string | null
+  entries: MarkdownEntryResult[]
+}
+
+function markdownForm(file: File, dryRun: boolean): FormData {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('dryRun', String(dryRun))
+  return form
+}
+
+/** Dry run: reads the ZIP (or .md file) and reports what would be saved or skipped. Writes nothing. */
+export function previewMarkdownImport(file: File): Promise<MarkdownImportResponse> {
+  return apiFetch<MarkdownImportResponse>('/ingest/markdown', { method: 'POST', body: markdownForm(file, true) })
+}
+
+/** Saves the new notes instantly and starts background classification (poll `fetchIngestJob`). */
+export function startMarkdownImport(file: File): Promise<MarkdownImportResponse> {
+  return apiFetch<MarkdownImportResponse>('/ingest/markdown', { method: 'POST', body: markdownForm(file, false) })
 }
 
 export interface IngestJobStatus {

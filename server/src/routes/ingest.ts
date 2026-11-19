@@ -8,6 +8,7 @@ import { detectPasteSource } from '../services/sourceDetect.js';
 import { parseKeepZipAsync } from '../services/keepImporter.js';
 import { classifyAndUpdateBatch } from '../services/enrichBatch.js'
 import { splitPaste, planPaste, savePlanned, MAX_PASTE_ENTRIES, MAX_PASTE_CHARS, type PasteEntryResult } from '../services/pasteImport.js'
+import { readMarkdownUpload, planMarkdown, saveMarkdownNotes, MAX_MARKDOWN_ENTRIES } from '../services/markdownImport.js'
 import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
@@ -345,11 +346,83 @@ router.post('/youtube/backfill', async (req, res) => {
   }
 })
 
+// ── POST /api/ingest/markdown ─────────────────────────────────────────────────
+// Import a zipped folder of Markdown notes (an Obsidian vault) or one .md file. One note per file; frontmatter title/tags/
+// created and inline #tags are kept, wikilinks stay as text, hidden folders (.obsidian, .trash) are skipped, duplicates
+// (inside the zip or already saved) are skipped. Notes are saved instantly as unreviewed notes and classified in the
+// background (poll GET /jobs/:id). Multipart: `file` and optional `dryRun=true`, which returns the plan and writes nothing.
+// Nothing is sent to any AI service here; classification afterwards follows the normal provider and privacy settings.
+
+const MARKDOWN_KIND = 'markdown-import'
+
+router.post('/markdown', ingestLimiter, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded. Send a .zip of your notes folder or a single .md file.' })
+  const dryRun = String(req.body?.dryRun ?? '').toLowerCase() === 'true'
+
+  let read: ReturnType<typeof readMarkdownUpload>
+  try {
+    read = readMarkdownUpload(req.file.buffer, req.file.originalname)
+  } catch (err) {
+    return res.status(400).json({ error: err instanceof Error ? err.message : 'Could not read the file.' })
+  }
+  if (read.notes.length === 0) {
+    return res.status(400).json({ error: 'No Markdown notes found (looked for .md, .markdown and .txt files, ignoring hidden folders).', skippedFiles: read.skipped.length })
+  }
+
+  try {
+    if (!dryRun && (await hasRunningJob(MARKDOWN_KIND))) {
+      return res.status(409).json({ error: 'A Markdown import is already running. Wait for it to finish.' })
+    }
+    const planned = await planMarkdown(read.notes)
+    const toSave = planned.filter(n => n.status === 'new')
+    const counts = { total: planned.length, new: toSave.length, skipped: planned.length - toSave.length, otherFilesIgnored: read.skipped.length, max: MAX_MARKDOWN_ENTRIES }
+    const toResult = (n: (typeof planned)[number], itemId?: string) => ({
+      index: n.index, path: n.path, title: n.title, tags: n.tags,
+      status: n.status === 'new' ? 'saved' : 'skipped', reason: n.reason, itemId, existingId: n.existingId,
+    })
+
+    if (dryRun) return res.json({ dryRun: true, ...counts, entries: planned.map(n => toResult(n)) })
+    if (toSave.length === 0) return res.json({ dryRun: false, ...counts, saved: 0, jobId: null, entries: planned.map(n => toResult(n)) })
+
+    const client = await pool.connect()
+    let ids: string[]
+    try {
+      await client.query('BEGIN')
+      ids = await saveMarkdownNotes(client, toSave, setItemTags)
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+
+    const idByIndex = new Map(toSave.map((n, i) => [n.index, ids[i]]))
+    const entries = planned.map(n => toResult(n, idByIndex.get(n.index)))
+    const jobId = uuidv4()
+    await createJob(jobId, ids.length, MARKDOWN_KIND)
+    await saveJobDetails(jobId, { entries }).catch(() => {})
+    classifyAndUpdateBatch(
+      ids,
+      toSave.map(n => ({ title: n.title, content: n.body, labels: n.tags, source: 'manual' as const })),
+      jobId,
+      { details: { entries } },
+    ).catch(err => failJob(jobId, String(err)).catch(() => {}))
+
+    logger.info(`[Markdown import] Saved ${ids.length} of ${planned.length} notes, classification started (job ${jobId})`)
+    res.json({ dryRun: false, ...counts, saved: ids.length, jobId, entries })
+  } catch (err) {
+    logger.error(err, 'Markdown import error')
+    res.status(500).json({ error: 'Failed to import the Markdown notes' })
+  }
+})
+
 // ── GET /api/ingest/markitdown/health ─────────────────────────────────────────
 
 router.get('/markitdown/health', async (_req, res) => {
   const installed = await checkMarkitdownInstalled();
-  res.json({ installed });
+  // `inDocker`: the official image has no Python, so the pip install the UI suggests cannot work there.
+  res.json({ installed, inDocker: process.env.MEMEX_IN_DOCKER === '1' });
 });
 
 // ── GET /api/ingest/vision/health — is a vision model available in Ollama? ────
@@ -457,7 +530,7 @@ router.post('/file', ingestLimiter, upload.single('file'), async (req, res) => {
 
 router.get('/whisper/health', async (_req, res) => {
   const installed = await checkWhisperInstalled();
-  res.json({ installed });
+  res.json({ installed, inDocker: process.env.MEMEX_IN_DOCKER === '1' });
 });
 
 // ── POST /api/ingest/voice — transcribe audio → classify → preview ────────────

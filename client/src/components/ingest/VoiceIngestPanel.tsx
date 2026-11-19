@@ -12,6 +12,7 @@ interface Props {
 
 export default function VoiceIngestPanel({ onSuccess }: Props) {
   const [whisperOk, setWhisperOk] = useState<boolean | null>(null);
+  const [inDocker, setInDocker] = useState(false);
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
@@ -28,7 +29,7 @@ export default function VoiceIngestPanel({ onSuccess }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    fetchWhisperHealth().then(r => setWhisperOk(r.installed)).catch(() => setWhisperOk(false));
+    fetchWhisperHealth().then(r => { setWhisperOk(r.installed); setInDocker(!!r.inDocker); }).catch(() => setWhisperOk(false));
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -138,15 +139,23 @@ export default function VoiceIngestPanel({ onSuccess }: Props) {
           <AlertCircle size={18} className="text-yellow-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm text-ink font-medium">Whisper is not installed</p>
-            <p className="text-xs text-ink-muted mt-1">
-              Voice transcription runs locally via OpenAI Whisper.
-            </p>
-            <code className="block mt-2 text-xs bg-bg text-accent px-3 py-2 rounded-lg border border-white/10 font-mono">
-              pip install openai-whisper
-            </code>
-            <p className="text-xs text-ink-muted mt-2">
-              Requires Python 3.8+ and ffmpeg. After installing, restart the Memex server.
-            </p>
+            {inDocker ? (
+              <p data-testid="docker-tool-notice" className="text-xs text-ink-muted mt-1">
+                The Docker install does not include voice transcription. Run Memex from source to use it; the README&apos;s &ldquo;What works with the Docker install&rdquo; table has the steps.
+              </p>
+            ) : (
+              <>
+                <p className="text-xs text-ink-muted mt-1">
+                  Voice transcription runs locally via OpenAI Whisper.
+                </p>
+                <code className="block mt-2 text-xs bg-bg text-accent px-3 py-2 rounded-lg border border-white/10 font-mono">
+                  pip install openai-whisper
+                </code>
+                <p className="text-xs text-ink-muted mt-2">
+                  Requires Python 3.8+ and ffmpeg. After installing, restart the Memex server.
+                </p>
+              </>
+            )}
             <a href="https://github.com/openai/whisper" target="_blank" rel="noopener noreferrer"
               className="inline-flex items-center gap-1 text-xs text-accent hover:underline mt-2">
               <ExternalLink size={11} /> OpenAI Whisper (MIT License)

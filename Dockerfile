@@ -27,6 +27,7 @@ ENV NODE_ENV=production \
     PORT=3002 \
     HOST=0.0.0.0 \
     MEMEX_AUTO_MIGRATE=true \
+    MEMEX_IN_DOCKER=1 \
     MEMEX_CLIENT_DIR=/app/client/dist
 WORKDIR /app/server
 

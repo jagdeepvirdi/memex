@@ -325,6 +325,30 @@ The AI provider, models, cloud consent and embedding model switch at runtime in 
 
 ---
 
+## Using Memex from your phone or another computer
+
+Memex listens on `127.0.0.1` only, so nothing else on your network can reach it. To use it from a phone (capture on the go, search, install the web app) you add HTTPS in front of it, on the same machine, and leave the binding alone. Your login protects the app; HTTPS protects the login and your notes in transit. Do not just set `MEMEX_BIND=0.0.0.0`: that serves your library over plain HTTP to everyone on the network.
+
+**Option A: Tailscale Serve (private to your own devices).** Install [Tailscale](https://tailscale.com/) on the computer that runs Memex and on your phone, sign both in to the same account, enable MagicDNS and HTTPS certificates for your tailnet, then on the computer run:
+
+```bash
+tailscale serve --bg 3002
+```
+
+Tailscale prints an `https://<machine>.<tailnet>.ts.net` address. Open it on the phone and use **Add to Home Screen** / **Install** to get the web app. Only devices in your tailnet can reach it. Stop sharing with `tailscale serve off`. Do not use `tailscale funnel`: that publishes the app to the public internet. Syntax is from the [Tailscale Serve docs](https://tailscale.com/docs/reference/tailscale-cli/serve) (checked 2026-11-20).
+
+**Option B: your own reverse proxy.** Any proxy that terminates HTTPS and forwards to `http://127.0.0.1:3002` on the same machine works (Caddy, nginx, Traefik). For example with Caddy and a domain that points at your machine, a `Caddyfile` of
+
+```
+memex.example.com {
+    reverse_proxy 127.0.0.1:3002
+}
+```
+
+gets a certificate automatically. If the proxy runs on a different machine, set `MEMEX_BIND` in `.env` to this machine's private LAN address (not `0.0.0.0`), firewall the port to that proxy, and keep the proxy's own login or IP allow-list in place. Set `MEMEX_CORS_ORIGINS` only if the web app is served from a different address than the API; behind a proxy that serves both it is not needed.
+
+Things to know: use a long, unique account password (10+ characters is enforced, longer is better), because the login is the only gate once the address is reachable; the login endpoints are rate limited; the vault is still locked by its separate master password; and the web app caches only its shell, never your library. Neither option has been run end to end by the maintainer yet; if you try one, please tell us what you find.
+
 ## Importing Google Keep
 
 1. Go to [Google Takeout](https://takeout.google.com) → select **Keep** → export as ZIP
@@ -332,6 +356,16 @@ The AI provider, models, cloud consent and embedding model switch at runtime in 
 3. Notes save immediately; AI enrichment runs in the background (3 concurrent)
 4. Watch the sidebar progress bar — it shows live count, rate (notes/min), and ETA
 5. Job state is persisted in the DB — progress survives server restarts
+
+## Importing Markdown notes (Obsidian or any folder of `.md` files)
+
+1. Zip the folder (for an Obsidian vault, zip the vault folder). A single `.md` file also works.
+2. In Memex: **Add → Markdown** → choose the file → **Preview**. Nothing is saved yet; the preview lists what will be imported and what will be skipped, and why.
+3. **Import**. Notes save at once as unreviewed notes; AI classification runs in the background like any other import.
+
+What it does: one note per `.md`, `.markdown` or `.txt` file (up to 500 per import, 20,000 characters each). The title comes from the front matter `title`, else the first `# heading`, else the file name. Front matter `tags` and inline `#tags` become tags, and `created` or `date` sets the note's date. Wikilinks (`[[Other note]]`) and image embeds stay as plain text. Hidden folders (`.obsidian`, `.trash`), images, attachments and other file types are ignored. A note is skipped if it is empty, too long, repeated in the folder, or already in Memex with the same title and text, so importing the same vault twice does not create copies.
+
+Nothing is read from or written to disk beyond the upload, and nothing is sent to an AI service by the import itself; classification afterwards follows your normal provider and privacy settings (a note you tag `private` stays on local AI). The API is `POST /api/ingest/markdown` (multipart `file`, optional `dryRun=true`).
 
 ---
 
@@ -526,7 +560,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
 
 **Is my data sent to Google, OpenAI, Anthropic or Groq?** Only if you add that provider's key, choose it in Settings, and turn on cloud consent. Even then the privacy guard keeps private items home, and "Review change" shows what a re-embed would send before it does.
 
-**Can I use it from my phone or another computer?** Not directly: it is bound to this machine on purpose. Put a reverse proxy with HTTPS in front, set `MEMEX_BIND` (and `MEMEX_CORS_ORIGINS` if the page lives on another origin), and install the web app (PWA). The login protects the API; the proxy protects the traffic.
+**Can I use it from my phone or another computer?** Yes, but not by opening the port to your network: Memex is bound to this machine on purpose. See [Using Memex from your phone](#using-memex-from-your-phone-or-another-computer) for a private, HTTPS way to do it.
 
 **I forgot my vault master password.** It cannot be recovered; that is what makes the vault private. Vault items stay locked. You can reset the vault (Settings > Vault), which deletes its items.
 
