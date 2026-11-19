@@ -12,7 +12,7 @@ export function BrandMark({ size = 32, className }: BrandMarkProps) {
 
   return (
     <img
-      src={theme === 'light' ? '/brand/memex-mark-light.svg' : '/brand/memex-mark.svg'}
+      src={theme === 'light' ? '/brand/memex-mark-light.png' : '/brand/memex-mark.png'}
       alt=""
       aria-hidden="true"
       width={size}

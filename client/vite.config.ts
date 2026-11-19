@@ -9,7 +9,7 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['apple-touch-icon.png', 'brand/favicon.svg', 'brand/masked-icon.svg'],
+      includeAssets: ['apple-touch-icon.png', 'favicon.ico', 'brand/favicon-32.png'],
       manifest: {
         name: 'Memex',
         short_name: 'Memex',

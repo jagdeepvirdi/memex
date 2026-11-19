@@ -1,4 +1,4 @@
-![Memex — Personal Knowledge OS](brand/memex-lockup-dark.svg)
+![Memex — Personal Knowledge OS](brand/memex-lockup-dark.png)
 
 # Memex — Personal Knowledge OS
 

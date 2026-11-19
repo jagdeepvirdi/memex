@@ -45,7 +45,7 @@
       "kind": "custom",
       "refersTo": "brand-lockup",
       "description": "Theme-aware Memory Ribbon symbol paired with the Memex wordmark.",
-      "html": "<span class=\"ds-brand\"><img src=\"/brand/memex-mark.svg\" alt=\"\"><span>Memex</span></span>",
+      "html": "<span class=\"ds-brand\"><img src=\"/brand/memex-mark.png\" alt=\"\"><span>Memex</span></span>",
       "css": ".ds-brand { display: inline-flex; align-items: center; gap: 12px; color: #E9EEF6; font: 600 20px/1.2 'DM Sans', system-ui, sans-serif; letter-spacing: -0.03em; } .ds-brand img { width: 32px; height: 32px; flex: none; }"
     }
   ],

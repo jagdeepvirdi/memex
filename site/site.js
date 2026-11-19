@@ -16,7 +16,7 @@
     if (!brandMark) return
     var override = document.documentElement.getAttribute('data-theme')
     var light = override === 'light' || (!override && window.matchMedia('(prefers-color-scheme: light)').matches)
-    brandMark.src = light ? 'brand/memex-mark-light.svg' : 'brand/memex-mark.svg'
+    brandMark.src = light ? 'brand/memex-mark-light.png' : 'brand/memex-mark.png'
   }
   updateBrandMark()
   window.matchMedia('(prefers-color-scheme: light)').addEventListener('change', updateBrandMark)
