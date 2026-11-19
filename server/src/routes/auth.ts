@@ -124,7 +124,7 @@ router.get('/me', async (req, res) => {
 
   const token = authHeader.split(' ')[1]
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string, email: string }
+    const decoded = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] }) as { userId: string, email: string }
     res.json({ user: { id: decoded.userId, email: decoded.email } })
   } catch (err) {
     res.status(401).json({ error: 'Invalid token' })

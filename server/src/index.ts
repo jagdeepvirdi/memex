@@ -97,7 +97,7 @@ const authMiddleware = async (req: Request, res: Response, next: NextFunction) =
   // 1. Try JWT (standard session token)
   let payload: string | jwt.JwtPayload | null = null
   try {
-    payload = jwt.verify(token, JWT_SECRET)
+    payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] })
   } catch {}
   if (payload) {
     req.user = payload

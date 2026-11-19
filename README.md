@@ -541,4 +541,4 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
 
 ---
 
-MIT licensed (see [LICENSE](LICENSE)). *Runs on your machine. No subscriptions. No telemetry. Nothing leaves it unless you turn on a cloud provider.*
+MIT licensed (see [LICENSE](LICENSE)). *Runs on your machine. No subscriptions. No telemetry. Your notes never leave it unless you turn on a cloud provider; saving a link does contact the page's host (through a free reader service), and Strict Local Mode blocks that too.*

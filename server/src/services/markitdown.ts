@@ -40,7 +40,10 @@ export async function checkMarkitdownInstalled(): Promise<boolean> {
  * Writes a temp file, calls markitdown, then cleans up.
  */
 export async function convertToMarkdown(buffer: Buffer, filename: string): Promise<string> {
-  const tmpPath = join(tmpdir(), `memex-${randomUUID()}-${filename}`)
+  // The name only matters for its extension (MarkItDown picks a converter by it). Keep a
+  // short, plain-character version so a crafted name can never steer the temp path.
+  const safeName = (filename.split(/[\\/]/).pop() ?? '').replace(/[^A-Za-z0-9._-]/g, '_').slice(-80) || 'upload'
+  const tmpPath = join(tmpdir(), `memex-${randomUUID()}-${safeName}`)
   await writeFile(tmpPath, buffer)
 
   try {

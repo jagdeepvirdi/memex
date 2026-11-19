@@ -26,6 +26,7 @@ An AI assistant connects through the MCP server (`mcp/`) with its own key (creat
 - **No encryption of the database or of backup files.** Notes other than vault items are stored as plain text in Postgres, and `npm run backup` writes plain SQL. Use disk encryption and keep backups private.
 - **No multi-user separation.** There is one account. Do not expose a Memex instance to people you would not give your notes to.
 - **A cloud AI you enable sees what you send it.** The guard above reduces that; it is a heuristic, not a guarantee. If something must never leave your machine, tag it `private`, put it in the vault, or turn on Strict Local Mode.
+- **Saving a link contacts other services, even with local AI.** To read a web page Memex sends its address to the free reader at `r.jina.ai`, which fetches the page; YouTube and Instagram links use those sites' public oEmbed endpoints; a link to a GitHub repo makes one unauthenticated request to `api.github.com` carrying only `owner/repo`. No note text is sent. Strict Local Mode blocks all of these, and pasting text instead of a link avoids them.
 - **No automatic updates.** Pull and rebuild yourself, and run `npm audit` now and then.
 
 ## Keep these safe yourself
