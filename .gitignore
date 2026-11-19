@@ -75,3 +75,10 @@ sessions/
 /USER-TODO.md
 
 .vercel
+
+# Browser profiles and design-tool caches from automated UI testing (can hold session data)
+/.chrome-app-profile/
+/.chrome-site-profile/
+/.edge-app-profile/
+/.edge-app-profile-2/
+/.impeccable-cache/

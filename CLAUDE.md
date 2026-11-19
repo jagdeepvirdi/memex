@@ -8,7 +8,7 @@ Memex is a personal knowledge management web app that ingests, auto-classifies, 
 - **Styling**: Tailwind CSS + custom design tokens
 - **State**: Zustand
 - **Animation**: framer-motion
-- **PWA**: `vite-plugin-pwa` + Workbox (NetworkFirst caching for `/api/*`)
+- **PWA**: `vite-plugin-pwa` + Workbox (app shell only; `/api/*` is never cached)
 - **Backend**: Node.js + Express (TypeScript)
 - **Database**: PostgreSQL (local Docker) — structured categories, tags, items, entities, settings
 - **Vector DB**: pgvector (local, inside same PostgreSQL) — semantic search + entity resolution
@@ -400,7 +400,7 @@ Displayed in Dashboard as a "Rediscover" widget.
 
 ## PWA
 `vite.config.ts` uses `vite-plugin-pwa` with Workbox:
-- `NetworkFirst` caching for all `/api/*` routes (30-day expiry, max 500 entries)
+- App shell only is precached. **API responses are not cached**: the server sends `Cache-Control: private, no-store` on every `/api` response (`lib/apiCachePolicy.ts`), and the client deletes the old `api-cache` Cache Storage entry at startup and on logout (`lib/pwaCache.ts`), because cached library data outlived logout. Consequence: no offline reading of items.
 - Share target: `/?share=true` with `title`, `text`, `url` params — Dashboard IngestPanel handles these
 - Manifest: dark theme (`#0D0D0D`), standalone display, maskable icons
 
