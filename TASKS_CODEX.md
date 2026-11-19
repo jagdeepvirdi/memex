@@ -1,6 +1,6 @@
 # Memex Redesign and Product Evolution Roadmap
 
-**Status:** Phases 0-9 complete; Phase 9 recommendations await owner selection (no implementation authorized).  
+**Status:** Phases 0-10 complete. Roadmap items (docs/ROADMAP.md) are proposals awaiting owner selection; nothing beyond R9-01/02/03/05/06 is authorized.  
 **Repository:** `jagdeepvirdi/memex`  
 **Planning baseline:** local repository source and docs reviewed 2026-11-19. The working tree already contains the user-provided, untracked `CODEX_PROMPT.md`; it was left untouched.
 
@@ -299,11 +299,14 @@ The regression matrix, migration-from-empty and dump/restore rehearsal are recor
 
 **Phase acceptance:** recommendations are prioritized by user value, effort, architecture, maintenance, security, dependency and sequence; only small, low-risk in-scope improvements are implemented under approved scope; larger initiatives have proposals and are not silently started; completed/next-release/strategic work are separated. Each roadmap item has an observable outcome and a clear status, while deferred and rejected items include rationale.
 
+
+**Phase 10 completed (2026-11-20):** `docs/ROADMAP.md` holds the prioritized roadmap (milestones M0-M2, items RM-01 to RM-15, each labelled and sized, with deferred/rejected rationale), a dependency check, the authorization record, and three ready-to-start bounded proposals (P10-A touch targets, P10-B light-theme screenshots, P10-C benchmark growth). `docs/CLOSEOUT_REPORT.md` is the closeout report. P10-002 is DONE as proposals only: nothing was implemented and no roadmap item is approved.
+
 | ID | Priority | Description and reason/outcome | Dependencies | Acceptance criteria | Verification | Status |
 |---|---|---|---|---|---|---|
 | P10-001 | P1 | Prioritize Phase 9 recommendations using user impact, evidence/confidence, urgency, effort, dependencies, architecture, privacy/security, compatibility, and recurring maintenance/operator cost. Define a feasible next-release slice, sequence prerequisites and milestones, and state what is deferred/rejected and why. | P9-007 | Roadmap communicates order and rationale, expected user outcome, rough effort/complexity, dependencies, risk, maintenance burden, and evidence for each selected initiative. Priorities fit the product principles and realistic project capacity. | Review ranking against Phase 9 evidence, self-hosting constraints, and product principles; check sequence for dependency conflicts. | DONE |
-| P10-002 | P2 | Identify bounded refinements that can be completed without new infrastructure, broad schema changes, or disproportionate maintenance. For each, define exact scope, acceptance criteria, affected files/systems, privacy/accessibility considerations, rollback or recovery approach where relevant, and verification. Implement only after the user explicitly authorizes that specific work; otherwise leave it as a ready-to-start proposal. | P10-001, explicit authorization for implementation | No enhancement is treated as approved by inclusion on the roadmap. Authorized changes remain bounded, tracked, documented, and verified; out-of-scope dependencies trigger a revised proposal before work expands. | Appropriate acceptance/regression checks for the approved change, with commands/results and any remaining limits recorded. | NOT STARTED |
-| P10-003 | P1 | Update the future roadmap and closeout report with completed work, recommended next-release items, strategic initiatives requiring separate projects, deferred/rejected ideas, open risks, assumptions, and suggested next decision. Cross-link recommendations to their Phase 9 evidence and phase/task IDs. | P10-001, P10-002 | Report clearly distinguishes completed, recommended, authorized/in-progress, deferred, and strategic work; no recommendation is represented as implemented or approved without evidence. | Roadmap cross-reference/completeness review and final project report. | NOT STARTED |
+| P10-002 | P2 | Identify bounded refinements that can be completed without new infrastructure, broad schema changes, or disproportionate maintenance. For each, define exact scope, acceptance criteria, affected files/systems, privacy/accessibility considerations, rollback or recovery approach where relevant, and verification. Implement only after the user explicitly authorizes that specific work; otherwise leave it as a ready-to-start proposal. | P10-001, explicit authorization for implementation | No enhancement is treated as approved by inclusion on the roadmap. Authorized changes remain bounded, tracked, documented, and verified; out-of-scope dependencies trigger a revised proposal before work expands. | Appropriate acceptance/regression checks for the approved change, with commands/results and any remaining limits recorded. | DONE |
+| P10-003 | P1 | Update the future roadmap and closeout report with completed work, recommended next-release items, strategic initiatives requiring separate projects, deferred/rejected ideas, open risks, assumptions, and suggested next decision. Cross-link recommendations to their Phase 9 evidence and phase/task IDs. | P10-001, P10-002 | Report clearly distinguishes completed, recommended, authorized/in-progress, deferred, and strategic work; no recommendation is represented as implemented or approved without evidence. | Roadmap cross-reference/completeness review and final project report. | DONE |
 
 ## 8. Dependencies and prerequisites
 
@@ -373,7 +376,7 @@ Phase-level criteria are stated at each phase heading above. A phase is not DONE
 - **Last completed phase:** Phase 6.
 - **Active tasks:** none. P0-001–P0-005, P1-001–P1-004, P2-001–P2-004, P3-001–P3-004, P4-001–P4-005, P5-001–P5-005, and P6-001–P6-004 are DONE.
 - **Blockers:** none. Handset/screen-reader testing, data-heavy visual stress cases, and installed-device offline verification remain documented release-QA limits.
-- **Next recommended action:** owner review of `docs/PRODUCT_ASSESSMENT.md`; choose which of R9-01 to R9-14 to schedule (suggested order: R9-03, R9-02, R9-01). R9-03 is done (cause of F-8-004 found and fixed, see `docs/PRODUCT_ASSESSMENT.md`); R9-01, R9-02, R9-03, R9-05 and R9-06 are done (Markdown import, retrieval benchmark, Docker certificate hook, Docker-aware tool notices, phone guide); R9-04 and R9-07 need a usability test first and R9-08 to R9-14 are demand-first, so none of those were started. Decision needed: put MarkItDown/Whisper in the Docker image or keep them source-only.
+- **Next recommended action:** owner decisions in `docs/ROADMAP.md` section 6: push the three local commits and confirm CI (RM-01), decide on v1.3.0 (RM-02), decide RM-06 (Docker image with Python tools), and pick any of the proposals P10-A/B/C.
 - **Last updated:** 2026-11-19.
 
 ## 14. Completed work
@@ -407,6 +410,8 @@ Phase-level criteria are stated at each phase heading above. A phase is not DONE
 
 ## 15. Deferred and outstanding work
 
+- **Latest (2026-11-20):** see `docs/CLOSEOUT_REPORT.md` section 7 for the current open risks and `docs/ROADMAP.md` for deferred and rejected items. The bullets below are historical and some are superseded.
+
 - Phase 6 is complete. The browser sweep used headless Chrome with DevTools viewport emulation and a synthetic authenticated session; no physical handset, screen reader, axe scan, large real-library dataset, or installed-PWA offline transaction was available. Optional MarkItDown/Whisper/vision runtime availability was not exercised against a live configured server.
 - No browser-run product audit or screen-by-screen visual verification was performed in Phase 0.
 - No tests/builds were run in Phase 0.
@@ -436,7 +441,7 @@ These are candidates for investigation, not commitments to implement. Phase 9 mu
 
 ## 17. Future roadmap
 
-Phase 10 will turn validated Phase 9 recommendations into a sequenced roadmap. The initial hypothesis is to prioritize (1) a clear, dependable capture-to-retrieval loop; (2) privacy/cache/session safeguards and transparent AI boundaries; (3) mobile and accessibility quality; and (4) high-value portability/integrations only when user evidence and maintenance economics justify them. No large new capability is pre-approved. Each selected initiative must state value, effort, architecture, maintenance, security, dependencies, and sequence.
+**Done (2026-11-20): see `docs/ROADMAP.md`.** Original plan: Phase 10 will turn validated Phase 9 recommendations into a sequenced roadmap. The initial hypothesis is to prioritize (1) a clear, dependable capture-to-retrieval loop; (2) privacy/cache/session safeguards and transparent AI boundaries; (3) mobile and accessibility quality; and (4) high-value portability/integrations only when user evidence and maintenance economics justify them. No large new capability is pre-approved. Each selected initiative must state value, effort, architecture, maintenance, security, dependencies, and sequence.
 
 ### Phase completion report template
 
