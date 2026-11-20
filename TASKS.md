@@ -885,7 +885,7 @@ markitdown --help
 - [x] Fix intent plumbing on all capture paths (`classifyAndUpdateBatch`, quicksave) as a bonus
       *(partly done 2026-11-12: quicksave, `/text`, `/url`, `/file`, `/voice` previews pass `intent`; still open: the Keep
       multi-entity split `createItem` call in `classifyAndUpdateBatch` omits it) — all done 2026-11-15 in `enrichBatch.ts`)*
-- [~] Clean stray categories (`Tech>Link`, `Courses>Tech`, `Travel>Links`, 218 bare-`Links` items) — small strays done, 155 bare-`Links` left (2026-11-20)
+- [~] Clean stray categories (`Tech>Link`, `Courses>Tech`, `Travel>Links`, 218 bare-`Links` items) — small strays done, 109 bare-`Links` left (2026-11-20)
       *(2026-11-15: read-only audit written, `server/src/scripts/auditStrayCategories.sql`, not yet run — needs Postgres up; no Ollama. Cleanup itself still to do.)*
       *(2026-11-15: audit run. Small strays = 6 items, all reviewed; dry-run `server/src/scripts/dryRunStrayCategoryMoves.sql` run, apply script `applyStrayCategoryMoves.sql` written, previewed, then APPLIED 2026-11-15 (6 items fixed; verified from a separate connection). Still open: the bare-`Links` items.
       *(2026-11-15: 21 of the 199 bare-`Links` items moved into hotels/restaurants/cameras/laptops/phones/cookies/stocks
@@ -895,7 +895,7 @@ markitdown --help
       collision), `Tech > Specs`/`Media > Books > Technical` hold furniture/courses, and `Links > Articles/Docs/YouTube/
       Instagram` are source buckets, not topics. Fix the classifier mapping first, verify with the baseline `compare`,
       then re-map the rest.)* The 218 bare-`Links` items (180 reviewed / 38 unreviewed) need a topic mapping.)*
-      *(2026-11-20: 23 more filed by `applyBareLinksMoves2.sql` (applied after a backup; ids only): 17 placeholder "YouTube Video/Short" items into `Links > YouTube`, 6 Instagram placeholders into `Links > Instagram`. **155 left**, mostly mixed: ~45 programming/data tutorials and courses (a `Tech` home was used for them before), real-estate and shop links, ~15 untitled items, a few personal links. They need a topic decision from the user, not a rule.)*
+      *(2026-11-20: 23 more filed by `applyBareLinksMoves2.sql` (applied after a backup; ids only): 17 placeholder "YouTube Video/Short" items into `Links > YouTube`, 6 Instagram placeholders into `Links > Instagram`. **155 left**; then `applyBareLinksMoves3.sql` filed 46 programming/data/tool tutorials, courses and how-tos under `Tech` (backup first), **109 left**: real-estate and shop links, ~15 untitled items, a few personal links, tool pages (Photoshop, VSCode, Dash Plotly), and one titled just "Cook". They need a topic decision from the user, not a rule.)*
 - [x] Update stale CLAUDE.md claims (content-hash dedupe, Instagram caption scraping) — done 2026-11-15 <!-- done: 2026-11-15 -->
 - [ ] If `'repo'` entity type is ever wanted: own migration file with only `ALTER TYPE entity_type ADD VALUE IF NOT EXISTS 'repo'`
       (no-txn), run before code that inserts it; update TS `EntityType` + `SemanticGraph.tsx` colours
