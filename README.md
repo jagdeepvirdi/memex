@@ -584,7 +584,7 @@ GitHub Actions (`.github/workflows/ci.yml`) runs four jobs on every push and PR:
 
 **The page looks old after an update.** Reload once or twice: the installed web app updates itself in the background.
 
-**Does it work on macOS and Linux?** It uses plain Docker features and the compose file has the Linux host mapping, but only Windows has been run so far. See [Platform notes](#platform-notes) and tell us what you find.
+**Does it work on macOS and Linux?** It uses plain Docker features and the compose file has the Linux host mapping, Windows was run by hand and Linux runs in CI on every change; macOS has not been tried. See [Platform notes](#platform-notes) and tell us what you find.
 
 **Can I contribute?** Yes: see [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately (see [SECURITY.md](SECURITY.md)).
 
