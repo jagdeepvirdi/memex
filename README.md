@@ -20,11 +20,18 @@ Open [http://localhost:3002](http://localhost:3002), create your account (10+ ch
 
 Everything is reachable from this computer only by default. More detail, local AI and cloud-only setups are under [Quick Start](#quick-start).
 
+![The Memex dashboard (dark theme, built-in sample data)](site/img/app-dashboard.webp)
+
+![Settings > Keys & Privacy: cloud AI is off until you add a key and consent](site/img/app-privacy.webp)
+
+*Both screenshots use the built-in sample data on a fresh install, never a real library. Memex also has a light theme (Settings > Appearance).*
+
 ---
 
 ## What it does
 
 - **Import from Google Keep** — upload a Takeout ZIP; every note saves instantly and is classified in the background with a live sidebar ETA
+- **Import Markdown / Obsidian notes** — Add > Markdown takes a zipped folder of `.md` files (or one file), previews what will be saved or skipped, keeps titles, front matter, tags and dates, and classifies in the background (see [Importing Markdown notes](#importing-markdown-notes-obsidian-or-any-folder-of-md-files))
 - **Ingest anything** — URLs, YouTube videos, Instagram posts, PDFs, Word docs, PowerPoint, images (vision AI), voice memos (Whisper), plain text
 - **Auto-classify with local AI** — Ollama tags, categorizes, and extracts structured data from each item (confidence-scored, multi-entity detection)
 - **Ask your knowledge** — RAG-powered chat: ask questions, get cited answers from your own notes
@@ -43,7 +50,10 @@ Everything is reachable from this computer only by default. More detail, local A
 - **Password vault** — AES-256-GCM client-side encryption; master password never leaves the browser
 - **Move to Vault** — one-click encryption of sensitive plain-text notes
 - **Data provenance** — every AI extraction is logged; roll back or apply any past extraction to an item
-- **PWA** — installable with an offline app shell and share-target support; viewing and changing library data requires a connection to your Memex instance
+- **Light and dark themes** — "Midnight" and "Daylight" with an iris accent; follows your system, or pick System / Light / Dark in Settings > Appearance
+- **Search and capture anywhere** — press `/` to search and `N` to capture from any page; the sidebar groups Home, Discover, Library and Review, with a quick-nav on phones
+- **Sample data** — about forty made-up items to look around in, removed again with one click
+- **PWA** — installable with an offline app shell and share-target support; API responses are never cached (and the old cache is deleted on logout), so viewing and changing library data requires a connection to your Memex instance
 
 **Monthly cost: $0 with local AI.** Cloud providers are optional and billed by them, not by Memex.
 
@@ -545,12 +555,12 @@ Coverage is also enforced in CI on every push/PR.
 
 ## CI
 
-GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
+GitHub Actions (`.github/workflows/ci.yml`) runs four jobs on every push and PR:
 
-1. `tsc --noEmit` — type-check both packages
-2. `npm test` — full test suite
-3. `npm run coverage` — coverage with threshold gate
-4. `scripts/smoke-test.sh` — builds the Docker image, starts it, and checks first-run setup, login, sample data, CORS and that the ports are loopback-only (run it yourself with `bash scripts/smoke-test.sh`)
+1. **Server** — `tsc --noEmit`, the full test suite, a retrieval benchmark (a synthetic library and labelled questions scored against a throwaway Postgres, so ranking changes are measured), and coverage with a threshold gate
+2. **Client** — `tsc --noEmit` and the full test suite
+3. **MCP server** — type-check, tests, build, and `npm audit --omit=dev` (no known advisories in production dependencies)
+4. **Docker smoke test** — `scripts/smoke-test.sh` builds the image, starts it, and checks first-run setup, login, sample data, CORS and that the ports are loopback-only (run it yourself with `bash scripts/smoke-test.sh`)
 
 ---
 
@@ -582,8 +592,8 @@ GitHub Actions (`.github/workflows/ci.yml`) runs on every push and PR:
 
 ## Keyboard Shortcuts
 
-- `Ctrl+K` / `Cmd+K` — Global search
-- `Ctrl+N` / `Cmd+N` — Quick add
+- `/` — Global search (when you are not typing in a field)
+- `N` — Capture something new (when you are not typing in a field)
 - `Esc` — Close any modal
 
 ---
