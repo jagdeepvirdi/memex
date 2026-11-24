@@ -162,6 +162,58 @@ export async function fetchGithubRepo(slug: string, opts: LookupOptions = {}): P
   return meta
 }
 
+/** Longest README kept (characters); the classifier only reads the start anyway. */
+export const MAX_README_CHARS = 20_000
+
+/**
+ * The repo's README as plain text/Markdown, from the same unauthenticated API (and the same rate-limit gate,
+ * Strict Local rule and User-Agent) as `fetchGithubRepo`. Used when the page fetch (Jina) fails for a repo.
+ * Throws GithubLookupError for every expected problem.
+ */
+export async function fetchGithubReadme(slug: string): Promise<string> {
+  const name = slug.trim().toLowerCase()
+  if (!isValidRepoSlug(name)) throw new GithubLookupError('invalid', 'That is not a valid GitHub repository name.')
+
+  if (asBool(await getSetting<unknown>('strict_local_mode', false))) {
+    throw new GithubLookupError('blocked', 'Strict Local Mode is on, so GitHub cannot be contacted.')
+  }
+
+  const now = Date.now()
+  if (now < rateLimitedUntil) {
+    throw new GithubLookupError('rate_limited', limitMessage(rateLimitedUntil), rateLimitedUntil)
+  }
+
+  const [owner, repo] = name.split('/')
+  let res: Response
+  try {
+    res = await fetch(`${API}/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/readme`, {
+      headers: {
+        Accept: 'application/vnd.github.raw+json',
+        'User-Agent': 'memex-local',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    })
+  } catch (err) {
+    logger.warn({ err: err instanceof Error ? err.name : 'error' }, 'GitHub README fetch failed')
+    throw new GithubLookupError('unavailable', 'Could not reach GitHub.')
+  }
+
+  if (res.status === 404) throw new GithubLookupError('not_found', 'This repository has no README (or it is private).')
+  if (res.status === 403 || res.status === 429) {
+    const reset = Number(res.headers.get('x-ratelimit-reset'))
+    const retryAfter = Number(res.headers.get('retry-after'))
+    const until = Number.isFinite(reset) && reset > 0 ? reset * 1000 : Number.isFinite(retryAfter) && retryAfter > 0 ? now + retryAfter * 1000 : now + 60 * 60 * 1000
+    rateLimitedUntil = until
+    throw new GithubLookupError('rate_limited', limitMessage(until), until)
+  }
+  if (!res.ok) throw new GithubLookupError('unavailable', `GitHub returned an error (${res.status}).`)
+
+  const text = (await res.text()).trim()
+  if (!text) throw new GithubLookupError('not_found', 'This repository has an empty README.')
+  return text.slice(0, MAX_README_CHARS)
+}
+
 function limitMessage(until: number): string {
   const mins = Math.max(1, Math.ceil((until - Date.now()) / 60_000))
   return `GitHub's request limit was reached. Try again in about ${mins} minute${mins === 1 ? '' : 's'}.`

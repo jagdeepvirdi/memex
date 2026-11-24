@@ -3,6 +3,8 @@ import { getSetting, asBool } from './settings.js';
 import logger from '../lib/logger.js'
 import { extractYoutubeId } from './youtubeUrl.js'
 import { fetchVideoDetails } from './youtubeApi.js'
+import { parseGithubRepoUrl } from './githubRepo.js'
+import { fetchGithubReadme, GithubLookupError } from './githubApi.js'
 
 export interface ScrapedContent {
   title: string;
@@ -162,6 +164,24 @@ async function scrapeInstagram(url: string, shortcode: string): Promise<ScrapedC
   }
 }
 
+/** A repo page Jina could not read: use the README from GitHub's API instead. Null on any problem. */
+async function githubReadmeFallback(url: string): Promise<ScrapedContent | null> {
+  const ref = parseGithubRepoUrl(url)
+  if (!ref) return null
+  try {
+    const readme = await fetchGithubReadme(`${ref.owner}/${ref.repo}`)
+    return {
+      title: `${ref.owner}/${ref.repo}`,
+      content: `# ${ref.owner}/${ref.repo}\n\n${readme}`,
+      source: 'url',
+      sourceUrl: url,
+    }
+  } catch (error) {
+    logger.warn({ kind: error instanceof GithubLookupError ? error.kind : 'error' }, 'GitHub README fallback failed')
+    return null
+  }
+}
+
 async function scrapeGeneric(url: string): Promise<ScrapedContent> {
   try {
     const jinaUrl = `https://r.jina.ai/${url}`;
@@ -176,7 +196,13 @@ async function scrapeGeneric(url: string): Promise<ScrapedContent> {
     }
 
     const data = await response.json() as { data: { title: string; content: string } };
-    
+
+    // Jina answered but found nothing on a repo page: the README is the content.
+    if (!data.data.content?.trim()) {
+      const readme = await githubReadmeFallback(url)
+      if (readme) return readme
+    }
+
     return {
       title: data.data.title || url,
       content: data.data.content || '',
@@ -185,6 +211,8 @@ async function scrapeGeneric(url: string): Promise<ScrapedContent> {
     };
   } catch (error) {
     logger.error(error, 'Generic scrape error')
+    const readme = await githubReadmeFallback(url)
+    if (readme) return readme
     return {
       title: url,
       content: 'Failed to extract content from this URL.',

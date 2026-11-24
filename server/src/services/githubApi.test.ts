@@ -9,7 +9,7 @@ const warn = vi.fn()
 vi.mock('../lib/logger', () => ({ default: { warn: (...a: unknown[]) => warn(...a), error: vi.fn(), info: vi.fn() } }))
 
 import {
-  parseGithubRepo, fetchGithubRepo, lookupGithubRepo, GithubLookupError, resetGithubState, CACHE_TTL_MS, NOT_FOUND_TTL_MS,
+  parseGithubRepo, fetchGithubRepo, fetchGithubReadme, MAX_README_CHARS, lookupGithubRepo, GithubLookupError, resetGithubState, CACHE_TTL_MS, NOT_FOUND_TTL_MS,
 } from './githubApi'
 
 const fetchMock = vi.fn()
@@ -256,5 +256,58 @@ describe('lookupGithubRepo (the automatic one used while saving)', () => {
   ])('returns null, never throws: %s', async (_n, arrange, slug) => {
     arrange()
     await expect(lookupGithubRepo(slug)).resolves.toBeNull()
+  })
+})
+
+describe('fetchGithubReadme', () => {
+  const text = (body: string, code = 200, headers: Record<string, string> = {}) =>
+    ({ ok: code >= 200 && code < 300, status: code, headers: new Headers(headers), text: async () => body, json: async () => ({}) })
+
+  it('asks the README endpoint for raw Markdown with the generic User-Agent', async () => {
+    fetchMock.mockResolvedValue(text('# Hello\n\nA tool.'))
+    await expect(fetchGithubReadme('Anthropics/Claude-Code')).resolves.toBe('# Hello\n\nA tool.')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe('https://api.github.com/repos/anthropics/claude-code/readme')
+    expect(init.headers.Accept).toBe('application/vnd.github.raw+json')
+    expect(init.headers['User-Agent']).toBe('memex-local')
+  })
+
+  it('truncates a very long README', async () => {
+    fetchMock.mockResolvedValue(text('x'.repeat(MAX_README_CHARS + 500)))
+    expect((await fetchGithubReadme('a/b')).length).toBe(MAX_README_CHARS)
+  })
+
+  it('refuses a bad name without calling GitHub', async () => {
+    await expect(fetchGithubReadme('../etc/passwd')).rejects.toMatchObject({ kind: 'invalid' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('never contacts GitHub in Strict Local Mode', async () => {
+    mockGetSetting.mockResolvedValue(true)
+    await expect(fetchGithubReadme('a/b')).rejects.toMatchObject({ kind: 'blocked' })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('maps 404 and an empty README to not_found', async () => {
+    fetchMock.mockResolvedValueOnce(text('', 404))
+    await expect(fetchGithubReadme('a/b')).rejects.toMatchObject({ kind: 'not_found' })
+    fetchMock.mockResolvedValueOnce(text('   '))
+    await expect(fetchGithubReadme('a/b')).rejects.toMatchObject({ kind: 'not_found' })
+  })
+
+  it('shares the rate-limit gate: after a 403 it stops asking, for the README and the repo lookup alike', async () => {
+    const reset = String(Math.floor(Date.now() / 1000) + 600)
+    fetchMock.mockResolvedValueOnce(text('', 403, { 'x-ratelimit-reset': reset }))
+    await expect(fetchGithubReadme('a/b')).rejects.toMatchObject({ kind: 'rate_limited' })
+    await expect(fetchGithubReadme('a/c')).rejects.toMatchObject({ kind: 'rate_limited' })
+    await expect(fetchGithubRepo('a/d')).rejects.toMatchObject({ kind: 'rate_limited' })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps a network failure and a 500 to unavailable', async () => {
+    fetchMock.mockRejectedValueOnce(new Error('boom'))
+    await expect(fetchGithubReadme('a/b')).rejects.toMatchObject({ kind: 'unavailable' })
+    fetchMock.mockResolvedValueOnce(text('', 500))
+    await expect(fetchGithubReadme('a/b')).rejects.toBeInstanceOf(GithubLookupError)
   })
 })
