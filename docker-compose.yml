@@ -11,6 +11,8 @@ services:
       POSTGRES_PASSWORD: memex
     volumes:
       - pg_data:/var/lib/postgresql/data
+    # Comes back after a reboot together with the app (which has the same policy); `docker compose stop` still stops it.
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U memex -d memex"]
       interval: 10s
