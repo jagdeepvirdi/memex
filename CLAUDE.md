@@ -485,6 +485,7 @@ Two palettes, **Midnight** (dark, default) and **Daylight** (light), as CSS vari
 - Canvas drawing (the graph) cannot use CSS variables: `SemanticGraph.tsx` keeps one palette per theme (`GRAPH_PALETTE`).
 - Midnight: bg `#0B0E14`, surface `#141922`, text `#E9EEF6`, muted `#8895A7`. Daylight: bg `#F5F7FB`, surface `#FFFFFF`, text `#121826`, muted `#5B687C`.
 - Accent "Iris": `#7C83FF` (dark) / `#5558E8` (light); vault teal `#5EEAD4` / `#0F766E`; type badges rose / sage / lilac / sky. The landing page (`site/style.css`) uses the same values and follows `prefers-color-scheme`.
+- Fonts are self-hosted (no request to Google): variable latin woff2 files in `client/src/assets/fonts` (SIL OFL, from @fontsource), `@font-face` at the top of `client/src/index.css`, precached by the PWA (`workbox.globPatterns` includes woff2). Other scripts use the fallback stacks.
 - Font display: `Playfair Display`
 - Font body: `DM Sans`
 - Font mono: `JetBrains Mono`

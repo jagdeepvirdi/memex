@@ -9,6 +9,8 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      // woff2 is not in Workbox's default list; the fonts are part of the app shell now.
+      workbox: { globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'] },
       includeAssets: ['apple-touch-icon.png', 'favicon.ico', 'brand/favicon-32.png'],
       manifest: {
         name: 'Memex',

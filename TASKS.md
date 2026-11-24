@@ -183,7 +183,7 @@ Repo is PUBLIC: generic fixtures and demo data only, no personal note titles, re
 - [x] Light-mode review of the remaining pages <!-- done: 2026-11-18 -->
       *(Looked at in light with stubbed data: Item, Vault (setup), Ask, Table, Places, Media, Trash, Category Review, Graph, Digest, Quick Add and Search modals, Settings > Keys & Privacy / Vault / Appearance. **Found and fixed:** `text-sky-*` / `bg-sky-*` classes (about 30 uses) never rendered, because `sky` was configured as a single colour, so the shades did not exist (a bug from before the redesign: link badges and some chips were unstyled); they now exist and flip with the theme, plus `violet-400`. Four cards still had hardcoded warm `rgba(...)` tints (Book, Media, Recipe, the tag chip): now theme variables. No other contrast problems seen. Also checked later the same day: the Welcome page (first step) and the public share page, in light and dark, no problems (the share page uses a bold sans title where the app uses the serif display font: a style difference, left as is). Not seen: the later Welcome steps, the vault when unlocked, the Digest 'on this day' block, the ingest panel's other tabs, and anything that needs real data.)*
 - [ ] Layout / typography redesign (fonts, spacing, card style), if wanted
-- [ ] Self-host the app's fonts (`client/index.html` still loads Playfair/DM Sans/JetBrains Mono from Google Fonts, which tells Google whenever the app opens; do it the way `site/fonts` does)
+- [x] Self-host the app's fonts *(done 2026-11-24: Playfair Display, DM Sans and JetBrains Mono as variable latin woff2 (normal + italic) in `client/src/assets/fonts`, `@font-face` in `client/src/index.css`, Google `<link>`s removed from `index.html`, woff2 added to the PWA precache. Build has no `fonts.googleapis` reference; client `tsc` clean, 949 tests pass. Not yet looked at in a real browser; latin subset only, so other scripts use the fallback stacks)*
 - [x] Screenshots for the README (reuses the landing page's two sample-data shots, `site/img/*.webp`) <!-- done: 2026-11-20 -->
 
 ---
@@ -853,6 +853,7 @@ markitdown --help
       `sessions/place-mining/places-dry-run-gemini-2026-11-16.json` (private, gitignored). Not yet in the app UI.
 - [x] Run the before/after classify diff against the Phase 0 baseline <!-- done: 2026-11-16, see Start here step 1 -->
       <!-- original note follows -->
+- [x] GitHub README fallback *(done 2026-11-24: a live test of `modelcontextprotocol/servers` showed Jina answering `Forbidden`, so the classifier got only the bare URL and the summary came from model memory. `fetchGithubReadme` (`githubApi.ts`) now supplies the README when Jina fails or is empty for a repo URL; same Strict Local rule and rate-limit gate as the metadata lookup; 12 new tests; committed `acbccda`. Checked end to end 2026-11-24 with Postgres + the real GitHub API + Gemini (only the Jina request stubbed to 403, nothing written to the DB): 10,851 chars of README reached the classifier, filed under `Tech > AI > Repos`, confidence 95, summary drawn from the README, stars attached)*
       (historical)
       *(2026-11-16: mapping fix written in `classifier.ts` — prompt tightening + `refineCategories()` guardrails,
       14 new tests in `classifier.refine.test.ts`, UNCOMMITTED. After-pass #1 (`classify-after-mapping-fix-2026-11-16.json`)

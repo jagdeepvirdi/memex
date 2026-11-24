@@ -2,6 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Self-hosted fonts (latin subset; SIL OFL, see assets/fonts/LICENSE.txt). Other scripts use the fallback stacks. */
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('./assets/fonts/playfair-display-latin-wght-normal.woff2') format('woff2');
+  font-weight: 400 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Playfair Display';
+  src: url('./assets/fonts/playfair-display-latin-wght-italic.woff2') format('woff2');
+  font-weight: 400 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'DM Sans';
+  src: url('./assets/fonts/dm-sans-latin-wght-normal.woff2') format('woff2');
+  font-weight: 100 1000;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'DM Sans';
+  src: url('./assets/fonts/dm-sans-latin-wght-italic.woff2') format('woff2');
+  font-weight: 100 1000;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./assets/fonts/jetbrains-mono-latin-wght-normal.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('./assets/fonts/jetbrains-mono-latin-wght-italic.woff2') format('woff2');
+  font-weight: 100 800;
+  font-style: italic;
+  font-display: swap;
+}
+
 /*
  * Design tokens (L9). Two palettes, "Midnight" (dark, the default) and "Daylight" (light), switched by
  * <html data-theme="dark|light"> (set before first paint from the saved choice or the system setting, see

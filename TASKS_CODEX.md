@@ -110,17 +110,17 @@ The app should feel like one calm personal library, not a collection of unrelate
 
 | Milestone | Phase | Scope | Status |
 |---|---:|---|---|
-| 0. Discovery and plan | 0 | Repository/product audit, strategy, full roadmap | DONE; approval required to start implementation |
-| 1. Brand and design foundation | 1 | Identity exploration, final logo and brand assets | NOT STARTED |
-| 1. Brand and design foundation | 2 | Tokens, reusable UI foundation, theme validation | NOT STARTED |
-| 2. Application redesign | 3 | App shell, navigation, global actions | NOT STARTED |
+| 0. Discovery and plan | 0 | Repository/product audit, strategy, full roadmap | DONE |
+| 1. Brand and design foundation | 1 | Identity exploration, final logo and brand assets | DONE (logo later replaced by a user-supplied raster; vector/monochrome gap open, see section 15) |
+| 1. Brand and design foundation | 2 | Tokens, reusable UI foundation, theme validation | DONE |
+| 2. Application redesign | 3 | App shell, navigation, global actions | DONE |
 | 2. Application redesign | 4 | Dashboard, capture, search, Ask workflows | DONE |
 | 2. Application redesign | 5 | Remaining app screens and specialized layouts | DONE |
-| 2. Application redesign | 6 | Responsive, accessibility, interaction, PWA polish | IN PROGRESS |
-| 3. Website and release quality | 7 | Public site, copy, metadata, product previews | NOT STARTED |
-| 3. Website and release quality | 8 | Regression, security, performance, release readiness | NOT STARTED |
-| 4. Product review and evolution | 9 | Independent product/security/architecture gap analysis | NOT STARTED |
-| 4. Product review and evolution | 10 | Prioritized future roadmap and approved small enhancements | NOT STARTED |
+| 2. Application redesign | 6 | Responsive, accessibility, interaction, PWA polish | DONE |
+| 3. Website and release quality | 7 | Public site, copy, metadata, product previews | DONE (2026-11-20) |
+| 3. Website and release quality | 8 | Regression, security, performance, release readiness | DONE (2026-11-20; F-8-004 open, not blocking) |
+| 4. Product review and evolution | 9 | Independent product/security/architecture gap analysis | DONE (2026-11-20) |
+| 4. Product review and evolution | 10 | Prioritized future roadmap and approved small enhancements | DONE as proposals only (2026-11-20); nothing implemented or approved |
 
 Phases are gated. Work stops at each phase boundary. Phase 0 does not authorize Phase 1. The user must approve the initial plan or explicitly instruct the next phase. Any significant scope change is recorded here before implementation expands.
 
@@ -371,13 +371,14 @@ Phase-level criteria are stated at each phase heading above. A phase is not DONE
 
 ## 13. Progress tracker
 
-- **Current milestone:** 2 — Application redesign.
-- **Current phase:** Phase 6 — Responsive, accessibility, interaction and PWA polish (complete).
-- **Last completed phase:** Phase 6.
-- **Active tasks:** none. P0-001–P0-005, P1-001–P1-004, P2-001–P2-004, P3-001–P3-004, P4-001–P4-005, P5-001–P5-005, and P6-001–P6-004 are DONE.
-- **Blockers:** none. Handset/screen-reader testing, data-heavy visual stress cases, and installed-device offline verification remain documented release-QA limits.
-- **Next recommended action:** owner decisions in `docs/ROADMAP.md` section 6: push the three local commits and confirm CI (RM-01), decide on v1.3.0 (RM-02), decide RM-06 (Docker image with Python tools), and pick any of the proposals P10-A/B/C.
-- **Last updated:** 2026-11-19.
+- **Current milestone:** 4 — Product review and evolution (complete). All four milestones are done.
+- **Current phase:** none. The roadmap (Phases 0-10) is finished; what remains is owner decisions.
+- **Last completed phase:** Phase 10 (2026-11-20, proposals only).
+- **Active tasks:** none. Every task P0-001 to P10-003 is DONE.
+- **Blockers:** none. Open, non-blocking: F-8-004 (Docker image build fails locally with an npm-internal error; CI `docker-smoke` passes), and the documented QA limits: no handset, screen-reader, axe scan, large real-library or installed-PWA offline testing.
+- **Next recommended action:** owner decisions in `docs/ROADMAP.md` section 6: push and confirm CI (RM-01), decide on v1.3.0 (RM-02), decide RM-06 (Docker image with Python tools), and pick any of the proposals P10-A/B/C. Nothing in the roadmap is authorized until you say so.
+- **Outside this roadmap, since 2026-11-20 (tracked in `TASKS.md`):** GitHub README fallback in the scraper (commit `acbccda`, local, not pushed as of 2026-11-24) and self-hosted app fonts (`client/src/assets/fonts`). Neither is a roadmap item.
+- **Last updated:** 2026-11-24 (tracker and milestone table refreshed; they had stopped at Phase 6 on 2026-11-19).
 
 ## 14. Completed work
 
@@ -420,7 +421,7 @@ Phase-level criteria are stated at each phase heading above. A phase is not DONE
 - Identity and design foundation are complete. Broader screen redesign, security review/remediation, new capabilities, and deployment remain outstanding and gated by their phases.
 - Confirm whether referenced screenshot assets exist and whether any current deployment details have changed before using them as evidence.
 - The supplied logo is raster only: there is no vector or monochrome version, so Phase 1's monochrome/vector acceptance items (P1-003) are not met until one is supplied. The mark is wider than tall and sits on a square canvas, so it renders about 25% shorter than the old square mark at the same size.
-- The section 6 milestone table still shows Phases 1-3 as NOT STARTED and Phase 6 as IN PROGRESS; section 13 and the completed-work log are authoritative.
+- ~~The section 6 milestone table still shows Phases 1-3 as NOT STARTED and Phase 6 as IN PROGRESS~~ Fixed 2026-11-24: the milestone table and the section 13 tracker now match the completed-work log.
 
 ## 16. Product improvement recommendations (initial hypotheses)
 
