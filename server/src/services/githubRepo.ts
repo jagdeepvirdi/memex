@@ -47,8 +47,8 @@ export function repoSlugFromStructured(s: Record<string, unknown>): string | und
 }
 
 /**
- * Returns the repo only when it is the *subject* of the item: the saved source URL, or a
- * leading line that is nothing but the URL. A repo merely mentioned in prose, or several
+ * Returns the repo only when it is the *subject* of the item: the saved source URL (always wins, even if the page
+ * links to other repos), or a leading line that is nothing but the URL. A repo merely mentioned in prose, or several
  * different repos in one caption (the multi-entity split path), does not qualify.
  */
 export function detectGithubRepoSubject(text: string, sourceUrl?: string): GithubRepoRef | null {
@@ -56,10 +56,11 @@ export function detectGithubRepoSubject(text: string, sourceUrl?: string): Githu
   for (const m of text.matchAll(/github\.com\/([A-Za-z0-9][A-Za-z0-9-]{0,38})\/([A-Za-z0-9._-]+)/gi)) {
     mentioned.add(`${m[1]}/${m[2]}`.toLowerCase().replace(/\.git$/, ''))
   }
+  // A saved repo page IS its repo, however many other repos its README links to (governance repos, forks, sponsors).
+  // Only text with no source URL of its own is ambiguous when it lists several repos.
   const fromSource = sourceUrl ? parseGithubRepoUrl(sourceUrl) : null
-  if (fromSource) mentioned.add(`${fromSource.owner}/${fromSource.repo}`.toLowerCase())
-  if (mentioned.size > 1) return null
   if (fromSource) return fromSource
+  if (mentioned.size > 1) return null
   // The Manual tab's editor posts HTML (`<p>https://github.com/a/b</p>`): turn block tags into line breaks
   // and strip the rest so the "leading line is just the URL" rule still works.
   const plain = text

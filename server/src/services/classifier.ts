@@ -101,6 +101,14 @@ Shape: {"type":"note","title":"","categories":[],"tags":[],"summary":"","structu
 Valid types: note, recipe, media, spec, stock, link, book, place
 Valid intents: actionable, reference, idea`
 
+// Appended when the item is a GitHub repo page. The plain-English line is what the user reads on the card, so it must
+// say what the project is FOR, not repeat the README's own jargon.
+const GITHUB_ADDENDUM = `
+
+This item is a GitHub repository page (title, README text). type MUST be "link" and structured.kind MUST be "repo".
+Set structured.whatItDoes to 1-2 plain sentences for someone who does not code: what the project is, then what you would use it for, e.g. "A toolkit for building websites quickly. Use it when you want to create a web server without writing everything from scratch."
+Avoid jargon (no "minimalist", "unopinionated", "middleware", "framework" unless you explain it). Do not start with the repository name. Base it only on the text; never invent features.`
+
 // ── JSON extraction helpers ───────────────────────────────────────────────────
 
 function extractJson(raw: string): string {
@@ -396,7 +404,7 @@ function mapDevKnowledgeCategories(structured: Record<string, unknown>): string[
 // and `CANONICAL_MAPPING` stay unchanged (the categories route and tests rely on them); these checks run last.
 
 const AI_SIGNAL =
-  /\b(ai|a\.i\.|llms?|gpt|chatgpt|openai|claude|anthropic|gemini|copilot|cursor|mcp|agents?|agentic|prompts?|machine learning|deep learning|neural|generative|genai|transformers?|rag|embeddings?|diffusion|midjourney|hugging ?face|ollama|langchain)\b/i
+  /\b(ai|a\.i\.|llms?|gpt|chatgpt|openai|claude|anthropic|gemini|copilot|cursor|mcp|agents?|agentic|prompts?|machine learning|deep learning|language models?|artificial intelligence|chatbots?|fine-?tun(?:e|ed|es|ing)|neural|generative|genai|transformers?|rag|embeddings?|diffusion|midjourney|hugging ?face|ollama|langchain)\b/i
 
 const FINANCE_SIGNAL =
   /\b(bank|banking|account|balance|invoice|tax|loan|salary|payment|fund|funds|invest\w*|stocks?|shares?|dividends?|crypto\w*|budget|expense|income|insurance|mortgage|credit|debit|emi|gst|trading|portfolio|finance|financial)\b/i
@@ -447,8 +455,13 @@ export function refineCategories(result: ClassificationResult, sourceText = ''):
   return result
 }
 
-function applyGithubRepo(result: ClassificationResult, ref: GithubRepoRef): ClassificationResult {
+/** A repo that is not about AI (a web framework, a CSS library) is filed under Tech > Repos, not Tech > AI > Repos. */
+const GENERAL_REPO_CATEGORY = ['Tech', 'Repos']
+
+function applyGithubRepo(result: ClassificationResult, ref: GithubRepoRef, text = ''): ClassificationResult {
   const prior = result.structured as Partial<RepoData>
+  // What the model said plus the top of the README (its one-line description): an AI word in either keeps Tech > AI.
+  const isAi = AI_SIGNAL.test(`${modelText(result)} ${prior.repoName ?? ''} ${ref.repo} ${text.slice(0, 600)}`)
   const structured: RepoData = {
     ...prior,
     kind: 'repo',
@@ -461,7 +474,7 @@ function applyGithubRepo(result: ClassificationResult, ref: GithubRepoRef): Clas
   return {
     ...result,
     type: 'link',
-    categories: [...DEV_ROOT, DEV_KIND_LEAF.repo],
+    categories: isAi ? [...DEV_ROOT, DEV_KIND_LEAF.repo] : GENERAL_REPO_CATEGORY,
     structured: structured as unknown as Record<string, unknown>,
   }
 }
@@ -558,7 +571,7 @@ export interface ClassifyHints {
 /** Topic beats source: dev-knowledge items file under Tech > AI, never under Links > Instagram/YouTube. */
 function applyDevKnowledge(result: ClassificationResult, text: string, hints?: ClassifyHints): ClassificationResult {
   const repo = detectGithubRepoSubject(text, hints?.sourceUrl)
-  if (repo) return applyGithubRepo(result, repo)
+  if (repo) return applyGithubRepo(result, repo, text)
   if (result.type === 'link') {
     const categories = mapDevKnowledgeCategories(result.structured)
     if (categories) return { ...result, categories }
@@ -617,7 +630,9 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
 
   // ── Attempt 1: normal prompt ──────────────────────────────────────────────
   try {
-    const system = hints?.video ? SYSTEM_PROMPT + YOUTUBE_ADDENDUM : SYSTEM_PROMPT
+    const system = hints?.video
+      ? SYSTEM_PROMPT + YOUTUBE_ADDENDUM
+      : detectGithubRepoSubject(text, hints?.sourceUrl) ? SYSTEM_PROMPT + GITHUB_ADDENDUM : SYSTEM_PROMPT
     const raw = await aiChat(text, system, 'json', { temperature: 0 }, undefined, aiOpts)
     const result = parseClassification(raw)
     result.model = usedModel

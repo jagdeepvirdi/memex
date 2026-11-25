@@ -61,7 +61,11 @@ describe('detectGithubRepoSubject', () => {
 
   it('does not match when several different repos are listed (multi-entity path)', () => {
     expect(detectGithubRepoSubject('https://github.com/a/b\nhttps://github.com/c/d')).toBeNull()
-    expect(detectGithubRepoSubject('see github.com/c/d', 'https://github.com/a/b')).toBeNull()
+  })
+
+  it('a saved repo page is its own subject even when its README links to other repos', () => {
+    const readme = '# Project\nSee also github.com/c/d and github.com/e/f, sponsored via github.com/g/h'
+    expect(detectGithubRepoSubject(readme, 'https://github.com/a/b')?.repo).toBe('b')
   })
 
   it('treats repeated mentions of the same repo as one repo', () => {
@@ -106,17 +110,54 @@ describe('classify() dev-knowledge handling', () => {
   })
 
   it('pre-pass uses the saved sourceUrl when the text is a scraped README', async () => {
-    mockAI({ type: 'note', title: 'x', categories: [], tags: [], summary: 's', structured: {} })
+    mockAI({ type: 'note', title: 'x', categories: [], tags: [], summary: 'An AI agent toolkit', structured: {} })
     const r = await classify('# Project\nSome readme text', { sourceUrl: 'https://github.com/a/b' })
     expect(r.categories).toEqual(['Tech', 'AI', 'Repos'])
     expect((r.structured as { repoName?: string }).repoName).toBe('a/b')
+  })
+
+  it('a scraped repo page that links to other repos is still recognised as the repo (was typed "spec")', async () => {
+    mockAI({ type: 'spec', title: 'x', categories: ['Tech'], tags: [], summary: 'A web server toolkit', structured: { language: 'JavaScript' } })
+    const readme = '# expressjs/express\nFast web framework.\nSee github.com/expressjs/discussions and github.com/expressjs/express-gh-ci'
+    const r = await classify(readme, { sourceUrl: 'https://github.com/expressjs/express' })
+    expect(r.type).toBe('link')
+    expect(r.structured).toMatchObject({ kind: 'repo', repoName: 'expressjs/express', platform: 'github' })
+  })
+
+  it('a repo that is not about AI is filed under Tech > Repos, not Tech > AI', async () => {
+    mockAI({ type: 'link', title: 'x', categories: [], tags: ['web', 'server'], summary: 'A toolkit for building web servers.', structured: {} })
+    const r = await classify('# express\nFast web server toolkit.', { sourceUrl: 'https://github.com/expressjs/express' })
+    expect(r.categories).toEqual(['Tech', 'Repos'])
+    expect(r.structured).toMatchObject({ kind: 'repo', whatItDoes: 'A toolkit for building web servers.' })
+  })
+
+  it('an AI repo stays under Tech > AI > Repos, judged from what the model said or the README top', async () => {
+    mockAI({ type: 'link', title: 'x', categories: [], tags: [], summary: 'Runs large language models locally.', structured: {} })
+    expect((await classify('# runner', { sourceUrl: 'https://github.com/a/b' })).categories).toEqual(['Tech', 'AI', 'Repos'])
+    mockAI({ type: 'link', title: 'x', categories: [], tags: [], summary: 'A command line helper.', structured: {} })
+    expect((await classify('# helper\nA Claude Code plugin.', { sourceUrl: 'https://github.com/a/c' })).categories).toEqual(['Tech', 'AI', 'Repos'])
+  })
+
+  it('asks the model for a plain-English "what it is for" line when the item is a repo page, and only then', async () => {
+    mockAI({ type: 'link', title: 'x', categories: [], tags: [], summary: 's', structured: {} })
+    await classify('# Project', { sourceUrl: 'https://github.com/a/b' })
+    const system = String(vi.mocked(aiChat).mock.calls[0][1])
+    expect(system).toMatch(/GitHub repository page/)
+    expect(system).toMatch(/whatItDoes/)
+    expect(system).toMatch(/does not code/)
+
+    mockAI({ type: 'note', title: 'x', categories: [], tags: [], summary: 's', structured: {} })
+    await classify('Just a note about lunch')
+    expect(String(vi.mocked(aiChat).mock.calls[1][1])).not.toMatch(/GitHub repository page/)
   })
 
   it('pre-pass still applies when the model fails and the fallback is used', async () => {
     vi.mocked(aiChat).mockResolvedValue('not json at all')
     const r = await classify('https://github.com/a/b')
     expect(r.confidence).toBe(0)
-    expect(r.categories).toEqual(['Tech', 'AI', 'Repos'])
+    expect(r.type).toBe('link')
+    expect(r.structured).toMatchObject({ kind: 'repo', repoName: 'a/b' })
+    expect(r.categories).toEqual(['Tech', 'Repos']) // nothing says it is about AI
   })
 
   it('keeps the model whatItDoes over the summary when it provided one', async () => {
