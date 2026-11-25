@@ -319,6 +319,7 @@ interface PlaceData {
 - Links → YouTube / Instagram / Articles / Docs
 - Travel → Destinations / Hotels / Restaurants / Attractions
 - Passwords → (vault section, separate)
+- Shopping / Real Estate / Courses → top-level leaves added 2026-11-25 (shops and products, property listings, non-tech courses and admissions pages). They are in the classifier prompt (`CANONICAL_LEAVES`), `shopping` no longer fuzzy-maps to Personal, and `refineCategories` moves a bare-Links link to Real Estate / Shopping only when the text plainly says so (`PROPERTY_SIGNAL` / `SHOP_SIGNAL`). A programming or tech course still goes to Tech. They are created on first use (`resolveCategoryPath`) and are not privacy-pinned like Personal.
 
 ### Entity Graph (migration 007)
 ```sql

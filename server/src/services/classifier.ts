@@ -47,6 +47,7 @@ const CANONICAL_LEAVES = [
   'Destinations', 'Hotels', 'Restaurants', 'Attractions',
   'YouTube', 'Instagram', 'Articles', 'Docs', 'Numbers', 'Contacts',
   'Repos', 'Prompts & Skills', 'Explainers', 'Tools',
+  'Shopping', 'Real Estate', 'Courses',
 ]
 
 const SYSTEM_PROMPT = `You are a knowledge classifier. Given raw text or a note, return ONLY valid JSON with no preamble.
@@ -85,7 +86,9 @@ Type rules:
   Choose the category by TOPIC, never by where it was posted: an Instagram or YouTube caption about a repo is Repos, not Instagram or YouTube.
   Topic beats platform for EVERY item: a tech or programming course, tutorial or video saved from YouTube, Instagram or any website is categories ["Tech"], not Links > YouTube/Instagram/Articles/Docs. Use those Links leaves only when no topic category fits.
   Tech > AI is ONLY for AI. A general programming tutorial or course (Python, SQL, web, data), a non-AI app or dev tool (Photoshop, VSCode), or a plain software or product page is categories ["Tech"], never Tech > AI.
-  Use the leaf Notes ONLY for finance notes. A shop, product, property listing, job post or any saved web page that fits no leaf is categories ["Links"].
+  Use the leaf Notes ONLY for finance notes.
+  A shop, product page, or anything to buy is categories ["Shopping"]. A property listing (condo, house, townhouse, land, an apartment to buy or rent) is categories ["Real Estate"]. An online course, diploma, degree programme, school or admissions page, workshop or class that is NOT about programming or technology is categories ["Courses"] (a programming or tech course stays ["Tech"]).
+  A job post or any other saved web page that fits no leaf is categories ["Links"].
 - note: everything else
 
 Intent rules:
@@ -215,7 +218,18 @@ export const CANONICAL_MAPPING: Record<string, string[]> = {
   numbers: ['Personal', 'Numbers'],
   contact: ['Personal', 'Contacts'],
   contacts: ['Personal', 'Contacts'],
-  shopping: ['Personal'],
+  // Shopping used to fuzzy-map to Personal (the privacy-pinned area); it has its own top-level category now.
+  shopping: ['Shopping'],
+  shop: ['Shopping'],
+  product: ['Shopping'],
+  products: ['Shopping'],
+  'real estate': ['Real Estate'],
+  'real-estate': ['Real Estate'],
+  realestate: ['Real Estate'],
+  property: ['Real Estate'],
+  properties: ['Real Estate'],
+  housing: ['Real Estate'],
+  courses: ['Courses'],
   todo: ['Personal'],
   work: ['Personal'],
   health: ['Personal'],
@@ -412,6 +426,19 @@ const FINANCE_SIGNAL =
 // A saved link to a person's profile really is a contact, so it keeps the privacy-pinned `Personal` category.
 const PROFILE_SIGNAL = /\b(facebook|instagram|linkedin|whatsapp|telegram|profile)\b/i
 
+// A saved link that is clearly a property listing or a shop page, for when the model left it in a catch-all.
+const PROPERTY_SIGNAL =
+  /\b(condo(?:minium)?s?|townhouses?|townhomes?|apartments?|bedrooms?|\d\s?bhk|real estate|for sale|for rent|property listing|house for)\b/i
+const SHOP_SIGNAL =
+  /\b(online (?:shop|store)|add to cart|buy now|free shipping|checkout|shop now|e-?commerce|product page|in stock)\b/i
+
+/** Where a link goes when a guard takes it out of a wrong catch-all: Real Estate or Shopping when it plainly is one, else Links. */
+function linkFallback(result: ClassificationResult, text: string): string[] {
+  if (PROPERTY_SIGNAL.test(text)) return ['Real Estate']
+  if (SHOP_SIGNAL.test(text)) return ['Shopping']
+  return mapToCategories(result.type, result.structured)
+}
+
 const sameLeaf = (a: string[], b: string[]) => a.length === b.length && a.every((v, i) => v === b[i])
 
 /** What the model itself said about the item: title, summary, tags and the "what it does" line. */
@@ -438,13 +465,19 @@ export function refineCategories(result: ClassificationResult, sourceText = ''):
   }
 
   if (result.type === 'link' && sameLeaf(cats, ['Finance', 'Notes']) && !FINANCE_SIGNAL.test(text)) {
-    return { ...result, categories: mapToCategories(result.type, result.structured) }
+    return { ...result, categories: linkFallback(result, text) }
   }
 
   // `shopping`, `todo`, `work`… all fuzzy-map to `Personal`, which is the privacy-pinned Numbers/Contacts area. A saved
   // link (a shop, a product page) does not belong there unless it is a contact or someone's profile.
   if (result.type === 'link' && cats[0] === 'Personal' && cats[1] !== 'Contacts' && !PROFILE_SIGNAL.test(text)) {
-    return { ...result, categories: mapToCategories(result.type, result.structured) }
+    return { ...result, categories: linkFallback(result, text) }
+  }
+
+  // A link the model left in bare Links (or nowhere) that plainly is a property listing or a shop page.
+  if (result.type === 'link' && (cats.length === 0 || sameLeaf(cats, ['Links'])) && !result.structured.kind) {
+    const fallback = linkFallback(result, text)
+    if (fallback[0] === 'Real Estate' || fallback[0] === 'Shopping') return { ...result, categories: fallback }
   }
 
   if (cats[0] === 'Media' && cats[1] === 'Books' && result.type !== 'book') {

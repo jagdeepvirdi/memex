@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { classify, refineCategories, type ClassificationResult } from './classifier'
+import { classify, refineCategories, normalizeCategories, type ClassificationResult } from './classifier'
 
 vi.mock('./ai', () => ({ aiChat: vi.fn() }))
 vi.mock('./githubApi', () => ({ lookupGithubRepo: vi.fn().mockResolvedValue(null) }))
@@ -47,9 +47,13 @@ describe('refineCategories: Tech > AI is only for AI', () => {
 })
 
 describe('refineCategories: Finance > Notes is only for finance', () => {
-  it('sends a shop or property link without finance words back to Links', () => {
-    expect(refineCategories(result({ title: 'Comfortable Summer Sandals', summary: 'An online shop.', categories: ['Finance', 'Notes'] })).categories).toEqual(['Links'])
-    expect(refineCategories(result({ title: 'Sell 2-story townhouse, Example Road', summary: 'A property listing.', categories: ['Finance', 'Notes'] })).categories).toEqual(['Links'])
+  it('sends a shop link to Shopping and a property listing to Real Estate', () => {
+    expect(refineCategories(result({ title: 'Comfortable Summer Sandals', summary: 'An online shop.', categories: ['Finance', 'Notes'] })).categories).toEqual(['Shopping'])
+    expect(refineCategories(result({ title: 'Sell 2-story townhouse, Example Road', summary: 'A property listing.', categories: ['Finance', 'Notes'] })).categories).toEqual(['Real Estate'])
+  })
+
+  it('falls back to Links when a link has no shop or property signal', () => {
+    expect(refineCategories(result({ title: 'Quarterly hobby club page', summary: 'A club.', categories: ['Finance', 'Notes'] })).categories).toEqual(['Links'])
   })
 
   it('keeps Finance > Notes when the model talks about finance', () => {
@@ -62,8 +66,8 @@ describe('refineCategories: Finance > Notes is only for finance', () => {
 })
 
 describe('refineCategories: Personal is not for shops', () => {
-  it('sends a product or shop link out of Personal back to Links', () => {
-    expect(refineCategories(result({ title: 'Comfortable Desk Lamp', summary: 'An online shop.', categories: ['Personal'] })).categories).toEqual(['Links'])
+  it('sends a product or shop link out of Personal: Shopping when it says so, else Links', () => {
+    expect(refineCategories(result({ title: 'Comfortable Desk Lamp', summary: 'An online shop.', categories: ['Personal'] })).categories).toEqual(['Shopping'])
     expect(refineCategories(result({ title: 'Garden Chair', categories: ['Personal', 'Numbers'] })).categories).toEqual(['Links'])
   })
 
@@ -116,5 +120,50 @@ describe('classify(): the guard runs after the dev-knowledge mapping', () => {
     }))
     const r = await classify('https://example.com/claude-agents')
     expect(r.categories).toEqual(['Tech', 'AI', 'Explainers'])
+  })
+})
+
+describe('Shopping, Real Estate and Courses are real leaves', () => {
+  it('maps the model answers to the new top-level categories (shopping no longer fuzzy-maps to Personal)', () => {
+    expect(normalizeCategories(['Shopping'])).toEqual(['Shopping'])
+    expect(normalizeCategories(['Real Estate'])).toEqual(['Real Estate'])
+    expect(normalizeCategories(['Property'])).toEqual(['Real Estate'])
+    expect(normalizeCategories(['Courses'])).toEqual(['Courses'])
+    expect(normalizeCategories(['Personal'])).toEqual(['Personal']) // untouched
+    expect(normalizeCategories(['course'])).toEqual(['Tech']) // a programming course still lands in Tech
+  })
+
+  it('tells the model about the three leaves, and that a tech course stays in Tech', async () => {
+    vi.mocked(aiChat).mockResolvedValueOnce(JSON.stringify({ type: 'link', title: 'x', categories: ['Shopping'], tags: [], summary: 's', structured: {} }))
+    await classify('https://shop.example.com/lamp')
+    const system = String(vi.mocked(aiChat).mock.calls[0][1])
+    expect(system).toContain('Shopping, Real Estate, Courses')
+    expect(system).toMatch(/\["Shopping"\]/)
+    expect(system).toMatch(/\["Real Estate"\]/)
+    expect(system).toMatch(/\["Courses"\].*stays \["Tech"\]/)
+  })
+
+  it('files a shop link the model answered with Shopping', async () => {
+    vi.mocked(aiChat).mockResolvedValueOnce(JSON.stringify({ type: 'link', title: 'Desk lamp', categories: ['Shopping'], tags: [], summary: 'A lamp.', structured: {} }))
+    expect((await classify('Desk lamp page')).categories).toEqual(['Shopping'])
+  })
+
+  it('files a property listing and a non-tech course the same way', async () => {
+    vi.mocked(aiChat).mockResolvedValueOnce(JSON.stringify({ type: 'link', title: 'Condo', categories: ['Real Estate'], tags: [], summary: 'A condo for sale.', structured: {} }))
+    expect((await classify('Condo for sale')).categories).toEqual(['Real Estate'])
+    vi.mocked(aiChat).mockResolvedValueOnce(JSON.stringify({ type: 'link', title: 'Nutrition course', categories: ['Courses'], tags: [], summary: 'An online course.', structured: {} }))
+    expect((await classify('Nutrition online course')).categories).toEqual(['Courses'])
+  })
+
+  it('moves a plain bare-Links link to Real Estate or Shopping only when it plainly is one', () => {
+    expect(refineCategories(result({ title: '3 bedroom condo', summary: 'A condo for sale.', categories: ['Links'] })).categories).toEqual(['Real Estate'])
+    expect(refineCategories(result({ title: 'Lamp', summary: 'Add to cart, free shipping.', categories: [] })).categories).toEqual(['Shopping'])
+    expect(refineCategories(result({ title: 'Some page', summary: 'A page.', categories: ['Links'] })).categories).toEqual(['Links'])
+  })
+
+  it('never touches videos, repos or other leaves', () => {
+    expect(refineCategories(result({ title: 'Condo tour', summary: 'A condo for sale.', categories: ['Links', 'YouTube'] })).categories).toEqual(['Links', 'YouTube'])
+    expect(refineCategories(result({ title: 'condo-finder', summary: 'for sale', categories: ['Links'], structured: { kind: 'repo' } })).categories).toEqual(['Links'])
+    expect(refineCategories(result({ type: 'note', title: 'Condo notes', summary: 'for sale', categories: [] })).categories).toEqual([])
   })
 })
