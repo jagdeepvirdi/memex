@@ -2,7 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
 import IngestPanel from './ingest/IngestPanel'
 import SearchModal from './search/SearchModal'
+import { toast } from 'sonner'
 import { useAuthStore } from '../store/authStore'
+import { useOutboxStore } from '../store/outboxStore'
+import { pingServer } from '../lib/api'
 
 type CaptureDetail = { url?: string; text?: string }
 
@@ -66,12 +69,34 @@ export function GlobalActions() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [authenticated, captureOpen, location.pathname, openCapture, openSearch, searchOpen])
 
+  // Something shared to Memex from another app (Android share sheet). With Memex reachable it opens the capture panel as
+  // before; when it is not (laptop off, no signal) the link or text goes straight into "Save for later", because the
+  // person sharing from another app should not have to do anything more.
   useEffect(() => {
     if (!authenticated || location.pathname !== '/' || searchParams.get('share') !== 'true') return
     const url = searchParams.get('url') || undefined
     const text = searchParams.get('text') || searchParams.get('title') || ''
-    openCapture({ url: url ?? (text.startsWith('http') ? text : undefined), text: url ? undefined : text || undefined })
-  }, [authenticated, location.pathname, openCapture, searchParams])
+    const detail: CaptureDetail = { url: url ?? (text.startsWith('http') ? text : undefined), text: url ? undefined : text || undefined }
+    const value = (detail.url ?? detail.text ?? '').trim()
+    if (!value) { openCapture(detail); return }
+
+    let cancelled = false
+    void (async () => {
+      const reachable = await pingServer()
+      if (cancelled) return
+      if (reachable) { openCapture(detail); return }
+      const saved = await useOutboxStore.getState().add(detail.url ? 'url' : 'text', value)
+      if (cancelled) return
+      if (saved.ok) {
+        toast.success('Memex is not reachable. Saved for later on this phone; it will be sent when Memex answers.')
+        clearSharedTarget()
+      } else {
+        toast.error(saved.message)
+        openCapture(detail) // let the person fix or keep it by hand
+      }
+    })()
+    return () => { cancelled = true }
+  }, [authenticated, clearSharedTarget, location.pathname, openCapture, searchParams])
 
   useEffect(() => {
     if (!captureOpen) return

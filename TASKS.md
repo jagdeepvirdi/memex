@@ -11,7 +11,8 @@ last_updated: 2026-11-25
 
 ### Done 2026-11-25 (evening): phone offline queue
 - **Phone "Save for later" outbox, P1 + automatic sending** (uncommitted until asked): IndexedDB queue, `Save for later` in the capture panel, `N waiting` header button with a list, flush through the normal capture routes, automatic sending on open / online / new item / slowing timer (30 s to 10 min). No cloud inbox: Supabase / Railway rejected, the data waits on the phone. Client 1005 tests, `tsc` clean. Documented in CLAUDE.md, README (Tailscale steps), CHANGELOG and the landing page ("Take it on your phone").
-- **Left for the queue:** P2 share-target while unreachable straight into the outbox; P3 server duplicate protection for notes; optional Background Sync; a "waiting N days" reminder.
+- **P2 done (uncommitted):** a share-sheet link or text goes straight into the outbox when Memex cannot be reached (`GlobalActions`); the offline service-worker fallback for `/?share=true` still needs a check on the real phone.
+- **Left for the queue:** P3 server duplicate protection for notes; optional Background Sync; a "waiting N days" reminder.
 - [ ] **User: try it on the real Android phone** (README "Step by step: an Android phone with Tailscale"): install Tailscale on both, enable MagicDNS + HTTPS in the admin page, `tailscale serve --bg 3002`, install the app, switch Tailscale off to save a link, switch it on and watch it send.
 - [ ] **User: change the password in the note that was tagged `private` on 2026-11-25** (kept out of the repo on purpose).
 

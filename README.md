@@ -379,6 +379,7 @@ Memex only lives on your computer, so on a weekend (or with no signal) the phone
 - **It sends by itself** once the computer answers: when you open the app, when the phone's network returns, when you save something new, and on a timer that slows down (30 s, 1, 2, 5, then every 10 min) while Memex stays unreachable. It only tries while the app is open and the phone is online.
 - **Each item is handled exactly like one typed in:** the page is read and classified, repo stats, recipes and the places named in a page or note are picked up, and the result lands in **Pending** for you to review. A link or note Memex already has is not saved twice.
 - **Nothing is dropped.** An item leaves the phone only after Memex confirms it. If the session ended it waits for you to sign in; a link Memex cannot read is kept with the reason and a **Try again** button. The list (open it from **N waiting**) lets you send now, retry or remove items. Up to 200 items, notes up to 50,000 characters.
+- **Sharing from another app works too:** share a link to Memex from Chrome or any app (Android Share menu). If Memex answers, the capture panel opens as usual; if not, the link is kept for later automatically and a message says so.
 - Items saved for later are stored unencrypted in the phone browser's storage until sent; clearing the site's data in Chrome removes them.
 - Not yet tried on a real phone by the maintainer: it is covered by tests and a desktop-browser check. If something does not behave, please tell us.
 
