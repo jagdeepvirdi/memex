@@ -43,6 +43,7 @@
         <a class="hide-sm" href="#where">Local or cloud</a>
         <a class="hide-sm" href="#privacy">Privacy</a>
         <a class="hide-sm" href="#assistants">AI assistants</a>
+        <a class="hide-sm" href="#phone">Phone</a>
         <a class="hide-sm" href="#new">What is new</a>
         <a href="#install">Install</a>
         <a href="https://github.com/jagdeepvirdi/memex">GitHub</a>
@@ -276,6 +277,24 @@
         </div>
       </div>
       <p class="more"><a href="https://github.com/jagdeepvirdi/memex#use-memex-from-an-ai-assistant-mcp">Read the full setup guide</a></p>
+    </section>
+
+    <section class="band wrap" id="phone" aria-labelledby="phone-h">
+      <h2 id="phone-h">Take it on your phone</h2>
+      <p class="intro">Memex installs on an Android phone as an app, straight from the browser: no app store and nothing to download from a third party. It is the same Memex, served by your own computer, so your library stays where it is.</p>
+      <ul class="plain two">
+        <li><strong>Private link, only for your devices.</strong> With Tailscale, your phone reaches your computer over an encrypted private network. The page is never put on the public internet. <span class="why">Why it helps: you can capture and search on the move without opening a port.</span></li>
+        <li><strong>Save now, send later.</strong> If your computer is off (a weekend, say) or the phone has no signal, "Save for later" keeps the link or note on the phone. <span class="why">Why it helps: you never lose a link because the laptop was closed.</span></li>
+        <li><strong>It sends by itself.</strong> When the app is opened, when the network is back, or when you save something new, the phone tries your computer. If it is still off, it asks less and less often and keeps everything. Each item is read and filed exactly as if you had typed it, places and recipes included. <span class="why">Why it helps: nothing to remember to do.</span></li>
+        <li><strong>Nothing is dropped.</strong> An item leaves the phone only after Memex confirms it is saved, and something you already have is not saved twice. <span class="why">Why it helps: safe to save the same link twice.</span></li>
+      </ul>
+      <h3 class="ver">Set it up once</h3>
+      <ol class="steps">
+        <li><strong>Computer:</strong> install <a href="https://tailscale.com/download">Tailscale</a> and sign in. Start Memex, then run <code>tailscale serve --bg 3002</code>.</li>
+        <li><strong>Phone:</strong> install Tailscale from Google Play and sign in with the same account.</li>
+        <li><strong>Phone:</strong> open the <code>https://&hellip;.ts.net</code> address Tailscale printed, sign in to Memex, and choose <strong>Install app</strong> in the browser menu.</li>
+      </ol>
+      <p class="fine">The full step-by-step guide, including the two switches to turn on in the Tailscale admin page, is in the <a href="https://github.com/jagdeepvirdi/memex#using-memex-from-your-phone-or-another-computer">README</a>. The phone only sends while Memex is open on the phone and Tailscale is connected. The saved-for-later queue is tested in code and in a desktop browser; it has not yet been tried on a real phone.</p>
     </section>
 
     <section class="band wrap new" id="new" aria-labelledby="new-h">

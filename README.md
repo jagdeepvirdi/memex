@@ -53,7 +53,7 @@ Everything is reachable from this computer only by default. More detail, local A
 - **Light and dark themes** — "Midnight" and "Daylight" with an iris accent; follows your system, or pick System / Light / Dark in Settings > Appearance
 - **Search and capture anywhere** — press `/` to search and `N` to capture from any page; the sidebar groups Home, Discover, Library and Review, with a quick-nav on phones
 - **Sample data** — about forty made-up items to look around in, removed again with one click
-- **PWA** — installable with an offline app shell and share-target support; API responses are never cached (and the old cache is deleted on logout), so viewing and changing library data requires a connection to your Memex instance
+- **PWA** — installable with an offline app shell and share-target support, plus **Save for later**: links and notes kept on the phone while your computer is off and sent by themselves when it answers (see the [phone guide](#using-memex-from-your-phone-or-another-computer)); API responses are never cached (and the old cache is deleted on logout), so viewing and changing library data requires a connection to your Memex instance
 
 **Monthly cost: $0 with local AI.** Cloud providers are optional and billed by them, not by Memex.
 
@@ -358,6 +358,29 @@ memex.example.com {
 gets a certificate automatically. If the proxy runs on a different machine, set `MEMEX_BIND` in `.env` to this machine's private LAN address (not `0.0.0.0`), firewall the port to that proxy, and keep the proxy's own login or IP allow-list in place. Set `MEMEX_CORS_ORIGINS` only if the web app is served from a different address than the API; behind a proxy that serves both it is not needed.
 
 Things to know: use a long, unique account password (10+ characters is enforced, longer is better), because the login is the only gate once the address is reachable; the login endpoints are rate limited; the vault is still locked by its separate master password; and the web app caches only its shell, never your library. Neither option has been run end to end by the maintainer yet; if you try one, please tell us what you find.
+
+### Step by step: an Android phone with Tailscale
+
+Tailscale gives your phone and your computer a private, encrypted network of their own. Memex never goes on the public internet. Tailscale (the company) only sees account and device details, not your notes: the traffic between your devices is end-to-end encrypted.
+
+1. **Computer:** install [Tailscale](https://tailscale.com/download) and sign in (Google, Microsoft, GitHub or Apple login all work). Leave it running.
+2. **Phone:** install **Tailscale** from Google Play and sign in with the **same account**. Turn it on (it shows as a VPN key icon in the status bar the first time you accept the prompt).
+3. **Tailscale admin page** ([login.tailscale.com/admin/dns](https://login.tailscale.com/admin/dns)), once: make sure **MagicDNS** is on, then under **HTTPS Certificates** press **Enable HTTPS**. Android needs HTTPS to install the web app.
+4. **Computer:** start Memex (`docker compose up -d`; after updating Memex use `docker compose up -d --build`), then in a terminal run `tailscale serve --bg 3002`. It prints an address like `https://<computer>.<tailnet>.ts.net`. (`tailscale serve status` shows it again; `tailscale serve off` stops it. Never use `tailscale funnel`: that is the public internet.)
+5. **Phone:** with Tailscale on, open that address in Chrome and sign in to Memex.
+6. **Phone:** Chrome menu, **Install app** (or **Add to Home screen**). Memex now opens full screen from its own icon, and Android lists it in the **Share** menu.
+
+Things to expect: Tailscale must be connected on the phone for Memex to be reachable; a Memex login lasts about a week before it asks for your password again; and Tailscale device keys expire (180 days by default), after which the phone asks you to sign in to Tailscale again.
+
+### When the computer is off: Saved for later
+
+Memex only lives on your computer, so on a weekend (or with no signal) the phone cannot reach it. Instead of losing the link, use **Save for later** in the capture screen. It keeps the link or note on the phone (in the browser's own storage) and shows an **N waiting** button in the header.
+
+- **It sends by itself** once the computer answers: when you open the app, when the phone's network returns, when you save something new, and on a timer that slows down (30 s, 1, 2, 5, then every 10 min) while Memex stays unreachable. It only tries while the app is open and the phone is online.
+- **Each item is handled exactly like one typed in:** the page is read and classified, repo stats, recipes and the places named in a page or note are picked up, and the result lands in **Pending** for you to review. A link or note Memex already has is not saved twice.
+- **Nothing is dropped.** An item leaves the phone only after Memex confirms it. If the session ended it waits for you to sign in; a link Memex cannot read is kept with the reason and a **Try again** button. The list (open it from **N waiting**) lets you send now, retry or remove items. Up to 200 items, notes up to 50,000 characters.
+- Items saved for later are stored unencrypted in the phone browser's storage until sent; clearing the site's data in Chrome removes them.
+- Not yet tried on a real phone by the maintainer: it is covered by tests and a desktop-browser check. If something does not behave, please tell us.
 
 ## Importing Google Keep
 

@@ -7,6 +7,9 @@ All notable changes to Memex are documented here.
 ## [Unreleased]
 
 ### Added
+- **Save for later (phone outbox).** Links and notes can be kept on the phone while the computer is off or out of reach, listed under an "N waiting" button, and sent by themselves (app opened, network back, new item, slowing timer) through the normal capture flow, so places, repo stats and recipes are picked up too. Nothing is removed until Memex confirms it; duplicates are not saved twice.
+- **Phone guide, step by step.** README walks through Tailscale on Android (HTTPS certificates, `tailscale serve`, install the web app) and documents the queue; the landing page has a matching "Take it on your phone" section.
+- **Places, GitHub, recipes, shops.** Places named in a note or web article are offered as their own entries; GitHub repos get a plain-English "what it is" line and stats; saved recipe videos queue recipe extraction; Shopping, Real Estate and Courses are new categories the classifier uses.
 - **Markdown / Obsidian import.** Add > Markdown takes a zipped folder of `.md` notes (or one file), previews what will be saved and skipped, keeps titles, front matter and inline tags and dates, skips hidden folders and duplicates, and classifies in the background. `POST /api/ingest/markdown`.
 - **Retrieval benchmark.** A synthetic library and labelled questions score search hit rates in CI against a throwaway Postgres (`retrievalBenchmark.realdb.test.ts`), so ranking changes are measured instead of judged by eye.
 - **Phone guide.** README section on using Memex from a phone or another computer over HTTPS (Tailscale Serve or a reverse proxy) without opening the port to the network.
@@ -23,6 +26,7 @@ All notable changes to Memex are documented here.
 - The table's Reviewed filter now reaches the server query (`reviewed=true`), Trash explicitly requests deleted items, the item page offers Retry when loading fails, and a new public link states that it expires after 7 days.
 
 ### Security
+- **Privacy scan widened.** A password-shaped token, a known secret-key prefix, a `login: value` line or a ledger-style note now keeps a note on this machine (never sent to a cloud AI).
 - **The PWA no longer caches API responses.** Every `/api` response is now `Cache-Control: private, no-store`, and the old `api-cache` is deleted at startup and on logout, so library data no longer survives logout in the browser. The app shell still works offline; reading items offline no longer does.
 
 ---
