@@ -4,9 +4,19 @@ last_updated: 2026-11-25
 
 # Memex — Task Backlog
 
-## ▶ Start here (updated 2026-11-20)
-**State on 2026-11-20:** `main` is at `9dabb00` (Phase 10 roadmap + closeout report); **v1.2.0** is the current release (tags v1.0.0, v1.1.0, v1.2.0). Phases 7-9 are done (claim trace, accessibility, Markdown/Obsidian import, retrieval benchmark in CI). The landing page is live at https://memex.jagdeepsinghvirdi.com (Vercel project `memex-site`, Root Directory `site`). The local Postgres is at migration **026**. **Ollama may be running (the Windows tray app auto-starts it at login); the user said it crashes the laptop, so consider turning off its auto-start.** Before any push: check the diff for personal data (public repo). Current plans: `docs/ROADMAP.md` (Phase 10), `docs/PRODUCT_ASSESSMENT.md`, `docs/CLOSEOUT_REPORT.md`.
-**Next up:** nothing is queued for Claude except what the user picks. **Waiting on the user:** (1) OpenAI live check is SKIPPED by choice (no credits; covered by mocks; Groq live check passed 2026-11-18); (2) try the first-run screen with a real key; (3) a run of the MCP server with a real assistant (Claude Desktop / Cursor). **Claude-side candidates:** README screenshots, self-hosting the app's fonts, L9 layout redesign, L8 ideas only on request. Rules: never start Ollama (it crashes the laptop); start only Postgres (`docker compose up -d postgres`) and stop it after; migrations are the user's step OUTSIDE Docker; cloud AI only with the user's say-so for anything from their library; fixtures stay synthetic; commit/push only when asked.
+## ▶ Start here (updated 2026-11-25)
+**Latest (2026-11-25):** `main` is at `8d3774b` on GitHub plus one local commit (the classifier categories). This session added: places inside a note, the GitHub repo fix, automatic recipe extraction from a saved video, places from a web link, and Shopping / Real Estate / Courses. See "Done 2026-11-25" below and the matching paragraphs in `CLAUDE.md`. Server 1934 tests, client 961, both `tsc` clean.
+**State on 2026-11-20:** `main` was at `9dabb00` (Phase 10 roadmap + closeout report); **v1.2.0** is the current release (tags v1.0.0, v1.1.0, v1.2.0). Phases 7-9 are done (claim trace, accessibility, Markdown/Obsidian import, retrieval benchmark in CI). The landing page is live at https://memex.jagdeepsinghvirdi.com (Vercel project `memex-site`, Root Directory `site`). The local Postgres is at migration **026**. **Ollama may be running (the Windows tray app auto-starts it at login); the user said it crashes the laptop, so consider turning off its auto-start.** Before any push: check the diff for personal data (public repo). Current plans: `docs/ROADMAP.md` (Phase 10), `docs/PRODUCT_ASSESSMENT.md`, `docs/CLOSEOUT_REPORT.md`.
+**Next up:** nothing is queued for Claude except what the user picks. **Waiting on the user:** (1) OpenAI live check is SKIPPED by choice (no credits; covered by mocks; Groq live check passed 2026-11-18); (2) try the first-run screen with a real key; (3) a run of the MCP server with a real assistant (Claude Desktop / Cursor). **Claude-side candidates:** L9 layout redesign, L8 ideas only on request, the known gaps listed under "Done 2026-11-25". Rules: never start Ollama (it crashes the laptop); start only Postgres (`docker compose up -d postgres`) and stop it after; migrations are the user's step OUTSIDE Docker; cloud AI only with the user's say-so for anything from their library; fixtures stay synthetic; commit/push only when asked.
+
+### Done 2026-11-25
+- **Library cleanup (database only, nothing in the repo):** all 86 mined places reviewed and their `visitStatus` settled (3 trips marked `visited`, 2 hike items `visited`); two apartment-listing "places" (Hyderabad, Indore) moved to Trash; Khao Yai kept as destinations with a `national park` tag; three new top-level categories **Shopping, Real Estate, Courses**, and 37 of the 109 bare `Links` items moved into them (72 bare `Links` left: videos, dev tools, data reading, aquarium, social profiles, about 12 with placeholder titles, a few others).
+- **Places inside a note** (`1952d10`, `services/notePlaces.ts`): a note that names several places offers each as its own unreviewed `want-to-visit` entry linked to the note (tick boxes on the capture screen; bulk paste / Keep / Markdown imports do it automatically). Verified live with Gemini.
+- **GitHub repo pages** (`031359e`): a scraped repo page is recognised even when its README links other repos (it used to come out as a generic `spec` with no stats); a plain-English "what it is and what you would use it for" line (`whatItDoes`); non-AI repos go to `Tech > Repos`, AI repos stay in `Tech > AI > Repos`.
+- **Automatic recipe extraction on save** (`e0a5daa`, `services/autoRecipe.ts`): a saved recipe video (or a Food link) queues the existing Extract recipe job; the item page shows queued / none found / failed. Also fixed Gemini returning empty replies for small token caps (thinking tokens count against `maxOutputTokens`; floor of 1024), which had also broken Settings' "Test Gemini".
+- **Places from a pasted web link** (`8d3774b`): reads up to 8000 characters of the page with a web-article prompt, drops stations/airports, never runs on videos, privacy-checks tags/category only (a public guide's phone numbers must not make it "private"); a truncated model answer now keeps its complete entries.
+- **Classifier uses Shopping / Real Estate / Courses** (local commit): the three leaves are in the prompt and mapping; `shopping` no longer maps to Personal; a bare-`Links` link that plainly is a listing or shop page is moved. Verified live on eight made-up pages.
+- **Known gaps left:** bulk paste and Keep imports do not get the video-recipe automation or places from links; a recipe page filed outside Food is not auto-extracted (untested); the 72 remaining bare `Links` items and the placeholder-title items need a page re-read (sends page text to the cloud AI: ask first); at most 30 places per capture.
 
 ### 🧑 Stuff I (the user) have to do — added 2026-11-25
 **Verification only I can do**
@@ -16,11 +26,12 @@ last_updated: 2026-11-25
 
 **Machine / housekeeping**
 - [ ] **Turn off Ollama auto-start** (Windows tray app starts it at login and it crashes the laptop).
-- [ ] **Review the uncommitted files** and commit or discard: `TASKS.md` (modified), `CODEX_PROMPT.md`, `TASKS_ARCHIVE.md` (untracked). Check for personal data before any push (the repo is public).
+- [ ] **Decide what to do with `CODEX_PROMPT.md`** (untracked; not committed or pushed). `TASKS.md` and `TASKS_ARCHIVE.md` are committed. Check for personal data before any push (the repo is public).
 
 **Library cleanup (needs my judgement)**
-- [ ] Review the 88 mined places in Pending (tag `from-note`): fix `visitStatus`, delete extras.
-- [ ] Decide on new categories for the ~178 bare `Links` items (shops / listings).
+- [x] Review the mined places in Pending, fix `visitStatus`, delete extras <!-- done 2026-11-25 -->
+- [x] Decide on new categories for bare `Links` items (shops / listings) <!-- done 2026-11-25: Shopping, Real Estate, Courses; 37 moved -->
+- [ ] The 72 bare `Links` items left (see Done 2026-11-25): decide which need a page re-read (cloud AI) and whether videos / dev tools / data reading / aquarium want their own categories.
 - [ ] Optional: fix the classifier leftovers (3 YouTube courses flipped to `media`; "Udemy Course" / "Oracle Learn" in `Links`; ML tutorials in `Tech > AI > Explainers`).
 - [ ] Optional: decide whether a merge-duplicates feature is wanted (~850 pairs at or above 0.92).
 
@@ -877,7 +888,7 @@ markitdown --help
 - [x] Fix intent plumbing on all capture paths (`classifyAndUpdateBatch`, quicksave) as a bonus
       *(partly done 2026-11-12: quicksave, `/text`, `/url`, `/file`, `/voice` previews pass `intent`; still open: the Keep
       multi-entity split `createItem` call in `classifyAndUpdateBatch` omits it) — all done 2026-11-15 in `enrichBatch.ts`)*
-- [~] Clean stray categories (`Tech>Link`, `Courses>Tech`, `Travel>Links`, 218 bare-`Links` items) — small strays done, 109 bare-`Links` left (2026-11-20)
+- [~] Clean stray categories (`Tech>Link`, `Courses>Tech`, `Travel>Links`, 218 bare-`Links` items) — small strays done, 72 bare-`Links` left (2026-11-25: 37 moved to Shopping / Real Estate / Courses)
       *(2026-11-15: read-only audit written, `server/src/scripts/auditStrayCategories.sql`, not yet run — needs Postgres up; no Ollama. Cleanup itself still to do.)*
       *(2026-11-15: audit run. Small strays = 6 items, all reviewed; dry-run `server/src/scripts/dryRunStrayCategoryMoves.sql` run, apply script `applyStrayCategoryMoves.sql` written, previewed, then APPLIED 2026-11-15 (6 items fixed; verified from a separate connection). Still open: the bare-`Links` items.
       *(2026-11-15: 21 of the 199 bare-`Links` items moved into hotels/restaurants/cameras/laptops/phones/cookies/stocks
