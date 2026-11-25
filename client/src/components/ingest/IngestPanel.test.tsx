@@ -1,3 +1,5 @@
+import 'fake-indexeddb/auto'
+import { IDBFactory } from 'fake-indexeddb'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 
@@ -12,6 +14,9 @@ vi.mock('../Editor', () => ({
     <textarea data-testid="editor" value={content} onChange={(e) => onChange(e.target.value)} />
   ),
 }))
+
+import { toast } from 'sonner'
+import { listOutbox } from '../../lib/outbox'
 
 const mockCreateItem = vi.fn()
 const mockIngestUrl = vi.fn()
@@ -53,6 +58,7 @@ function mockTextEndpoint(preview: Record<string, unknown>) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  globalThis.indexedDB = new IDBFactory()
   mockCreateItem.mockResolvedValue(SAVED)
 })
 
@@ -229,5 +235,49 @@ describe('IngestPanel — bulk paste tab', () => {
     expect(screen.queryByTestId('paste-panel')).not.toBeInTheDocument()
     fireEvent.click(screen.getByRole('tab', { name: /Bulk Paste/i }))
     expect(screen.getByTestId('paste-panel')).toBeInTheDocument()
+  })
+})
+
+describe('IngestPanel — Save for later', () => {
+  it('keeps a pasted link on this device without contacting Memex, and clears the field', async () => {
+    render(<IngestPanel />)
+    const field = screen.getByPlaceholderText(/Paste URL/i) as HTMLInputElement
+    fireEvent.change(field, { target: { value: 'https://example.com/pine-valley' } })
+    fireEvent.click(screen.getByRole('button', { name: /Save for later/i }))
+
+    await waitFor(async () => expect(await listOutbox()).toHaveLength(1))
+    expect((await listOutbox())[0]).toMatchObject({ kind: 'url', value: 'https://example.com/pine-valley', status: 'waiting' })
+    expect(field.value).toBe('')
+    expect(toast.success).toHaveBeenCalledWith(expect.stringMatching(/Kept on this device/))
+    expect(mockIngestUrl).not.toHaveBeenCalled()
+    expect(mockCreateItem).not.toHaveBeenCalled()
+  })
+
+  it('keeps a typed note for later', async () => {
+    render(<IngestPanel />)
+    fireEvent.click(screen.getByRole('tab', { name: /Manual Note/i }))
+    fireEvent.change(screen.getByTestId('editor'), { target: { value: 'Stay at Lakeview Hotel' } })
+    fireEvent.click(screen.getByRole('button', { name: /Save for later/i }))
+
+    await waitFor(async () => expect(await listOutbox()).toHaveLength(1))
+    expect((await listOutbox())[0]).toMatchObject({ kind: 'text', value: 'Stay at Lakeview Hotel' })
+    expect((screen.getByTestId('editor') as HTMLTextAreaElement).value).toBe('')
+  })
+
+  it('disables the button while there is nothing to keep', () => {
+    render(<IngestPanel />)
+    expect(screen.getByRole('button', { name: /Save for later/i })).toBeDisabled()
+    fireEvent.click(screen.getByRole('tab', { name: /Manual Note/i }))
+    expect(screen.getByRole('button', { name: /Save for later/i })).toBeDisabled()
+  })
+
+  it('says why when the link cannot be kept, and keeps what was typed', async () => {
+    render(<IngestPanel />)
+    const field = screen.getByPlaceholderText(/Paste URL/i) as HTMLInputElement
+    fireEvent.change(field, { target: { value: 'ftp://files.example.com/x' } })
+    fireEvent.click(screen.getByRole('button', { name: /Save for later/i }))
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/web link/)))
+    expect(field.value).toBe('ftp://files.example.com/x')
+    expect(await listOutbox()).toEqual([])
   })
 })

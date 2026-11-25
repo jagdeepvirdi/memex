@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic, ListPlus, BookText } from 'lucide-react';
+import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic, ListPlus, BookText, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { ingestUrl, createItem, apiFetch } from '../../lib/api';
 import type { SimilarItem } from '../../lib/api';
@@ -12,6 +12,7 @@ import VoiceIngestPanel from './VoiceIngestPanel';
 import Editor from '../Editor';
 import PriorityPicker from '../PriorityPicker';
 import { previewToCreateRequest, type IngestPreview } from '../../lib/ingest';
+import { useOutboxStore } from '../../store/outboxStore';
 import type { Item, ItemPriority } from '../../../../shared/types';
 
 interface IngestPanelProps {
@@ -35,6 +36,19 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
   const [isSaving, setIsSaving] = useState(false);
   // Places found in the note that the user unticked (by name); everything else is saved as its own entry.
   const [skippedPlaces, setSkippedPlaces] = useState<Set<string>>(new Set());
+
+  const addToOutbox = useOutboxStore((state) => state.add);
+
+  // Keeps the link or note on this device and sends it later (see OutboxIndicator). Works with no connection at all.
+  const saveForLater = async (kind: 'url' | 'text', value: string, clear: () => void) => {
+    const result = await addToOutbox(kind, value);
+    if (!result.ok) {
+      toast.error(result.message);
+      return;
+    }
+    clear();
+    toast.success('Kept on this device. It will be sent to Memex when you choose, from the "waiting" button at the top.');
+  };
 
   const togglePlace = (name: string) =>
     setSkippedPlaces((prev) => {
@@ -229,6 +243,15 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
                     </>
                   )}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void saveForLater('text', manualText, () => setManualText(''))}
+                  disabled={loading || !manualText || manualText === '<p></p>'}
+                  className="w-full bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-ink font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all"
+                >
+                  <Clock size={16} aria-hidden="true" />
+                  Save for later
+                </button>
               </form>
             ) : (
               <PreviewState preview={preview} setPreview={setPreview} priority={priority} setPriority={setPriority} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} skippedPlaces={skippedPlaces} togglePlace={togglePlace} />
@@ -264,6 +287,15 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
                       Analyze URL
                     </>
                   )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void saveForLater('url', url, () => setUrl(''))}
+                  disabled={loading || !url}
+                  className="w-full bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed text-ink font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-all"
+                >
+                  <Clock size={16} aria-hidden="true" />
+                  Save for later
                 </button>
               </form>
             ) : (

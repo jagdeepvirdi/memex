@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../store/authStore'
 import { useAiStatus } from '../hooks/useAiStatus'
 import { DemoBanner } from './DemoBanner'
+import OutboxIndicator from './outbox/OutboxIndicator'
 import { ThemeToggle } from './ThemeToggle'
 
 interface Props {
@@ -86,6 +87,7 @@ export function AppHeader({ left, actions }: Props) {
       {/* Right side */}
       <div className="order-2 md:order-3 h-16 md:h-auto flex items-center gap-3 text-ink-muted shrink-0">
         <DemoBanner />
+        <OutboxIndicator />
 
         {/* AI status pills — hidden on small screens */}
         <div role="status" aria-live="polite" aria-label={`Local Ollama ${aiStatus === 'ok' ? 'available' : aiStatus === 'error' ? 'unavailable' : 'checking'}${isOnline ? ', network online' : ', network offline'}${enrichment && enrichment.total > 0 ? `, ${enrichment.pending} items pending classification` : ''}`} className="hidden lg:flex items-center gap-3 pr-3 border-r border-white/10">

@@ -73,6 +73,19 @@ function adoptRefreshedToken(res: Response) {
   if (currentExp === null || newExp > currentExp) setToken(refreshed)
 }
 
+/**
+ * True when the Memex server answers (the public liveness endpoint, with a short timeout). Used before sending anything
+ * saved for later: a laptop that is off or a phone with no route to it fails here in seconds instead of hanging.
+ */
+export async function pingServer(timeoutMs = 4000): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE}/health`, { signal: AbortSignal.timeout(timeoutMs), cache: 'no-store' })
+    return res.ok
+  } catch {
+    return false
+  }
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = useAuthStore.getState().token
 
