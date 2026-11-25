@@ -19,7 +19,7 @@ import { pool } from '../db/client.js';
 import { setItemTags } from '../db/helpers.js';
 import { quickSaveUrl } from '../services/quickSave.js';
 import { cloudSafe } from '../services/cloudSafe.js';
-import { shouldMinePlaces, extractNotePlaces, planNotePlaces } from '../services/notePlaces.js';
+import { placesForCapture } from '../services/notePlaces.js';
 import type { MinedPlace } from '../services/placeMining.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
 import logger from '../lib/logger.js'
@@ -28,6 +28,9 @@ import { cancelRunningJob, isCancellableJobKind } from '../services/jobControl.j
 import { z } from 'zod'
 import { getSetting, asBool } from '../services/settings.js'
 import { loadBackfillPlan, previewSample, runBackfill, BACKFILL_KIND, DELAY_MIN_MS, DELAY_MAX_MS } from '../services/youtubeBackfill.js'
+
+/** How much of a scraped web page is read for places (a list article puts its places far down). */
+const URL_PLACE_CHARS = 8000;
 
 const router = Router();
 
@@ -69,7 +72,16 @@ router.post('/url', ingestLimiter, async (req, res) => {
 
     // Same page saved before (any URL spelling) is listed first, then near-duplicate content.
     const [sameUrl, similar] = await Promise.all([findItemsBySourceUrl(url), findSimilarItems(embedding)]);
-    res.json({ preview, similarItems: mergeSimilar(sameUrl, similar) });
+
+    // A web article about a trip ("things to do in X") offers its places too. Not for videos (a transcript is noisy).
+    const found = preview.source === 'url'
+      ? await placesForCapture({ ...preview, structured: preview.structured as Record<string, unknown> }, scraped.content, { maxChars: URL_PLACE_CHARS, scanContent: false, page: true })
+      : { places: [] as MinedPlace[], model: undefined };
+
+    res.json({
+      preview: { ...preview, ...(found.places.length > 0 ? { places: found.places, placesModel: found.model } : {}) },
+      similarItems: mergeSimilar(sameUrl, similar),
+    });
   } catch (error) {
     logger.error(error, 'Ingest URL error')
     res.status(500).json({ error: 'Failed to ingest URL' });
@@ -626,18 +638,9 @@ router.post('/text', ingestLimiter, async (req, res) => {
 
     // Places named in the note ("stay at X, eat at Y") are offered as their own entries; the client sends the ones
     // the user keeps back with the save. Failure-soft: no places is the old behaviour.
-    let places: MinedPlace[] = [];
-    let placesModel: string | undefined;
-    if (shouldMinePlaces(classification, text)) {
-      const safe = cloudSafe({
-        type: classification.type, categories: classification.categories, tags: classification.tags,
-        title: classification.title, content: text,
-      });
-      const found = await extractNotePlaces(classification.title, text, { cloudSafe: safe });
-      const name = (classification.structured as { name?: unknown }).name;
-      places = await planNotePlaces(pool, found.places, { title: classification.title, ...(typeof name === 'string' ? { name } : {}) });
-      placesModel = found.model;
-    }
+    const found = await placesForCapture(classification, text);
+    const places = found.places;
+    const placesModel = found.model;
 
     res.json({
       preview: {

@@ -57,6 +57,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
     try {
       const { preview, similarItems } = await ingestUrl(url);
       setPreview(preview);
+      setSkippedPlaces(new Set());
       setSimilarItems(similarItems ?? []);
       toast.success('URL analyzed successfully');
     } catch (err) {
@@ -266,7 +267,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
                 </button>
               </form>
             ) : (
-              <PreviewState preview={preview} setPreview={setPreview} priority={priority} setPriority={setPriority} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} />
+              <PreviewState preview={preview} setPreview={setPreview} priority={priority} setPriority={setPriority} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} skippedPlaces={skippedPlaces} togglePlace={togglePlace} />
             )}
           </>
         ) : activeTab === 'paste' ? (

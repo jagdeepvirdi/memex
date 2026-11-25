@@ -10,6 +10,8 @@
 
 import type { PoolClient } from 'pg'
 import { aiChat } from './ai.js'
+import { pool } from '../db/client.js'
+import { cloudSafe } from './cloudSafe.js'
 import { createItem } from '../db/helpers.js'
 import { mapToCategories } from './classifier.js'
 import {
@@ -38,16 +40,27 @@ export interface FoundPlaces {
  * Asks the AI for the named places in a note. Failure-soft: any problem (no provider reachable, bad JSON) returns
  * no places and the note is saved as before. Names that are not in the note are dropped by `verifyPlaces`.
  */
-export async function extractNotePlaces(title: string, text: string, opts: { cloudSafe: boolean }): Promise<FoundPlaces> {
+/** Appended for a scraped web article: it is about somewhere, so that somewhere and its region are not "places in it". */
+const PAGE_ADDENDUM = `
+This text is a web article or guide. List the specific places it recommends or describes (sights, parks, temples, hotels, restaurants, cafes, markets, towns to visit). Do NOT list the place the whole article is about, its province, region or country, or places named only to say where something is.`
+
+/** Output cap for the place call: a long guide names dozens of places and the default cap cut the JSON off mid-list. */
+const PLACE_REPLY_TOKENS = 6000
+
+export async function extractNotePlaces(
+  title: string, text: string, opts: { cloudSafe: boolean; maxChars?: number; page?: boolean },
+): Promise<FoundPlaces> {
   const plain = stripHtml(text)
   if (!plain.trim()) return { places: [] }
+  const limit = opts.maxChars ?? 3000
   let model: string | undefined
   try {
     const reply = await aiChat(
-      `Title: ${title}\n\n${plain.slice(0, 3000)}`, PLACE_SYSTEM_PROMPT, 'json', { temperature: 0 }, undefined,
+      `Title: ${title}\n\n${plain.slice(0, limit)}`, opts.page ? PLACE_SYSTEM_PROMPT + PAGE_ADDENDUM : PLACE_SYSTEM_PROMPT,
+      'json', { temperature: 0, num_predict: PLACE_REPLY_TOKENS }, undefined,
       { task: 'place_mining', cloudSafe: opts.cloudSafe, onProvider: (p) => { model = `${p.provider}:${p.model}` } },
     )
-    const { places } = verifyPlaces(`${title}\n${plain}`, parsePlacesJson(reply))
+    const { places } = verifyPlaces(`${title}\n${plain.slice(0, limit)}`, parsePlacesJson(reply))
     return { places: places.slice(0, MAX_NOTE_PLACES), ...(model ? { model } : {}) }
   } catch (err) {
     logger.warn({ err: err instanceof Error ? err.message : String(err) }, '[Places] could not read places from the note; saving it without')
@@ -115,4 +128,41 @@ export async function createNotePlaces(
     created.push(item)
   }
   return created
+}
+
+/** A classified capture, as far as the place step needs to know it. */
+export interface CaptureNote {
+  type: string
+  title: string
+  categories: string[]
+  tags: string[]
+  structured: Record<string, unknown>
+}
+
+/**
+ * Everything the capture preview needs in one call: does it look like a place note, read the places with the right
+ * privacy flag, keep the ones worth creating.
+ *
+ * - `maxChars` widens the window for a long web page.
+ * - `page: true` tells the model it is reading a web article (the place it is about is not "a place in it").
+ * - `scanContent: false` is for a scraped PUBLIC web page: the privacy check then looks at type, category and tags only.
+ *   The page text of a travel guide is full of phone numbers and street addresses that would wrongly mark it private,
+ *   and classifying a URL does not scan page text either. A note the user typed always has its text scanned.
+ */
+export async function placesForCapture(
+  note: CaptureNote, text: string, opts: { maxChars?: number; scanContent?: boolean; page?: boolean } = {},
+): Promise<FoundPlaces> {
+  if (!shouldMinePlaces(note, text)) return { places: [] }
+  const safe = cloudSafe({
+    type: note.type, categories: note.categories, tags: note.tags,
+    ...(opts.scanContent === false ? {} : { title: note.title, content: text }),
+  })
+  const found = await extractNotePlaces(note.title, text, {
+    cloudSafe: safe, ...(opts.maxChars ? { maxChars: opts.maxChars } : {}), ...(opts.page ? { page: true } : {}),
+  })
+  const name = note.structured.name
+  // On a web article, "other" is mostly bus stations and airports: not something to save as a place to visit.
+  const candidates = opts.page ? found.places.filter((p) => p.type !== 'other') : found.places
+  const places = await planNotePlaces(pool, candidates,{ title: note.title, ...(typeof name === 'string' ? { name } : {}) })
+  return { places, ...(found.model ? { model: found.model } : {}) }
 }

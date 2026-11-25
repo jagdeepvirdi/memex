@@ -5,6 +5,8 @@ import { app } from '../index'
 import { pool } from '../db/client'
 import { classify } from '../services/classifier'
 import { aiChat } from '../services/ai'
+import { scrapeUrl } from '../services/scraper'
+import { summarizeAndClassify } from '../services/summarizer'
 
 // Capturing a note that names several places offers them as separate entries (the client sends the kept ones back).
 // Invented names only.
@@ -12,6 +14,8 @@ vi.mock('../db/client', () => ({ pool: { query: vi.fn(), connect: vi.fn() } }))
 vi.mock('../services/ai', async (orig) => ({ ...(await orig<typeof import('../services/ai')>()), aiChat: vi.fn(), aiEmbed: vi.fn().mockResolvedValue([]) }))
 vi.mock('../lib/logger', () => ({ default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }))
 vi.mock('../services/classifier', () => ({ classify: vi.fn(), classifyBatch: vi.fn() }))
+vi.mock('../services/scraper', () => ({ scrapeUrl: vi.fn() }))
+vi.mock('../services/summarizer', () => ({ summarizeAndClassify: vi.fn() }))
 vi.mock('../services/duplicateService', async (orig) => ({
   ...(await orig<typeof import('../services/duplicateService')>()),
   findSimilarItems: vi.fn().mockResolvedValue([]),
@@ -88,5 +92,53 @@ describe('POST /api/ingest/text: places inside the note', () => {
     vi.mocked(aiChat).mockResolvedValue('{"places":[]}')
     await request(app).post('/api/ingest/text').set('Authorization', AUTH).send({ text: TRIP })
     expect(vi.mocked(aiChat).mock.calls[0][5]).toMatchObject({ task: 'place_mining', cloudSafe: false })
+  })
+})
+
+describe('POST /api/ingest/url: places inside a web article', () => {
+  const ARTICLE = `Things to do in Pine Valley. ${'Filler text. '.repeat(400)} Do not miss Old Mill Cafe and Lakeview Hotel.`
+  const scraped = (source = 'url') => ({ title: 'Pine Valley guide', content: ARTICLE, url: 'https://example.com/pine', sourceUrl: 'https://example.com/pine', source })
+  const classified = (over: Record<string, unknown> = {}) => ({
+    title: 'Pine Valley guide', type: 'note', content: ARTICLE, structured: {}, categories: ['Travel', 'Destinations'], tags: ['travel'],
+    source: 'url', sourceUrl: 'https://example.com/pine', confidence: 90, reviewed: false, ...over,
+  })
+
+  it('offers the places named further down the page', async () => {
+    vi.mocked(scrapeUrl).mockResolvedValue(scraped() as never)
+    vi.mocked(summarizeAndClassify).mockResolvedValue(classified() as never)
+    vi.mocked(aiChat).mockResolvedValue(JSON.stringify({ places: [
+      { name: 'Old Mill Cafe', type: 'cafe', confidence: 90 }, { name: 'Lakeview Hotel', type: 'hotel', confidence: 88 },
+    ] }))
+    const res = await request(app).post('/api/ingest/url').set('Authorization', AUTH).send({ url: 'https://example.com/pine' })
+    expect(res.status).toBe(200)
+    expect(res.body.preview.places.map((p: { name: string }) => p.name)).toEqual(['Old Mill Cafe', 'Lakeview Hotel'])
+    expect(res.body.preview.title).toBe('Pine Valley guide')
+    expect(String(vi.mocked(aiChat).mock.calls[0][0])).toContain('Lakeview Hotel') // the wider window reached it
+  })
+
+  it('does not read places from a video', async () => {
+    vi.mocked(scrapeUrl).mockResolvedValue(scraped('youtube') as never)
+    vi.mocked(summarizeAndClassify).mockResolvedValue(classified({ source: 'youtube' }) as never)
+    const res = await request(app).post('/api/ingest/url').set('Authorization', AUTH).send({ url: 'https://www.youtube.com/watch?v=abc' })
+    expect(res.status).toBe(200)
+    expect(res.body.preview).not.toHaveProperty('places')
+    expect(aiChat).not.toHaveBeenCalled()
+  })
+
+  it('has no places for an article that is not about places', async () => {
+    vi.mocked(scrapeUrl).mockResolvedValue({ ...scraped(), content: 'A guide to TypeScript generics and mapped types.' } as never)
+    vi.mocked(summarizeAndClassify).mockResolvedValue(classified({ categories: ['Tech'], tags: [], type: 'link' }) as never)
+    const res = await request(app).post('/api/ingest/url').set('Authorization', AUTH).send({ url: 'https://example.com/tech' })
+    expect(res.body.preview).not.toHaveProperty('places')
+    expect(aiChat).not.toHaveBeenCalled()
+  })
+
+  it('still returns the preview when reading the places fails', async () => {
+    vi.mocked(scrapeUrl).mockResolvedValue(scraped() as never)
+    vi.mocked(summarizeAndClassify).mockResolvedValue(classified() as never)
+    vi.mocked(aiChat).mockRejectedValue(new Error('provider down'))
+    const res = await request(app).post('/api/ingest/url').set('Authorization', AUTH).send({ url: 'https://example.com/pine' })
+    expect(res.status).toBe(200)
+    expect(res.body.preview).not.toHaveProperty('places')
   })
 })

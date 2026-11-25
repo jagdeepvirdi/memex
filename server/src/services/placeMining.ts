@@ -100,13 +100,42 @@ Rules:
 - Skip personal contact details and anyone's home or private address. Skip shops, products, companies and websites that are not a place to visit.
 - A note that is not about places returns {"places":[]}.`
 
+/**
+ * The complete `{...}` objects inside the `"places": [...]` array of a reply, even when the reply was cut off
+ * mid-list (a long page makes a long answer and the model stops at its token limit). Strings and escapes are respected.
+ */
+function completeObjects(raw: string): unknown[] {
+  const at = raw.search(/"places"\s*:\s*\[/)
+  if (at === -1) return []
+  const out: unknown[] = []
+  let depth = 0, begin = -1, inString = false, escaped = false
+  for (let i = raw.indexOf('[', at) + 1; i < raw.length; i++) {
+    const ch = raw[i]
+    if (inString) {
+      if (escaped) escaped = false
+      else if (ch === '\\') escaped = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') inString = true
+    else if (ch === '{') { if (depth === 0) begin = i; depth++ }
+    else if (ch === '}') {
+      depth--
+      if (depth === 0 && begin !== -1) {
+        try { out.push(JSON.parse(raw.slice(begin, i + 1))) } catch { /* skip a broken object */ }
+        begin = -1
+      }
+    } else if (ch === ']' && depth === 0) break
+  }
+  return out
+}
+
 export function parsePlacesJson(raw: string): RawPlace[] {
   const start = raw.indexOf('{')
   const end = raw.lastIndexOf('}')
   if (start === -1 || end <= start) return []
-  let parsed: unknown
-  try { parsed = JSON.parse(raw.slice(start, end + 1)) } catch { return [] }
-  const list = (parsed as { places?: unknown })?.places
+  let list: unknown
+  try { list = (JSON.parse(raw.slice(start, end + 1)) as { places?: unknown })?.places } catch { list = completeObjects(raw) }
   if (!Array.isArray(list)) return []
   const str = (v: unknown) => (typeof v === 'string' ? v.trim() : undefined)
   return list.flatMap((p): RawPlace[] => {

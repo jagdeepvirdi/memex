@@ -48,6 +48,16 @@ describe('parsePlacesJson', () => {
     expect(r.map((p) => [p.name, p.type, p.city, p.confidence])).toEqual([['Royal Cliff', 'hotel', 'Pattaya', 88], ['X', undefined, undefined, 60]])
   })
 
+  it('keeps the complete places from an answer that was cut off mid-list', () => {
+    const cut = '{"places":[{"name":"Old Mill Cafe","type":"cafe","confidence":90},{"name":"Lakeview {Resort} Hotel","type":"hotel","confidence":85},{"name":"Eagle Rock View'
+    expect(parsePlacesJson(cut).map((p) => p.name)).toEqual(['Old Mill Cafe', 'Lakeview {Resort} Hotel'])
+  })
+
+  it('handles quotes, braces and escapes inside a name when salvaging', () => {
+    const cut = '{"places":[{"name":"The \\"Big\\" Bar","type":"restaurant","confidence":80},{"name":"Next","type":"cafe","confi'
+    expect(parsePlacesJson(cut).map((p) => p.name)).toEqual(['The "Big" Bar'])
+  })
+
   it('returns [] for garbage', () => {
     expect(parsePlacesJson('sorry, no')).toEqual([])
     expect(parsePlacesJson('{"places": "none"}')).toEqual([])

@@ -168,6 +168,30 @@ describe('IngestPanel — places found in a note', () => {
     expect(mockCreateItem.mock.calls[0][0]).not.toHaveProperty('places')
   })
 
+  it('offers places found in a pasted web link too, and starts ticked again for the next link', async () => {
+    mockIngestUrl
+      .mockResolvedValueOnce({ preview: { ...tripPreview(), source: 'url', sourceUrl: 'https://example.com/pine' }, similarItems: [] })
+      .mockResolvedValueOnce({ preview: { ...tripPreview(), source: 'url', sourceUrl: 'https://example.com/pine2' }, similarItems: [] })
+    render(<IngestPanel />)
+
+    fireEvent.change(screen.getByPlaceholderText(/Paste URL/i), { target: { value: 'https://example.com/pine' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze URL/i }))
+    await screen.findByText(/3 of 3 will be saved/i)
+    fireEvent.click(screen.getByRole('checkbox', { name: /Maple Diner/i }))
+    expect(screen.getByText(/2 of 3 will be saved/i)).toBeInTheDocument()
+
+    // Back, then a second link: the unticked box from the first one must not carry over.
+    fireEvent.click(screen.getByRole('button', { name: /Back/i }))
+    fireEvent.change(screen.getByPlaceholderText(/Paste URL/i), { target: { value: 'https://example.com/pine2' } })
+    fireEvent.click(screen.getByRole('button', { name: /Analyze URL/i }))
+    await screen.findByText(/3 of 3 will be saved/i)
+
+    fireEvent.click(screen.getByRole('button', { name: /Save to Memex/i }))
+    await waitFor(() => expect(mockCreateItem).toHaveBeenCalled())
+    expect(mockCreateItem.mock.calls[0][0].places).toHaveLength(3)
+    expect(mockCreateItem.mock.calls[0][0].sourceUrl).toBe('https://example.com/pine2')
+  })
+
   it('shows no place list for a note without places', async () => {
     mockTextEndpoint(textPreview())
     render(<IngestPanel />)

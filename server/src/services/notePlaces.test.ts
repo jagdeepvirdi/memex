@@ -2,11 +2,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 vi.mock('./ai', () => ({ aiChat: vi.fn() }))
 vi.mock('../db/helpers', () => ({ createItem: vi.fn() }))
+vi.mock('../db/client', () => ({ pool: { query: vi.fn() } }))
 vi.mock('../lib/logger', () => ({ default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }))
 
 import { aiChat } from './ai'
 import { createItem } from '../db/helpers'
-import { shouldMinePlaces, extractNotePlaces, planNotePlaces, createNotePlaces, toRawPlaces } from './notePlaces'
+import { pool } from '../db/client'
+import { shouldMinePlaces, extractNotePlaces, planNotePlaces, createNotePlaces, toRawPlaces, placesForCapture } from './notePlaces'
 import type { MinedPlace } from './placeMining'
 
 // Generic, invented fixtures only (the repo is public).
@@ -152,6 +154,78 @@ describe('createNotePlaces', () => {
     const client = { query: vi.fn() }
     await createNotePlaces(client as never, 'note-1', [place({ name: 'Maple Diner' })])
     expect(client.query).not.toHaveBeenCalled()
+  })
+})
+
+describe('extractNotePlaces on a long page', () => {
+  it('reads only the first 3000 characters by default, and as many as asked for', async () => {
+    vi.mocked(aiChat).mockResolvedValue('{"places":[]}')
+    const page = `${'x '.repeat(2000)}Deep Cave Cafe`
+    await extractNotePlaces('t', page, { cloudSafe: true })
+    expect(String(vi.mocked(aiChat).mock.calls[0][0])).not.toContain('Deep Cave Cafe')
+    await extractNotePlaces('t', page, { cloudSafe: true, maxChars: 8000 })
+    expect(String(vi.mocked(aiChat).mock.calls[1][0])).toContain('Deep Cave Cafe')
+  })
+
+  it('ignores a place the model names from beyond the part it was shown', async () => {
+    const page = `${'x '.repeat(2000)}Deep Cave Cafe`
+    vi.mocked(aiChat).mockResolvedValue(JSON.stringify({ places: [{ name: 'Deep Cave Cafe', type: 'cafe', confidence: 90 }] }))
+    expect((await extractNotePlaces('t', page, { cloudSafe: true })).places).toEqual([])
+  })
+})
+
+describe('placesForCapture', () => {
+  const note = { type: 'place', title: 'Pine Valley', categories: ['Travel'], tags: [] as string[], structured: { name: 'Pine Valley' } }
+
+  it('returns the planned places and the model, widening the window when asked', async () => {
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as never)
+    vi.mocked(aiChat).mockImplementation(async (_p, _s, _f, _o, _sig, opts) => {
+      opts?.onProvider?.({ provider: 'gemini', model: 'gemini-x' })
+      return JSON.stringify({ places: [{ name: 'Maple Diner', type: 'restaurant', confidence: 90 }, { name: 'Pine Valley', type: 'destination', confidence: 95 }] })
+    })
+    const out = await placesForCapture(note, TRIP, { maxChars: 8000 })
+    expect(out.places.map((p) => p.name)).toEqual(['Maple Diner'])
+    expect(out.model).toBe('gemini:gemini-x')
+  })
+
+  it('on a web article: asks for specific places, gives the answer room, and leaves out stations and airports', async () => {
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as never)
+    vi.mocked(aiChat).mockResolvedValue(JSON.stringify({ places: [
+      { name: 'Maple Diner', type: 'restaurant', confidence: 90 },
+      { name: 'Pine Valley Bus Station', type: 'other', confidence: 90 },
+    ] }))
+    const out = await placesForCapture(note, `${TRIP} Pine Valley Bus Station.`, { page: true, scanContent: false })
+    expect(out.places.map((p) => p.name)).toEqual(['Maple Diner'])
+    expect(String(vi.mocked(aiChat).mock.calls[0][1])).toMatch(/web article or guide/)
+    expect(vi.mocked(aiChat).mock.calls[0][3]).toMatchObject({ num_predict: 6000 })
+  })
+
+  it('a pasted note keeps the plain prompt, and its text is privacy-checked', async () => {
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as never)
+    vi.mocked(aiChat).mockResolvedValue('{"places":[]}')
+    await placesForCapture(note, `${TRIP} My bank account number is 0012 3456 7890 123`)
+    expect(String(vi.mocked(aiChat).mock.calls[0][1])).not.toMatch(/web article or guide/)
+    expect(vi.mocked(aiChat).mock.calls[0][5]).toMatchObject({ cloudSafe: false })
+  })
+
+  it('a web page full of phone numbers is not treated as private (its text is not scanned)', async () => {
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as never)
+    vi.mocked(aiChat).mockResolvedValue('{"places":[]}')
+    await placesForCapture(note, `${TRIP} Call +66 53 698 123 456 or 0012 3456 7890 123 for the hotel.`, { scanContent: false })
+    expect(vi.mocked(aiChat).mock.calls[0][5]).toMatchObject({ cloudSafe: true })
+  })
+
+  it('makes no AI call for something that is not about places', async () => {
+    const out = await placesForCapture({ ...note, type: 'note', categories: ['Food'] }, 'Buy milk')
+    expect(out.places).toEqual([])
+    expect(aiChat).not.toHaveBeenCalled()
+  })
+
+  it('tells the AI to stay local for a private capture', async () => {
+    vi.mocked(pool.query).mockResolvedValue({ rows: [] } as never)
+    vi.mocked(aiChat).mockResolvedValue('{"places":[]}')
+    await placesForCapture({ ...note, tags: ['private'] }, TRIP)
+    expect(vi.mocked(aiChat).mock.calls[0][5]).toMatchObject({ cloudSafe: false })
   })
 })
 
