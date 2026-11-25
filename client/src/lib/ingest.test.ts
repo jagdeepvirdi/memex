@@ -41,4 +41,24 @@ describe('previewToCreateRequest', () => {
       categories: ['Tech', 'AI', 'Repos'], tags: ['cli'],
     })
   })
+
+  describe('places found in a note', () => {
+    const hotel = { name: 'Lakeview Hotel', type: 'hotel' as const, city: 'Pine Valley', evidence: '…Lakeview Hotel…', confidence: 88 }
+    const diner = { name: 'Maple Diner', type: 'restaurant' as const, confidence: 90 }
+
+    it('sends nothing about places unless the user kept some', () => {
+      const req = previewToCreateRequest({ ...preview, places: [hotel], placesModel: 'gemini:x' })
+      expect(req).not.toHaveProperty('places')
+      expect(req).not.toHaveProperty('placesModel')
+    })
+
+    it('sends the kept places and the model that found them, without the display-only evidence', () => {
+      const req = previewToCreateRequest({ ...preview, places: [hotel, diner], placesModel: 'gemini:x' }, null, [hotel, diner])
+      expect(req.places).toEqual([
+        { name: 'Lakeview Hotel', type: 'hotel', city: 'Pine Valley', confidence: 88 },
+        { name: 'Maple Diner', type: 'restaurant', confidence: 90 },
+      ])
+      expect(req.placesModel).toBe('gemini:x')
+    })
+  })
 })

@@ -1,7 +1,10 @@
-import type { Item, CreateItemRequest, ItemPriority } from '../../../shared/types'
+import type { Item, CreateItemRequest, ItemPriority, PlaceProposal } from '../../../shared/types'
 
-/** What the ingest endpoints return as `preview`: an unsaved item. */
-export type IngestPreview = Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'embedding'>
+/** What the ingest endpoints return as `preview`: an unsaved item. Text capture may also offer places found in the note. */
+export type IngestPreview = Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'embedding'> & {
+  places?: PlaceProposal[]
+  placesModel?: string
+}
 
 /**
  * Builds the POST /api/items payload from an ingest preview.
@@ -12,10 +15,13 @@ export type IngestPreview = Omit<Item, 'id' | 'createdAt' | 'updatedAt' | 'embed
  *
  * `reviewed` is passed through as-is: previews arrive with `reviewed: false`, so AI-classified
  * captures land in the review queue instead of being marked reviewed on save.
+ *
+ * `keptPlaces` are the places the user left ticked in the preview; without it no place is created.
  */
 export function previewToCreateRequest(
   preview: IngestPreview,
   priority: ItemPriority | null = null,
+  keptPlaces: PlaceProposal[] = [],
 ): CreateItemRequest {
   return {
     title: preview.title,
@@ -30,5 +36,12 @@ export function previewToCreateRequest(
     confidence: preview.confidence,
     reviewed: preview.reviewed,
     priority,
+    ...(keptPlaces.length > 0
+      ? {
+          // `evidence` is for display only; the server rebuilds it from the note.
+          places: keptPlaces.map(({ evidence: _evidence, ...p }) => p),
+          ...(preview.placesModel ? { placesModel: preview.placesModel } : {}),
+        }
+      : {}),
   }
 }

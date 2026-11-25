@@ -258,7 +258,24 @@ export interface VaultStatus {
 
 // ── API request/response shapes ───────────────────────────────────────────────
 
+/** A place found inside a note at capture time; the user keeps or drops it, and each kept one becomes its own item. */
+export interface PlaceProposal {
+  name: string
+  type: 'restaurant' | 'cafe' | 'hotel' | 'attraction' | 'destination' | 'other'
+  city?: string
+  country?: string
+  address?: string
+  mapsUrl?: string
+  /** A short snippet of the note around the name (shown to the user, never sent back). */
+  evidence?: string
+  confidence: number
+}
+
 export interface CreateItemRequest {
+  /** Places the user kept from the capture preview (see `PlaceProposal`). */
+  places?: PlaceProposal[]
+  /** `<provider>:<model>` that found them, recorded on the created items. */
+  placesModel?: string
   title?: string
   type?: ItemType
   content: string

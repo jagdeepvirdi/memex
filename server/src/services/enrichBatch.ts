@@ -10,6 +10,7 @@ import { classify } from './classifier.js'
 import { cloudSafe } from './cloudSafe.js'
 import { setItemCategories, setItemTags, createItem } from '../db/helpers.js'
 import { extractAndLinkEntities } from './entityService.js'
+import { shouldMinePlaces, extractNotePlaces, planNotePlaces, createNotePlaces, type FoundPlaces } from './notePlaces.js'
 import { updateJobProgress, completeJob, failJob } from './ingestJobs.js'
 import logger from '../lib/logger.js'
 import type { ItemSource } from '../../../shared/types.js'
@@ -75,6 +76,12 @@ export async function classifyAndUpdateBatch(
       // otherwise a cloud provider could classify a note the user marked as staying on this machine.
       const safe = cloudSafe({ title: entry?.title, content: entry?.content, tags: entry?.labels })
       const result = await classify(text, { ...(entry?.sourceUrl ? { sourceUrl: entry.sourceUrl } : {}), cloudSafe: safe })
+
+      // Places named in a travel-looking note become their own entries. Read before the transaction opens (it is an AI
+      // call); failure-soft, so a note whose places cannot be read is still saved and classified.
+      const foundPlaces: FoundPlaces = !(result.multiEntity && result.entities?.length) && shouldMinePlaces(result, text)
+        ? await extractNotePlaces(result.title, text, { cloudSafe: safe })
+        : { places: [] }
 
       const client = await pool.connect()
       try {
@@ -143,6 +150,16 @@ export async function classifyAndUpdateBatch(
             if (allTags.length > 0) await setItemTags(client, id, allTags)
             if (result.categories.length > 0) await setItemCategories(client, id, result.categories)
             await extractAndLinkEntities(client, id, result.type, structuredWithSummary)
+
+            if (foundPlaces.places.length > 0) {
+              const named = (result.structured as { name?: unknown }).name
+              const fresh = await planNotePlaces(client, foundPlaces.places, {
+                title: result.title, id, ...(typeof named === 'string' ? { name: named } : {}),
+              })
+              const created = await createNotePlaces(client, id, fresh, foundPlaces.model)
+              for (const place of created) await extractAndLinkEntities(client, place.id, place.type, place.structured)
+              if (created.length > 0) logger.info(`[Classify] ${created.length} place(s) found in note ${id}`)
+            }
           } else {
             logger.info(`[Classify] Skipped applying to reviewed item ${id} — extraction saved for review`)
           }

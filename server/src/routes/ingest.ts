@@ -18,6 +18,9 @@ import { embedForDuplicateCheck } from '../services/embedder.js';
 import { pool } from '../db/client.js';
 import { setItemTags } from '../db/helpers.js';
 import { quickSaveUrl } from '../services/quickSave.js';
+import { cloudSafe } from '../services/cloudSafe.js';
+import { shouldMinePlaces, extractNotePlaces, planNotePlaces } from '../services/notePlaces.js';
+import type { MinedPlace } from '../services/placeMining.js';
 import type { IngestUrlRequest } from '../../../shared/types.js';
 import logger from '../lib/logger.js'
 import { createJob, saveJobDetails, failJob, hasRunningJob, cancelJob } from '../services/ingestJobs.js'
@@ -620,6 +623,22 @@ router.post('/text', ingestLimiter, async (req, res) => {
       findSimilarItems(embedding),
     ]);
     const similarItems = mergeSimilar(sameUrl, similar);
+
+    // Places named in the note ("stay at X, eat at Y") are offered as their own entries; the client sends the ones
+    // the user keeps back with the save. Failure-soft: no places is the old behaviour.
+    let places: MinedPlace[] = [];
+    let placesModel: string | undefined;
+    if (shouldMinePlaces(classification, text)) {
+      const safe = cloudSafe({
+        type: classification.type, categories: classification.categories, tags: classification.tags,
+        title: classification.title, content: text,
+      });
+      const found = await extractNotePlaces(classification.title, text, { cloudSafe: safe });
+      const name = (classification.structured as { name?: unknown }).name;
+      places = await planNotePlaces(pool, found.places, { title: classification.title, ...(typeof name === 'string' ? { name } : {}) });
+      placesModel = found.model;
+    }
+
     res.json({
       preview: {
         title: classification.title,
@@ -633,6 +652,7 @@ router.post('/text', ingestLimiter, async (req, res) => {
         confidence: classification.confidence,
         intent: classification.intent,
         reviewed: false,
+        ...(places.length > 0 ? { places, placesModel } : {}),
       },
       similarItems,
     });

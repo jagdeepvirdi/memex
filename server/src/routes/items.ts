@@ -26,6 +26,8 @@ import {
 } from '../services/itemService.js'
 import { embedAndStoreItem, clearEmbeddingSkip, activeEmbeddingId } from '../services/embeddingService.js'
 import { extractAndLinkEntities } from '../services/entityService.js'
+import { MAX_NOTE_PLACES, createNotePlaces, planNotePlaces, toRawPlaces } from '../services/notePlaces.js'
+import { stripHtml, verifyPlaces } from '../services/placeMining.js'
 import { generateDigest } from '../services/digestService.js'
 import { scrapeUrl } from '../services/scraper.js'
 import { aiChat } from '../services/ai.js'
@@ -35,7 +37,7 @@ import { anotherAiJobRunning, createAiJob, EXPLAIN_JOB_KIND, EXTRACT_RECIPE_JOB_
 import { describeActionError, actionErrorBody } from '../services/actionErrors.js'
 import { fetchGithubRepo, GithubLookupError } from '../services/githubApi.js'
 import { repoSlugFromStructured, parseGithubRepoUrl } from '../services/githubRepo.js'
-import type { ItemType, ItemSource, ItemIntent, ConnectedEntity } from '../../../shared/types.js'
+import type { Item, ItemType, ItemSource, ItemIntent, ConnectedEntity } from '../../../shared/types.js'
 import logger from '../lib/logger.js'
 
 const router = Router()
@@ -62,6 +64,17 @@ const createItemSchema = z.object({
   priority: z.enum(ITEM_PRIORITIES).nullable().optional(),
   confidence: z.number().min(0).max(100).optional(),
   reviewed: z.boolean().optional(),
+  /** Places the user kept from the capture preview; each becomes its own item linked to this note. */
+  places: z.array(z.object({
+    name: z.string().min(1).max(100),
+    type: z.enum(['restaurant', 'cafe', 'hotel', 'attraction', 'destination', 'other']),
+    city: z.string().max(100).optional(),
+    country: z.string().max(100).optional(),
+    address: z.string().max(300).optional(),
+    mapsUrl: z.string().url().max(500).optional(),
+    confidence: z.number().min(0).max(100),
+  })).max(MAX_NOTE_PLACES).optional(),
+  placesModel: z.string().max(100).optional(),
 })
 
 const updateItemSchema = z.object({
@@ -191,6 +204,18 @@ router.post('/', async (req, res) => {
       await setItemTags(client, itemId, tags)
     }
 
+    // Places the user kept from the preview become their own items. The names are checked against the note again
+    // (the client is not trusted to invent places) and against the Places table (a double submit creates nothing).
+    let newPlaces: Item[] = []
+    if (body.places && body.places.length > 0) {
+      const named = (structured as { name?: unknown }).name
+      const verified = verifyPlaces(`${title ?? ''}\n${stripHtml(body.content)}`, toRawPlaces(body.places)).places
+      const fresh = await planNotePlaces(client, verified, {
+        title: title ?? 'Untitled', id: itemId, ...(typeof named === 'string' ? { name: named } : {}),
+      })
+      newPlaces = await createNotePlaces(client, itemId, fresh, body.placesModel)
+    }
+
     await client.query('COMMIT')
 
     // Best effort, after the commit (autocommit): a failed link must never undo the save.
@@ -200,6 +225,11 @@ router.post('/', async (req, res) => {
 
     if (item) {
       void embedAndStoreItem(item)
+    }
+
+    for (const placeItem of newPlaces) {
+      await extractAndLinkEntities(client, placeItem.id, placeItem.type, placeItem.structured)
+      void embedAndStoreItem(placeItem)
     }
 
     res.status(201).json(item)

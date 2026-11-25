@@ -33,6 +33,16 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
   const [priority, setPriority] = useState<ItemPriority | null>(null);
   const [similarItems, setSimilarItems] = useState<SimilarItem[]>([]);
   const [isSaving, setIsSaving] = useState(false);
+  // Places found in the note that the user unticked (by name); everything else is saved as its own entry.
+  const [skippedPlaces, setSkippedPlaces] = useState<Set<string>>(new Set());
+
+  const togglePlace = (name: string) =>
+    setSkippedPlaces((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
 
   const handleIngest = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,6 +85,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
       });
       // Keep the server's source/sourceUrl: pasted Instagram captions and GitHub links are detected there.
       setPreview({ ...data.preview, content: manualText });
+      setSkippedPlaces(new Set());
       setSimilarItems(data.similarItems ?? []);
       toast.success('Note classified successfully');
     } catch (err) {
@@ -93,9 +104,10 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
     setError(null);
 
     try {
-      const savedItem = await createItem(previewToCreateRequest(preview, priority));
+      const kept = (preview.places ?? []).filter((p) => !skippedPlaces.has(p.name));
+      const savedItem = await createItem(previewToCreateRequest(preview, priority, kept));
       onSuccess?.(savedItem);
-      toast.success('Item saved to Memex');
+      toast.success(kept.length > 0 ? `Saved, plus ${kept.length} place${kept.length === 1 ? '' : 's'} as separate entries` : 'Item saved to Memex');
       setUrl('');
       setManualText('');
       setPreview(null);
@@ -218,7 +230,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
                 </button>
               </form>
             ) : (
-              <PreviewState preview={preview} setPreview={setPreview} priority={priority} setPriority={setPriority} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} />
+              <PreviewState preview={preview} setPreview={setPreview} priority={priority} setPriority={setPriority} handleSave={handleSave} isSaving={isSaving} error={error} similarItems={similarItems} skippedPlaces={skippedPlaces} togglePlace={togglePlace} />
             )}
           </>
         ) : activeTab === 'url' ? (
@@ -282,9 +294,17 @@ interface PreviewStateProps {
   isSaving: boolean;
   error: string | null;
   similarItems?: SimilarItem[];
+  skippedPlaces?: Set<string>;
+  togglePlace?: (name: string) => void;
 }
 
-function PreviewState({ preview, setPreview, priority, setPriority, handleSave, isSaving, error, similarItems = [] }: PreviewStateProps) {
+const PLACE_TYPE_LABEL: Record<string, string> = {
+  restaurant: 'Restaurant', cafe: 'Café', hotel: 'Hotel', attraction: 'Attraction', destination: 'Destination', other: 'Place',
+};
+
+function PreviewState({ preview, setPreview, priority, setPriority, handleSave, isSaving, error, similarItems = [], skippedPlaces = new Set(), togglePlace }: PreviewStateProps) {
+  const places = preview.places ?? [];
+  const keptCount = places.filter((p) => !skippedPlaces.has(p.name)).length;
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
       {/* Duplicate warning */}
@@ -330,6 +350,34 @@ function PreviewState({ preview, setPreview, priority, setPriority, handleSave, 
           }}
         />
       </div>
+
+      {places.length > 0 && togglePlace && (
+        <fieldset className="rounded-xl border border-white/10 p-3">
+          <legend className="px-1 text-xs font-semibold text-ink">
+            Places in this note ({keptCount} of {places.length} will be saved as their own entries)
+          </legend>
+          <ul className="mt-1 space-y-1">
+            {places.map((p) => (
+              <li key={p.name}>
+                <label className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5">
+                  <input
+                    type="checkbox"
+                    checked={!skippedPlaces.has(p.name)}
+                    onChange={() => togglePlace(p.name)}
+                    disabled={isSaving}
+                    className="accent-accent"
+                  />
+                  <span className="min-w-0 flex-1 truncate text-sm text-ink">{p.name}</span>
+                  <span className="shrink-0 text-[10px] text-ink-muted">
+                    {[PLACE_TYPE_LABEL[p.type] ?? 'Place', p.city].filter(Boolean).join(' · ')}
+                  </span>
+                </label>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[10px] text-ink-muted">They are added as unreviewed places, marked "want to visit", and linked to this note.</p>
+        </fieldset>
+      )}
 
       <div className="flex items-center justify-between gap-3">
         <span className="text-xs text-ink-muted">How important is this?</span>

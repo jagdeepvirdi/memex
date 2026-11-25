@@ -8,6 +8,12 @@ vi.mock('./ingestJobs', () => ({
   completeJob: vi.fn().mockResolvedValue(undefined),
   failJob: vi.fn().mockResolvedValue(undefined),
 }))
+vi.mock('./notePlaces', () => ({
+  shouldMinePlaces: vi.fn().mockReturnValue(false),
+  extractNotePlaces: vi.fn().mockResolvedValue({ places: [] }),
+  planNotePlaces: vi.fn(),
+  createNotePlaces: vi.fn(),
+}))
 vi.mock('../db/helpers', () => ({
   setItemCategories: vi.fn().mockResolvedValue(undefined),
   setItemTags: vi.fn().mockResolvedValue(undefined),
@@ -19,6 +25,8 @@ import { pool } from '../db/client'
 import { classify } from './classifier'
 import { completeJob, failJob } from './ingestJobs'
 import { createItem, setItemTags } from '../db/helpers'
+import { shouldMinePlaces, extractNotePlaces, planNotePlaces, createNotePlaces } from './notePlaces'
+import { extractAndLinkEntities } from './entityService'
 
 const RESULT = {
   type: 'link', title: 'Claude Code', summary: 'A coding agent.', categories: ['Tech', 'AI', 'Repos'],
@@ -164,5 +172,63 @@ describe('classifyAndUpdateBatch', () => {
     await classifyAndUpdateBatch(['a'], [{ content: ' ', source: 'manual' }], 'j')
     expect(failJob).not.toHaveBeenCalled()
     expect(completeJob).toHaveBeenCalledTimes(1)
+  })
+
+  describe('places named inside a note', () => {
+    const FOUND = { places: [{ name: 'Maple Diner', type: 'restaurant', evidence: '', confidence: 90 }], model: 'gemini:gemini-x' }
+
+    beforeEach(() => {
+      vi.mocked(shouldMinePlaces).mockReturnValue(true)
+      vi.mocked(extractNotePlaces).mockResolvedValue(FOUND as never)
+      vi.mocked(planNotePlaces).mockImplementation(async (_db, places) => places)
+      vi.mocked(createNotePlaces).mockResolvedValue([{ id: 'pl-1', type: 'place', structured: { name: 'Maple Diner' } }] as never)
+    })
+
+    it('creates them linked to the note in the same transaction, and links their entities', async () => {
+      const client = mockClient()
+      await classifyAndUpdateBatch(['i1'], [entry({ labels: ['x'] })], 'j')
+
+      expect(extractNotePlaces).toHaveBeenCalledWith('Claude Code', 'some text', { cloudSafe: true })
+      expect(createNotePlaces).toHaveBeenCalledWith(client, 'i1', FOUND.places, 'gemini:gemini-x')
+      expect(extractAndLinkEntities).toHaveBeenCalledWith(client, 'pl-1', 'place', { name: 'Maple Diner' })
+      const sqls = client.query.mock.calls.map(c => String(c[0]))
+      expect(sqls.at(-1)).toBe('COMMIT')
+    })
+
+    it('reads the places with the same privacy flag as the classification', async () => {
+      mockClient()
+      await classifyAndUpdateBatch(['i1'], [entry({ labels: ['private'] })], 'j')
+      expect(extractNotePlaces).toHaveBeenCalledWith(expect.anything(), expect.anything(), { cloudSafe: false })
+    })
+
+    it('does not read places for a note that is split into separate items', async () => {
+      mockClient()
+      vi.mocked(classify).mockResolvedValue({ ...RESULT, multiEntity: true, entities: [{ title: 'A' }] } as never)
+      await classifyAndUpdateBatch(['i1'], [entry()], 'j')
+      expect(extractNotePlaces).not.toHaveBeenCalled()
+      expect(createNotePlaces).not.toHaveBeenCalled()
+    })
+
+    it('creates nothing for a note the user already reviewed', async () => {
+      mockClient(true)
+      await classifyAndUpdateBatch(['i1'], [entry()], 'j')
+      expect(createNotePlaces).not.toHaveBeenCalled()
+    })
+
+    it('makes no extra AI call for a note with no place signal', async () => {
+      mockClient()
+      vi.mocked(shouldMinePlaces).mockReturnValue(false)
+      await classifyAndUpdateBatch(['i1'], [entry()], 'j')
+      expect(extractNotePlaces).not.toHaveBeenCalled()
+    })
+
+    it('still classifies the note when no place could be read', async () => {
+      const client = mockClient()
+      vi.mocked(extractNotePlaces).mockResolvedValue({ places: [] })
+      await classifyAndUpdateBatch(['i1'], [entry()], 'j')
+      expect(createNotePlaces).not.toHaveBeenCalled()
+      expect(client.query.mock.calls.some(c => /UPDATE items SET type/.test(c[0]))).toBe(true)
+      expect(completeJob).toHaveBeenCalledWith('j', { classified: 1, failed: [] })
+    })
   })
 })

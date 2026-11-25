@@ -123,6 +123,59 @@ describe('IngestPanel — manual tab', () => {
   })
 })
 
+describe('IngestPanel — places found in a note', () => {
+  const places = [
+    { name: 'Old Mill Cafe', type: 'cafe', confidence: 90 },
+    { name: 'Lakeview Hotel', type: 'hotel', city: 'Pine Valley', confidence: 88 },
+    { name: 'Maple Diner', type: 'restaurant', confidence: 90 },
+  ]
+  const tripPreview = () => textPreview({ type: 'place', title: 'Pine Valley', source: 'manual', sourceUrl: undefined, places, placesModel: 'gemini:gemini-x' })
+
+  it('lists the places, all ticked, and saves them with the note', async () => {
+    mockTextEndpoint(tripPreview())
+    render(<IngestPanel />)
+    await classifyManual('Pine Valley trip')
+
+    expect(screen.getByText(/3 of 3 will be saved as their own entries/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Save to Memex/i }))
+    await waitFor(() => expect(mockCreateItem).toHaveBeenCalled())
+
+    const req = mockCreateItem.mock.calls[0][0]
+    expect(req.places.map((p: { name: string }) => p.name)).toEqual(['Old Mill Cafe', 'Lakeview Hotel', 'Maple Diner'])
+    expect(req.placesModel).toBe('gemini:gemini-x')
+  })
+
+  it('leaves out a place the user unticks', async () => {
+    mockTextEndpoint(tripPreview())
+    render(<IngestPanel />)
+    await classifyManual('Pine Valley trip')
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /Lakeview Hotel/i }))
+    expect(screen.getByText(/2 of 3 will be saved/i)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Save to Memex/i }))
+    await waitFor(() => expect(mockCreateItem).toHaveBeenCalled())
+
+    expect(mockCreateItem.mock.calls[0][0].places.map((p: { name: string }) => p.name)).toEqual(['Old Mill Cafe', 'Maple Diner'])
+  })
+
+  it('sends no places when every one is unticked', async () => {
+    mockTextEndpoint(tripPreview())
+    render(<IngestPanel />)
+    await classifyManual('Pine Valley trip')
+    for (const name of [/Old Mill Cafe/i, /Lakeview Hotel/i, /Maple Diner/i]) fireEvent.click(screen.getByRole('checkbox', { name }))
+    fireEvent.click(screen.getByRole('button', { name: /Save to Memex/i }))
+    await waitFor(() => expect(mockCreateItem).toHaveBeenCalled())
+    expect(mockCreateItem.mock.calls[0][0]).not.toHaveProperty('places')
+  })
+
+  it('shows no place list for a note without places', async () => {
+    mockTextEndpoint(textPreview())
+    render(<IngestPanel />)
+    await classifyManual('caption')
+    expect(screen.queryByText(/Places in this note/i)).not.toBeInTheDocument()
+  })
+})
+
 describe('IngestPanel — URL tab', () => {
   it('saves a scraped GitHub repo with its structured data and source URL', async () => {
     mockIngestUrl.mockResolvedValue({
