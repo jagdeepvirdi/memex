@@ -17,7 +17,7 @@ vi.mock('../../lib/api', async orig => ({
   fetchIngestJob: vi.fn(),
 }))
 
-import ItemAiActions, { DerivedFromLink, aiActionsFor } from './ItemAiActions'
+import ItemAiActions, { DerivedFromLink, aiActionsFor, autoRecipeNote } from './ItemAiActions'
 import { ApiError, explainItem, extractRecipeFromItem, fetchAiProviders, fetchDerivedItems, fetchItem, fetchIngestJob } from '../../lib/api'
 import type { Item } from '../../../../shared/types'
 
@@ -245,3 +245,41 @@ describe('DerivedFromLink', () => {
     expect(screen.getByTestId('derived-from')).toHaveTextContent('From: original item')
   })
 })
+
+describe('automatic recipe extraction status', () => {
+  const withState = (recipeExtraction: Record<string, unknown>) =>
+    video({ structured: { videoId: 'dQw4w9WgXcQ', videoKind: 'recipe', recipeExtraction } })
+
+  it('says it is looking while the extraction is queued', async () => {
+    render(<ItemAiActions item={withState({ status: 'queued' })} onItemUpdated={vi.fn()} />)
+    expect(await screen.findByTestId('auto-recipe-note')).toHaveTextContent(/looking for the recipe/i)
+  })
+
+  it('says plainly when none was found, with the reason', async () => {
+    render(<ItemAiActions item={withState({ status: 'none', reason: 'No recipe was found in this content.' })} onItemUpdated={vi.fn()} />)
+    const note = await screen.findByTestId('auto-recipe-note')
+    expect(note).toHaveTextContent(/found none/i)
+    expect(note).toHaveTextContent('No recipe was found in this content.')
+  })
+
+  it('says nothing extra when a recipe was found: the recipe is listed instead', async () => {
+    vi.mocked(fetchDerivedItems).mockResolvedValue([RECIPE])
+    render(<ItemAiActions item={withState({ status: 'found', recipeId: 'rec-1' })} onItemUpdated={vi.fn()} />)
+    await screen.findByTestId('derived-recipes')
+    expect(screen.queryByTestId('auto-recipe-note')).not.toBeInTheDocument()
+  })
+
+  it('shows nothing for an item that was never tried', async () => {
+    render(<ItemAiActions item={video()} onItemUpdated={vi.fn()} />)
+    await screen.findByRole('button', { name: /explain this/i })
+    expect(screen.queryByTestId('auto-recipe-note')).not.toBeInTheDocument()
+  })
+
+  it('autoRecipeNote wording', () => {
+    expect(autoRecipeNote(undefined, false)).toBeNull()
+    expect(autoRecipeNote({ status: 'queued' }, true)).toBeNull()
+    expect(autoRecipeNote({ status: 'failed', reason: 'The AI provider is down.' }, false)).toMatch(/did not finish.*provider is down.*try/i)
+    expect(autoRecipeNote({ status: 'weird' }, false)).toBeNull()
+  })
+})
+

@@ -26,6 +26,7 @@ import {
 } from '../services/itemService.js'
 import { embedAndStoreItem, clearEmbeddingSkip, activeEmbeddingId } from '../services/embeddingService.js'
 import { extractAndLinkEntities } from '../services/entityService.js'
+import { queueRecipeExtraction } from '../services/autoRecipe.js'
 import { MAX_NOTE_PLACES, createNotePlaces, planNotePlaces, toRawPlaces } from '../services/notePlaces.js'
 import { stripHtml, verifyPlaces } from '../services/placeMining.js'
 import { generateDigest } from '../services/digestService.js'
@@ -225,6 +226,9 @@ router.post('/', async (req, res) => {
 
     if (item) {
       void embedAndStoreItem(item)
+      // A saved recipe video (or a Food link) has its recipe extracted in the background; the saved item is not touched
+      // beyond a status note, and the Extract recipe button still works for anything this skips.
+      void queueRecipeExtraction(item).catch(() => {})
     }
 
     for (const placeItem of newPlaces) {

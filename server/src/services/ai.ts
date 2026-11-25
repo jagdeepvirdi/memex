@@ -137,6 +137,11 @@ function getGeminiClient(): GoogleGenAI {
   return _gemini.client
 }
 
+// Gemini's current models think before they answer, and the thinking counts against `maxOutputTokens`. A small cap (the
+// recipe check asks for 60, the Settings test for 16) therefore came back empty ("Gemini returned no text"), at random.
+// The cap is a ceiling, not a target, so a floor costs nothing when the answer is short.
+const GEMINI_MIN_OUTPUT_TOKENS = 1024
+
 const geminiProvider: Provider = {
   id: 'gemini',
   available: () => !!peekApiKey('gemini'),
@@ -151,7 +156,7 @@ const geminiProvider: Provider = {
           ...(system ? { systemInstruction: system } : {}),
           ...(r.format ? { responseMimeType: 'application/json' } : {}),
           ...(typeof r.options?.temperature === 'number' ? { temperature: r.options.temperature } : {}),
-          maxOutputTokens: maxTokens(r.options),
+          maxOutputTokens: Math.max(maxTokens(r.options), GEMINI_MIN_OUTPUT_TOKENS),
           abortSignal: withTimeout(r.signal),
         },
       })

@@ -76,6 +76,20 @@ function ExplanationCard({ e }: { e: ExplanationData }) {
   )
 }
 
+/** What the automatic recipe extraction (run when a recipe video is saved) recorded on the item. */
+interface AutoRecipeState { status?: string; reason?: string }
+
+/** One sentence about the automatic extraction, or null when there is nothing to say (found: the recipe is listed below). */
+export function autoRecipeNote(state: AutoRecipeState | undefined, hasRecipe: boolean): string | null {
+  if (!state || hasRecipe) return null
+  switch (state.status) {
+    case 'queued': return 'Looking for the recipe in this automatically. It will show up here and in your review queue; reload in a minute.'
+    case 'none': return `Memex looked for a recipe in this automatically and found none. ${state.reason ?? ''} You can still try "Extract recipe".`.replace(/\s+/g, ' ')
+    case 'failed': return `The automatic recipe extraction did not finish. ${state.reason ?? ''} You can try "Extract recipe" again.`.replace(/\s+/g, ' ')
+    default: return null
+  }
+}
+
 interface Props {
   item: Item
   onItemUpdated: (item: Item) => void
@@ -132,6 +146,7 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
 
   const explanation = (item.structured as { explanation?: ExplanationData }).explanation
   const choice = provider || undefined
+  const autoNote = autoRecipeNote((item.structured as { recipeExtraction?: AutoRecipeState }).recipeExtraction, recipes.length > 0)
 
   const handleExplain = async () => {
     try {
@@ -234,6 +249,12 @@ export default function ItemAiActions({ item, onItemUpdated }: Props) {
       {noRecipe && (
         <p role="status" className="text-xs text-ink-muted bg-white/3 border border-white/5 rounded-lg px-3 py-2">
           {noRecipe} Nothing was saved.
+        </p>
+      )}
+
+      {!noRecipe && autoNote && (
+        <p role="status" data-testid="auto-recipe-note" className="text-xs text-ink-muted bg-white/3 border border-white/5 rounded-lg px-3 py-2">
+          {autoNote}
         </p>
       )}
 

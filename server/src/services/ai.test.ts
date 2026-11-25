@@ -305,6 +305,14 @@ describe('JSON mode', () => {
     expect(mockGenerate.mock.calls[1][0].config.responseMimeType).toBeUndefined()
   })
 
+  it('gives Gemini room to think: a tiny output cap is raised, a big one is left alone', async () => {
+    mockGetAiConfig.mockResolvedValue(cloud({ provider: 'gemini' }))
+    await aiChat('hi', undefined, 'json', { temperature: 0, num_predict: 60 })
+    expect(mockGenerate.mock.calls[0][0].config.maxOutputTokens).toBe(1024)
+    await aiChat('hi', undefined, 'json', { temperature: 0, num_predict: 4000 })
+    expect(mockGenerate.mock.calls[1][0].config.maxOutputTokens).toBe(4000)
+  })
+
   it('includes a schema object in the JSON instruction', async () => {
     mockGetAiConfig.mockResolvedValue(cloud({ provider: 'claude' }))
     await aiChat('hi', undefined, { type: 'object' })

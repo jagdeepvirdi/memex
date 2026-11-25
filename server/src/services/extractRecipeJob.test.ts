@@ -14,7 +14,7 @@ vi.mock('./classifier', () => ({ mapToCategories: vi.fn().mockReturnValue(['Food
 vi.mock('./embedder', () => ({ embedItem: vi.fn().mockResolvedValue([0.1, 0.2]) }))
 vi.mock('../lib/logger', () => ({ default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }))
 
-import { runExtractRecipeJob, type ExtractRecipeJobInput } from './extractRecipeJob'
+import { runExtractRecipeJob, recipeCategories, type ExtractRecipeJobInput } from './extractRecipeJob'
 import { extractRecipe } from './recipeExtractor'
 import { reportJobProgress, completeJob, failJob, cancelJob } from './ingestJobs'
 import { cancelRunningJob, runningJobCount } from './jobControl'
@@ -286,3 +286,59 @@ describe('runExtractRecipeJob — the user cancels', () => {
     await expect(run).resolves.toBeUndefined()
   })
 })
+
+describe('runExtractRecipeJob — onOutcome (used by the automatic extraction on save)', () => {
+  it('reports found with the new recipe id', async () => {
+    const onOutcome = vi.fn()
+    await runExtractRecipeJob({ ...INPUT, onOutcome })
+    expect(onOutcome).toHaveBeenCalledTimes(1)
+    expect(onOutcome).toHaveBeenCalledWith({ kind: 'found', recipeId: 'rec-1' })
+  })
+
+  it('reports "none" with the reason when the content holds no recipe', async () => {
+    vi.mocked(extractRecipe).mockResolvedValue({ found: false, reason: 'No recipe was found in this content.', model: 'm' })
+    const onOutcome = vi.fn()
+    await runExtractRecipeJob({ ...INPUT, onOutcome })
+    expect(onOutcome).toHaveBeenCalledWith({ kind: 'none', reason: 'No recipe was found in this content.' })
+  })
+
+  it('reports a failure with the readable message', async () => {
+    vi.mocked(extractRecipe).mockRejectedValue(new Error('boom'))
+    const onOutcome = vi.fn()
+    await runExtractRecipeJob({ ...INPUT, onOutcome })
+    expect(onOutcome).toHaveBeenCalledWith({ kind: 'failed', reason: 'Failed to extract recipe' })
+  })
+
+  it('does not let a throwing callback break the job', async () => {
+    const onOutcome = vi.fn().mockRejectedValue(new Error('callback broke'))
+    await runExtractRecipeJob({ ...INPUT, onOutcome })
+    expect(completeJob).toHaveBeenCalledWith('job-1', expect.objectContaining({ found: true, recipeId: 'rec-1' }))
+    expect(failJob).not.toHaveBeenCalled()
+  })
+
+  it('works without a callback, as before', async () => {
+    await expect(runExtractRecipeJob(INPUT)).resolves.toBeUndefined()
+  })
+})
+
+describe('recipeCategories', () => {
+  it('keeps the source deeper Food path when the recipe itself only maps to Food', () => {
+    expect(recipeCategories(['Food'], ['Food', 'Savory', 'Italian'])).toEqual(['Food', 'Savory', 'Italian'])
+  })
+  it('keeps the recipe own, more specific path', () => {
+    expect(recipeCategories(['Food', 'Savory', 'Thai'], ['Food', 'Savory', 'Italian'])).toEqual(['Food', 'Savory', 'Thai'])
+  })
+  it('ignores a source that is not under Food, or that is shallower', () => {
+    expect(recipeCategories(['Food'], ['Links', 'YouTube'])).toEqual(['Food'])
+    expect(recipeCategories(['Food', 'Savory'], ['Food'])).toEqual(['Food', 'Savory'])
+    expect(recipeCategories(['Food'], undefined)).toEqual(['Food'])
+  })
+  it('is used when the job creates the recipe', async () => {
+    vi.mocked(createItem).mockResolvedValue({ id: 'rec-1', title: 'T', content: 'c' } as never)
+    const { mapToCategories } = await import('./classifier')
+    vi.mocked(mapToCategories).mockReturnValueOnce(['Food'])
+    await runExtractRecipeJob({ ...INPUT, sourceCategories: ['Food', 'Savory', 'Italian'] })
+    expect(vi.mocked(createItem).mock.calls.at(-1)![1].categories).toEqual(['Food', 'Savory', 'Italian'])
+  })
+})
+
