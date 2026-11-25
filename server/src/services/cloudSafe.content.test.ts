@@ -132,3 +132,40 @@ describe('cloudSafeReason', () => {
     expect(describePrivacyReason('content')).toMatch(/account details/)
   })
 })
+
+// Found 2026-11-25: a login pasted into an ordinary note ("<id> <password-like token>") has no banking word and no long
+// digit run, so it went to a cloud AI. Invented values only.
+describe('looksSensitiveContent — logins, keys and ledgers', () => {
+  it.each([
+    '2048117 Zq@mtor7731',                       // an id and a password-shaped token, nothing else
+    'wifi at home Pa$$w0rdXy',                   // a password-shaped token inside a sentence
+    'username: mango99',
+    'login id is 55abc',
+    'pwd = hunter22',
+    'key sk-xxxxxxxxxxxxxxxxxxxxxxxx',
+    'token gsk_xxxxxxxxxxxxxxxxxxxx',
+    'Ann 1300 Bo 1100 Cy 1100 Di 1600 Ed 500 Fay 900 total 6500',   // a ledger of amounts
+  ])('flags %s', (t) => expect(looksSensitiveContent(t)).toBe(true))
+
+  it.each([
+    '#VSCOcool2 #Travel9Gram #LandscapePhotography',
+    'Mail jane.Doe9@example.com about the trip',
+    'Released as v1.2.3-Beta4! last week',
+    'Hello World! Welcome to Pine Valley',
+    'Bought 3 for 250 baht, 2 for 400',
+    'Mix 2 cups flour, 1 tsp salt, bake 350 degrees for 25 minutes',
+    'Best years were 2019, 2021 and 2024',           // years are not amounts
+    'Phone case 120 baht, charger 350 baht, cable 180 baht',   // a shopping list is not a ledger of 5+ amounts
+    'Wi-Fi6E router with 8 antennas',
+    'A long ordinary note about a trip to Pine Valley where we ate noodles and walked by the river all afternoon.',
+  ])('does not flag %s', (t) => expect(looksSensitiveContent(t)).toBe(false))
+
+  it('ignores a long token that sits inside a link', () => {
+    expect(looksSensitiveContent('Saved https://example.com/p/Zq@mtor7731Abc for later')).toBe(false)
+  })
+
+  it('keeps a flagged note on this machine through cloudSafe', () => {
+    expect(cloudSafe({ type: 'note', title: 'Untitled', content: '2048117 Zq@mtor7731' })).toBe(false)
+    expect(cloudSafeReason({ type: 'note', content: 'username: mango99' })).toBe('content')
+  })
+})

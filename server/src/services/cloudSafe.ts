@@ -85,11 +85,43 @@ const WEAK_WORD_WITH_VALUE = /\b(pin|otp|password|passwd|acct)\b\s*(?:is|:|=|-|â
 const HOME_ADDRESS =
   /\b(my (home|house|flat|apartment|residential)? ?address|home address|residential address|my home|my flat|my apartment)\b/i
 
+// A login pasted into a random note ("2048117 Zq@mtor7731", invented here) has no banking word and no long digit run, so the checks above
+// miss it (found 2026-11-25, when such a note went to a cloud AI). These three are the common shapes of that miss.
+//
+// 1. A password-shaped token: 8-64 characters, no dots or slashes (not a URL, e-mail, path or version), with a lower-case
+//    letter, an upper-case letter, a digit AND a symbol. "#hashtags" and "@mentions" are skipped.
+// 2. A known secret-key prefix (sk-, AIza, ghp_, AKIA, xox...) followed by a long run.
+// 3. A "label: value" login ("username: bob", "pwd = x", "login id is 123abc").
+// 4. A ledger: a short note that is mostly amounts ("Ann 1300 Bob 1100 Cy 500 ..."): five or more numbers of 3-6 digits that
+//    are not years, making up at least a third of its words.
+const PASSWORD_SYMBOL = /[@$%^&*!?+=~]/
+const SECRET_KEY_PREFIX = /\b(?:sk-[A-Za-z0-9_-]{16,}|AIza[A-Za-z0-9_-]{20,}|gh[pousr]_[A-Za-z0-9]{20,}|AKIA[A-Z0-9]{12,}|xox[abprs]-[A-Za-z0-9-]{10,}|gsk_[A-Za-z0-9]{16,})/
+const LOGIN_LABEL_WITH_VALUE = /\b(user ?name|user ?id|login(?: id)?|log ?in|pwd)\b\s*(?:is|:|=)\s*\S{3,}/i
+
+function looksLikePasswordToken(token: string): boolean {
+  if (token.length < 8 || token.length > 64) return false
+  if (/^[#@]/.test(token) || /[./:\\]/.test(token)) return false
+  return /[a-z]/.test(token) && /[A-Z]/.test(token) && /\d/.test(token) && PASSWORD_SYMBOL.test(token)
+}
+
+function looksLikeLedger(text: string): boolean {
+  const words = text.split(/\s+/).filter(Boolean)
+  if (words.length < 6 || words.length > 150) return false
+  const amounts = words.filter((w) => /^\d{3,6}$/.test(w) && !/^(?:19|20)\d{2}$/.test(w)).length
+  return amounts >= 5 && amounts / words.length >= 1 / 3
+}
+
 export function looksSensitiveContent(text: string): boolean {
   const scanned = text.slice(0, CONTENT_SCAN_CHARS).replace(URLS, ' ')
   const runs = scanned.replace(DATES, ' ').match(DIGIT_RUN)
   if (runs?.some((r) => r.replace(/\D/g, '').length >= MIN_SENSITIVE_DIGITS)) return true
-  return STRONG_WORDS.test(scanned) || WEAK_WORD_WITH_VALUE.test(scanned) || HOME_ADDRESS.test(scanned)
+  if (STRONG_WORDS.test(scanned) || WEAK_WORD_WITH_VALUE.test(scanned) || HOME_ADDRESS.test(scanned)) return true
+  return (
+    LOGIN_LABEL_WITH_VALUE.test(scanned) ||
+    SECRET_KEY_PREFIX.test(scanned) ||
+    scanned.split(/\s+/).some(looksLikePasswordToken) ||
+    looksLikeLedger(scanned)
+  )
 }
 
 /** True only if every item is safe â€” use for calls that bundle several items into one prompt. */
