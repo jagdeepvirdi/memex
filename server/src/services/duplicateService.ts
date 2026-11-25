@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { pool } from '../db/client.js'
 import { activeEmbeddingId } from './embeddingService.js'
 import { activeProfile } from './embeddingProfiles.js'
@@ -49,6 +50,41 @@ export async function findItemsBySourceUrl(url: string, limit = 3): Promise<Simi
       .filter((r) => (r.source_url ? sameSourceUrl(r.source_url, url) : isBareLinkTo(r.content ?? '', url)))
       .slice(0, limit)
       .map(({ id, title, type }) => ({ id, title, type, similarity: 1 }))
+  } catch {
+    // Never block ingestion due to a duplicate-check failure
+    return []
+  }
+}
+
+/** Shortest note (after whitespace is collapsed) worth matching word for word; a one-word note saved twice is not news. */
+const EXACT_TEXT_MIN_CHARS = 12
+
+/** The text with runs of whitespace collapsed and the ends trimmed: what "the same note" means here. */
+export function normalizeNoteText(text: string): string {
+  return text.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Live notes whose text is exactly this text (spaces and line breaks ignored). It needs no embedding, so it still finds a
+ * note saved a moment ago that the background worker has not embedded yet. That is what protects a phone retry: if the
+ * first send was saved but its answer was lost, sending again finds it instead of saving a second copy. Vault and
+ * password items are never matched. Never throws.
+ */
+export async function findItemsByExactText(text: string, limit = 3): Promise<SimilarItem[]> {
+  const normalized = normalizeNoteText(text ?? '')
+  if (normalized.length < EXACT_TEXT_MIN_CHARS) return []
+  try {
+    const digest = createHash('md5').update(normalized, 'utf8').digest('hex')
+    const { rows } = await pool.query<{ id: string; title: string; type: ItemType }>(
+      `SELECT id, title, type
+       FROM items
+       WHERE deleted_at IS NULL AND encrypted = false AND type <> 'password'
+         AND md5(btrim(regexp_replace(content, '\\s+', ' ', 'g'))) = $1
+       ORDER BY created_at DESC
+       LIMIT $2`,
+      [digest, limit],
+    )
+    return (rows ?? []).map(({ id, title, type }) => ({ id, title, type, similarity: 1 }))
   } catch {
     // Never block ingestion due to a duplicate-check failure
     return []

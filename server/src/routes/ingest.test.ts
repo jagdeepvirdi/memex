@@ -5,7 +5,7 @@ import AdmZip from 'adm-zip'
 import { app } from '../index'
 import { pool } from '../db/client'
 import { classify } from '../services/classifier'
-import { findItemsBySourceUrl, findSimilarItems } from '../services/duplicateService'
+import { findItemsBySourceUrl, findItemsByExactText, findSimilarItems } from '../services/duplicateService'
 import { scrapeUrl } from '../services/scraper'
 import { getSetting } from '../services/settings'
 import { loadBackfillPlan, previewSample, runBackfill } from '../services/youtubeBackfill'
@@ -42,6 +42,7 @@ vi.mock('../services/duplicateService', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../services/duplicateService')>()), // real mergeSimilar
   findSimilarItems: vi.fn().mockResolvedValue([]),
   findItemsBySourceUrl: vi.fn().mockResolvedValue([]),
+  findItemsByExactText: vi.fn().mockResolvedValue([]),
 }))
 
 vi.mock('../services/settings', async (importOriginal) => ({
@@ -328,6 +329,17 @@ describe('POST /api/ingest/text', () => {
 
     expect(findItemsBySourceUrl).toHaveBeenCalledWith('https://youtu.be/dQw4w9WgXcQ')
     expect(res.body.similarItems.map((s: { id: string }) => s.id)).toEqual(['u1', 's2'])
+    expect(res.body.similarItems[0].similarity).toBe(1)
+  })
+
+  it('lists a note with exactly the same text first, even when it has no embedding yet', async () => {
+    vi.mocked(findItemsByExactText).mockResolvedValueOnce([{ id: 'x1', title: 'Saved a moment ago', type: 'note', similarity: 1 }] as any)
+    vi.mocked(findSimilarItems).mockResolvedValueOnce([{ id: 's2', title: 'Similar', type: 'note', similarity: 0.93 }] as any)
+
+    const res = await request(app).post('/api/ingest/text').set('Authorization', AUTH).send({ text: 'Buy oat milk and bread on Friday' })
+
+    expect(findItemsByExactText).toHaveBeenCalledWith('Buy oat milk and bread on Friday')
+    expect(res.body.similarItems.map((s: { id: string }) => s.id)).toEqual(['x1', 's2'])
     expect(res.body.similarItems[0].similarity).toBe(1)
   })
 

@@ -13,7 +13,7 @@ import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
 import { transcribeAudio, checkWhisperInstalled, isAudioMime } from '../services/whisperService.js';
-import { findSimilarItems, findItemsBySourceUrl, mergeSimilar } from '../services/duplicateService.js';
+import { findSimilarItems, findItemsBySourceUrl, findItemsByExactText, mergeSimilar } from '../services/duplicateService.js';
 import { embedForDuplicateCheck } from '../services/embedder.js';
 import { pool } from '../db/client.js';
 import { setItemTags } from '../db/helpers.js';
@@ -630,11 +630,12 @@ router.post('/text', ingestLimiter, async (req, res) => {
       embedForDuplicateCheck(text.slice(0, 2000)),
     ]);
 
-    const [sameUrl, similar] = await Promise.all([
+    const [sameUrl, sameText, similar] = await Promise.all([
       sourceUrl ? findItemsBySourceUrl(sourceUrl) : Promise.resolve([]),
+      findItemsByExactText(text),
       findSimilarItems(embedding),
     ]);
-    const similarItems = mergeSimilar(sameUrl, similar);
+    const similarItems = mergeSimilar(sameUrl, sameText, similar);
 
     // Places named in the note ("stay at X, eat at Y") are offered as their own entries; the client sends the ones
     // the user keeps back with the save. Failure-soft: no places is the old behaviour.

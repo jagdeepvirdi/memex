@@ -8,6 +8,7 @@ All notable changes to Memex are documented here.
 
 ### Added
 - **Save for later (phone outbox).** Links and notes can be kept on the phone while the computer is off or out of reach, listed under an "N waiting" button, and sent by themselves (app opened, network back, new item, slowing timer) through the normal capture flow, so places, repo stats and recipes are picked up too. Nothing is removed until Memex confirms it; duplicates are not saved twice.
+- **Same note, saved once.** Capturing text now also checks for a note with exactly the same words (spaces and line breaks ignored) and offers it as "you already have this", even when it has not been embedded yet, so a send that is retried from the phone does not create a second copy.
 - **Share to Memex while it is unreachable.** A link or text shared from another app is kept for later automatically when Memex cannot be reached, instead of opening a capture panel that cannot save.
 - **Phone guide, step by step.** README walks through Tailscale on Android (HTTPS certificates, `tailscale serve`, install the web app) and documents the queue; the landing page has a matching "Take it on your phone" section.
 - **Places, GitHub, recipes, shops.** Places named in a note or web article are offered as their own entries; GitHub repos get a plain-English "what it is" line and stats; saved recipe videos queue recipe extraction; Shopping, Real Estate and Courses are new categories the classifier uses.

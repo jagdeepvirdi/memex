@@ -84,8 +84,9 @@ describe('capture routes when the embedding fails', () => {
 
   it('with a working embedding the hint is computed as before', async () => {
     vi.mocked(aiEmbed).mockResolvedValue([0.1, 0.2])
+    // 'Garlic pasta again' is under the exact-text minimum, so only the embedding lookup runs.
     vi.mocked(pool.query).mockResolvedValue({ rows: [{ id: 'i1', title: 'Garlic pasta (old)', type: 'note', similarity: 0.96 }] } as never)
-    const res = await request(app).post('/api/ingest/text').set('Authorization', AUTH).send({ text: 'Garlic pasta again' })
+    const res = await request(app).post('/api/ingest/text').set('Authorization', AUTH).send({ text: 'Garlic' })
     expect(res.status).toBe(200)
     expect(res.body.similarItems).toEqual([{ id: 'i1', title: 'Garlic pasta (old)', type: 'note', similarity: 0.96 }])
   })
