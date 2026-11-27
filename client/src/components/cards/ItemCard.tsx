@@ -52,7 +52,7 @@ export default function ItemCard({ item, onClick, selectable, selected, onToggle
       {renderCard()}
       
       {selectable && (
-        <div className="absolute top-2 right-2 z-10">
+        <div className="absolute -top-3 -right-2 z-10 rounded-full border border-white/15 bg-surface p-1.5 shadow-md">
           <input 
             type="checkbox"
             aria-label={`Select ${item.title}`}

@@ -78,7 +78,7 @@ export default function SemanticGraphPage() {
 
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative overflow-hidden bg-bg-2">
         <AppHeader
-          left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} aria-label="Go back" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-2"><Sparkles className="text-accent" size={18} /><h1 className="font-display text-lg text-ink">Semantic Intelligence Map</h1></div></div>}
+          left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} aria-label="Go back" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-2"><Sparkles className="text-accent" size={18} /><h1 className="font-display text-lg text-ink"><span className="max-sm:hidden">Semantic Intelligence Map</span><span className="sm:hidden">Knowledge Map</span></h1></div></div>}
           actions={
             <div className="flex items-center gap-3">
               <span className="text-xs text-ink-muted hidden sm:inline">Nodes:</span>
@@ -158,7 +158,7 @@ export default function SemanticGraphPage() {
            {!loading && data.nodes.length > 0 && <nav aria-label="Items in the intelligence map" className="sr-only"><ul>{data.nodes.map(node => <li key={node.id}><a href={`/item/${node.id}`} onClick={event => { event.preventDefault(); navigate(`/item/${node.id}`) }}>{node.title}</a></li>)}</ul></nav>}
 
            {/* Legend */}
-           <div className="absolute bottom-8 left-8 p-4 bg-surface/80 backdrop-blur-md border border-white/5 rounded-2xl flex flex-col gap-2 z-10 pointer-events-none">
+           <div className="absolute bottom-24 md:bottom-8 left-4 md:left-8 p-3 md:p-4 bg-surface/80 backdrop-blur-md border border-white/5 rounded-2xl flex flex-col gap-2 z-10 pointer-events-none">
               <p className="text-[10px] text-ink-muted uppercase tracking-widest font-bold mb-2">Semantic Clusters</p>
               <LegendItem color={pal.nodes.recipe} label="Recipes" />
               <LegendItem color={pal.nodes.media} label="Media" />

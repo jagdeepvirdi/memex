@@ -86,14 +86,14 @@ export default function MediaView() {
       <Sidebar activeSection="media" />
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0">
         <AppHeader
-          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg flex items-center gap-2">{mode === 'book' ? <Book size={20} className="text-accent" /> : <Clapperboard size={20} className="text-accent" />}{mode === 'book' ? 'Library (Books)' : 'Media & Movies'}</h1><div className="flex bg-white/5 p-1 rounded-lg"><button onClick={() => { const p = new URLSearchParams(searchParams); p.set('mode', 'media'); setSearchParams(p) }} className={`px-3 py-1 text-[10px] rounded-md transition-all ${mode === 'media' ? 'bg-accent text-bg font-bold' : 'text-ink-muted hover:text-ink'}`}>Movies</button><button onClick={() => { const p = new URLSearchParams(searchParams); p.set('mode', 'book'); setSearchParams(p) }} className={`px-3 py-1 text-[10px] rounded-md transition-all ${mode === 'book' ? 'bg-accent text-bg font-bold' : 'text-ink-muted hover:text-ink'}`}>Books</button></div>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} items</span>}</div>}
+          left={<div className="flex items-center gap-3 sm:gap-6"><button onClick={() => navigate('/')} aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg flex items-center gap-2 max-sm:sr-only">{mode === 'book' ? <Book size={20} className="text-accent" /> : <Clapperboard size={20} className="text-accent" />}{mode === 'book' ? 'Library (Books)' : 'Media & Movies'}</h1><div className="flex bg-white/5 p-1 rounded-lg"><button onClick={() => { const p = new URLSearchParams(searchParams); p.set('mode', 'media'); setSearchParams(p) }} className={`px-3 py-1 text-[10px] rounded-md transition-all ${mode === 'media' ? 'bg-accent text-bg font-bold' : 'text-ink-muted hover:text-ink'}`}>Movies</button><button onClick={() => { const p = new URLSearchParams(searchParams); p.set('mode', 'book'); setSearchParams(p) }} className={`px-3 py-1 text-[10px] rounded-md transition-all ${mode === 'book' ? 'bg-accent text-bg font-bold' : 'text-ink-muted hover:text-ink'}`}>Books</button></div></div>}
           actions={<button onClick={handleExportCsv} className="text-xs flex items-center gap-2 bg-white/5 text-ink-muted hover:text-ink border border-white/10 px-3 py-1.5 rounded-lg transition-all"><Download size={14} />Export CSV</button>}
         />
         <AppHeader.Spacer />
 
         <div className="p-4 sm:p-6 lg:p-8 flex-1 flex flex-col gap-6 overflow-hidden">
           {/* Filters Bar */}
-          <div className="flex flex-wrap items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/5">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 bg-white/5 p-3 sm:p-4 rounded-xl border border-white/5">
             <div className="flex items-center gap-2 flex-1 min-w-[200px]">
               <Search size={16} className="text-ink-muted" />
               <input aria-label={`Search ${mode === 'book' ? 'books' : 'media'}`}
@@ -109,6 +109,7 @@ export default function MediaView() {
               />
             </div>
             
+            {!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} items</span>}
             <button 
               onClick={() => setSearchParams({ mode })}
               className="p-1.5 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-colors"
@@ -121,8 +122,8 @@ export default function MediaView() {
           {/* Table Container */}
           <div className="flex-1 bg-white/[0.02] border border-white/5 rounded-xl overflow-hidden flex flex-col">
             <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-              <table className="w-full text-left border-collapse table-fixed"><caption className="sr-only">{mode === 'book' ? 'Saved books' : 'Saved movies and media'} with reading or watch status and personal ratings</caption>
-                <thead className="sticky top-0 bg-bg/95 backdrop-blur-sm shadow-sm z-10">
+              <table className="w-full text-left border-collapse md:table-fixed max-md:block"><caption className="sr-only">{mode === 'book' ? 'Saved books' : 'Saved movies and media'} with reading or watch status and personal ratings</caption>
+                <thead className="sticky top-0 bg-bg/95 backdrop-blur-sm shadow-sm z-10 max-md:hidden">
                   <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-ink-muted font-semibold">
                     <th className="px-6 py-4 w-[25%] min-w-[200px]">Title</th>
                     <th className="px-4 py-4 w-32">{mode === 'book' ? 'Author' : 'Director'}</th>
@@ -132,7 +133,7 @@ export default function MediaView() {
                     <th className="px-6 py-4 w-16 text-center"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.03]">
+                <tbody className="divide-y divide-white/[0.03] max-md:block">
                   {loading ? (
                     [...Array(10)].map((_, i) => (
                       <tr key={i} className="animate-pulse">
@@ -157,22 +158,22 @@ export default function MediaView() {
                       const data = item.structured as any
                       const status = mode === 'book' ? data.status : data.watchStatus
                       return (
-                        <tr key={item.id} className="hover:bg-white/[0.03] transition-colors group">
-                          <td className="px-6 py-4 truncate font-medium text-ink/90 group-hover:text-ink cursor-pointer" onClick={() => navigate(`/item/${item.id}`)}>
+                        <tr key={item.id} className="hover:bg-white/[0.03] transition-colors group max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-x-3 max-md:gap-y-1 max-md:px-4 max-md:py-3">
+                          <td className="px-6 py-4 truncate font-medium text-ink/90 group-hover:text-ink cursor-pointer max-md:w-full max-md:whitespace-normal max-md:p-0 max-md:text-[15px] max-md:leading-snug" onClick={() => navigate(`/item/${item.id}`)}>
                             {item.title}
                             {data.year && <span className="ml-2 text-[10px] text-ink-muted font-normal">({data.year})</span>}
                           </td>
-                          <td className="px-4 py-4 truncate text-xs text-ink-muted">
+                          <td className="px-4 py-4 truncate text-xs text-ink-muted max-md:w-auto max-md:max-w-[48%] max-md:p-0">
                             {(mode === 'book' ? data.author : data.director) || '—'}
                           </td>
-                          <td className="px-4 py-4 truncate text-xs text-ink-muted">
+                          <td className="px-4 py-4 truncate text-xs text-ink-muted max-md:w-auto max-md:max-w-[48%] max-md:p-0">
                             {data.genre || '—'}
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-4 max-md:p-0">
                             <select 
                               value={status || ''} 
                               onChange={(e) => handleUpdateStatus(item.id, e.target.value)}
-                              className="bg-transparent border-none text-xs text-ink-muted focus:text-accent outline-none cursor-pointer"
+                              className="bg-transparent border-none text-xs text-ink-muted focus:text-accent outline-none cursor-pointer max-md:py-2"
                             >
                               <option value="">Unknown</option>
                               {mode === 'book' ? (
@@ -190,21 +191,21 @@ export default function MediaView() {
                               )}
                             </select>
                           </td>
-                          <td className="px-4 py-4">
+                          <td className="px-4 py-4 max-md:p-0 max-md:ml-auto">
                             <div className="flex gap-0.5">
                               {[1, 2, 3, 4, 5].map(star => (
                                 <button 
                                   key={star} 
                                   onClick={() => handleUpdateRating(item.id, star)}
                                   aria-label={`Rate ${star} out of 5`}
-                                  className={`transition-colors ${star <= (data.userRating || 0) ? 'text-accent' : 'text-white/10 hover:text-accent/40'}`}
+                                  className={`max-md:p-1.5 transition-colors ${star <= (data.userRating || 0) ? 'text-accent' : 'text-white/10 hover:text-accent/40'}`}
                                 >
                                   <Star size={12} fill={star <= (data.userRating || 0) ? 'currentColor' : 'none'} />
                                 </button>
                               ))}
                             </div>
                           </td>
-                          <td className="px-6 py-4 flex justify-center items-center gap-2">
+                          <td className="px-6 py-4 flex justify-center items-center gap-2 max-md:hidden">
                             <button 
                               onClick={() => navigate(`/item/${item.id}`)}
                               className="p-1.5 text-ink-muted hover:text-ink hover:bg-white/10 rounded-lg transition-all"
@@ -222,7 +223,7 @@ export default function MediaView() {
             </div>
 
             {/* Pagination */}
-            <div className="h-14 border-t border-white/5 flex items-center justify-between px-8 bg-white/[0.01]">
+            <div className="min-h-14 py-2 gap-3 flex-wrap border-t border-white/5 flex items-center justify-between px-4 sm:px-8 bg-white/[0.01]">
               <div className="text-xs text-ink-muted">
                 Showing {items.length > 0 ? offset + 1 : 0} to {offset + items.length} of {total} items
               </div>

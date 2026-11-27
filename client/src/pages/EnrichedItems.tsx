@@ -38,8 +38,12 @@ export default function EnrichedItemsPage() {
   const [recatValue, setRecatValue] = useState('')
   const [recatSaving, setRecatSaving] = useState(false)
   const recatInputRef = useRef<HTMLInputElement>(null)
+  // The table view is for a wide screen; a phone always gets cards (and the toggle is hidden there).
+  const isPhone = typeof window !== 'undefined' && !!window.matchMedia?.('(max-width: 767px)').matches
   const [viewMode, setViewMode] = useState<ViewMode>(() =>
-    (localStorage.getItem('enriched-view-mode') as ViewMode | null) ?? 'card'
+    isPhone
+      ? 'card'
+      : (localStorage.getItem('enriched-view-mode') as ViewMode | null) ?? 'card'
   )
 
   const typeFilter = (searchParams.get('type') as ItemType | 'all') || 'all'
@@ -164,8 +168,8 @@ export default function EnrichedItemsPage() {
       <Sidebar activeSection="enriched" />
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0">
         <AppHeader
-          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-3"><Zap size={20} className="text-yellow-400" /><h1 className="font-display text-lg text-ink">AI Enriched Notes</h1></div>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} enriched</span>}</div>}
-          actions={<div className="flex items-center gap-3">{selectedIds.size > 0 && <button onClick={handleBulkDelete} disabled={deleting} className="flex items-center gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-all text-xs font-bold disabled:opacity-50">{deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}Delete Selected ({selectedIds.size})</button>}<div className="flex bg-white/5 border border-white/10 p-0.5 rounded-lg"><button onClick={() => switchView('card')} className={`p-1.5 rounded-md transition-all ${viewMode === 'card' ? 'bg-accent text-bg' : 'text-ink-muted hover:text-ink'}`} title="Card view"><LayoutGrid size={15} /></button><button onClick={() => switchView('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-accent text-bg' : 'text-ink-muted hover:text-ink'}`} title="Table view"><List size={15} /></button></div></div>}
+          left={<div className="flex items-center gap-3 sm:gap-6"><button onClick={() => navigate('/')} aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="flex items-center gap-2 sm:gap-3 min-w-0"><Zap size={20} className="text-yellow-400 shrink-0" /><h1 className="font-display text-lg text-ink">AI Enriched Notes</h1></div>{!loading && <span className="max-sm:hidden text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg whitespace-nowrap">{total} enriched</span>}</div>}
+          actions={isPhone && selectedIds.size === 0 ? undefined : <div className="flex items-center gap-3">{selectedIds.size > 0 && <button onClick={handleBulkDelete} disabled={deleting} className="flex items-center gap-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 border border-red-500/20 px-3 py-1.5 rounded-lg transition-all text-xs font-bold disabled:opacity-50">{deleting ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}Delete Selected ({selectedIds.size})</button>}<div className="max-md:hidden flex bg-white/5 border border-white/10 p-0.5 rounded-lg"><button onClick={() => switchView('card')} className={`p-1.5 rounded-md transition-all ${viewMode === 'card' ? 'bg-accent text-bg' : 'text-ink-muted hover:text-ink'}`} title="Card view"><LayoutGrid size={15} /></button><button onClick={() => switchView('table')} className={`p-1.5 rounded-md transition-all ${viewMode === 'table' ? 'bg-accent text-bg' : 'text-ink-muted hover:text-ink'}`} title="Table view"><List size={15} /></button></div></div>}
         />
         <AppHeader.Spacer />
 

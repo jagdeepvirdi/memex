@@ -201,7 +201,7 @@ export default function AskMemexPage() {
         </div>
 
         {/* Input Area */}
-        <div className="p-8 pt-0 shrink-0 bg-bg/80 backdrop-blur-md">
+        <div className="p-4 sm:p-8 pt-0 max-md:pb-24 shrink-0 bg-bg/80 backdrop-blur-md">
           <form 
             onSubmit={handleAsk}
             className="relative flex items-center gap-2 bg-surface p-2 pr-3 rounded-2xl border border-white/10 focus-within:border-accent/50 transition-all shadow-xl shadow-black/20"
