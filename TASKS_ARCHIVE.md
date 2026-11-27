@@ -1,6 +1,6 @@
 ﻿---
 project: Memex
-last_updated: 2026-11-25
+last_updated: 2026-11-27
 ---
 
 # Archived Tasks
@@ -50,4 +50,16 @@ last_updated: 2026-11-25
 - [x] Design tokens as CSS variables + Tailwind mapping, theme switch (system / light / dark, saved), pre-paint script, toggle in the header, themed toasts and graph canvas, landing page on the same palette <!-- done: 2026-11-18 -->
 - [x] Settings > Appearance: choose System / Light / Dark (radio cards, same saved choice as the header button); checked in the browser, 915 tests <!-- done: 2026-11-18 -->
 - [x] Light-mode review of the remaining pages <!-- done: 2026-11-18 -->
+
+
+## 🚀 Public Launch — planned 2026-11-16
+<!-- archived_on: 2026-11-26 -->
+- [x] Obsidian / Markdown importer (R9-01, `POST /api/ingest/markdown`) <!-- done: 2026-11-19 -->
+
+
+## 🚀 Public Launch — planned 2026-11-16
+<!-- archived_on: 2026-11-27 -->
+- [x] README rewrite (what it is, 2-minute quick start, local vs cloud table, privacy model, FAQ), screenshots from demo data <!-- done: 2026-11-20 -->
+- [x] CI green on main; `docker compose` smoke test in CI <!-- done: 2026-11-20 -->
+- [x] Screenshots for the README (reuses the landing page's two sample-data shots, `site/img/*.webp`) <!-- done: 2026-11-20 -->
 
