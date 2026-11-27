@@ -79,6 +79,8 @@ describe('Sidebar navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Open navigation menu' }))
     const menu = screen.getByRole('dialog', { name: 'Navigation menu' })
     expect(within(menu).getByRole('link', { name: 'Settings' })).toBeInTheDocument()
+    expect(within(menu).queryByRole('link', { name: /Work/ })).not.toBeInTheDocument()
+    fireEvent.click(within(menu).getByRole('button', { name: /Browse categories/ }))
     fireEvent.click(await within(menu).findByRole('link', { name: /Work/ }))
     expect(screen.getByTestId('route-path')).toHaveTextContent('/category/cat1')
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Navigation menu' })).not.toBeInTheDocument())

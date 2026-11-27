@@ -22,11 +22,12 @@ export function DemoBanner() {
       type="button"
       data-testid="demo-banner"
       onClick={() => navigate('/settings/library')}
-      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[10px] font-bold font-mono uppercase tracking-wide hover:bg-accent/20 transition-colors"
+      aria-label="Demo mode: sample data is loaded. Open Library settings to clear it."
+      className="flex items-center gap-1.5 px-2.5 py-1 max-sm:px-2 rounded-lg border border-accent/30 bg-accent/10 text-accent text-[10px] font-bold font-mono uppercase tracking-wide hover:bg-accent/20 transition-colors"
       title={`${items} sample items are loaded. Click to clear them in Settings.`}
     >
       <FlaskConical size={12} aria-hidden="true" />
-      Demo mode
+      <span className="max-sm:hidden">Demo mode</span>
     </button>
   )
 }

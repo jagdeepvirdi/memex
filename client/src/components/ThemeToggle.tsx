@@ -5,7 +5,7 @@ const NEXT: Record<ThemePref, ThemePref> = { system: 'light', light: 'dark', dar
 const LABEL: Record<ThemePref, string> = { system: 'Theme: follow system', light: 'Theme: light', dark: 'Theme: dark' }
 const ICON = { system: Monitor, light: Sun, dark: Moon }
 
-/** One button that cycles system -> light -> dark. */
+/** One button that cycles system -> light -> dark. Hidden on a phone (no room in the bar); Settings > Appearance has the same choice. */
 export function ThemeToggle() {
   const [pref, setPref] = useThemePref()
   const Icon = ICON[pref]
@@ -13,7 +13,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={() => setPref(NEXT[pref])}
-      className="p-2 hover:bg-white/5 rounded-lg transition-colors hover:text-ink"
+      className="max-md:hidden p-2 hover:bg-white/5 rounded-lg transition-colors hover:text-ink"
       title={`${LABEL[pref]} (click for ${NEXT[pref]})`}
       aria-label={`${LABEL[pref]}. Switch to ${NEXT[pref]}.`}
     >

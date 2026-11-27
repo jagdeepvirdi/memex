@@ -271,7 +271,7 @@ export default function TableView() {
       <Sidebar activeSection="table" />
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col min-w-0">
         <AppHeader
-          left={<div className="flex items-center gap-6"><button onClick={() => navigate('/')} aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg">All Items Table</h1>{!loading && <span className="text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} items</span>}</div>}
+          left={<div className="flex items-center gap-3 sm:gap-6"><button onClick={() => navigate('/')} aria-label="Back to dashboard" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><h1 className="font-display text-lg">All Items Table</h1>{!loading && <span className="max-sm:hidden text-xs text-ink-muted bg-white/5 px-2 py-1 rounded-lg">{total} items</span>}</div>}
           actions={<div className="flex items-center gap-3"><button onClick={handleExportCsv} className="text-xs flex items-center gap-2 bg-white/5 text-ink-muted hover:text-ink border border-white/10 px-3 py-1.5 rounded-lg transition-all"><Download size={14} />Export CSV</button><button onClick={handleBulkReview} disabled={bulkReviewing} className="text-xs flex items-center gap-2 bg-accent/10 text-accent hover:bg-accent/20 border border-accent/20 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50">{bulkReviewing ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}Mark All Reviewed</button></div>}
         />
         <AppHeader.Spacer />
@@ -279,7 +279,7 @@ export default function TableView() {
         <div className="p-4 sm:p-6 lg:p-8 flex-1 flex flex-col gap-6 overflow-hidden">
           {/* Filters Bar */}
           <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center gap-4 bg-white/5 p-4 rounded-xl border border-white/5">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4 bg-white/5 p-3 sm:p-4 rounded-xl border border-white/5">
             {nlMode ? (
               /* NL filter input */
               <div className="flex items-center gap-2 flex-1 min-w-[200px]">
@@ -322,8 +322,8 @@ export default function TableView() {
 
             <div className="h-4 w-px bg-white/10 mx-2 hidden sm:block" />
 
-            <div className="flex items-center gap-3">
-              <Filter size={16} className="text-ink-muted" />
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+              <Filter size={16} className="text-ink-muted max-sm:hidden" />
               <select 
                 aria-label="Item type filter"
                 value={type} 
@@ -443,31 +443,34 @@ export default function TableView() {
           {/* Table Container */}
           <div className="flex-1 bg-white/[0.02] border border-white/5 rounded-xl overflow-hidden flex flex-col">
             <div className="overflow-x-auto overflow-y-auto flex-1 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
-              <table className="w-full text-left border-collapse table-fixed">
+              <table className="w-full text-left border-collapse md:table-fixed max-md:block">
                 <caption className="sr-only">Saved items with type, priority, categories, tags, score, summary, and available actions</caption>
-                <thead className="sticky top-0 bg-bg/95 backdrop-blur-sm shadow-sm z-10">
-                  <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-ink-muted font-semibold">
-                    <th className="pl-6 pr-2 py-4 w-10">
-                      <input
-                        type="checkbox"
-                        aria-label="Select all items on this page"
-                        checked={allSelected}
-                        onChange={toggleAll}
-                        disabled={items.length === 0}
-                        className="accent-amber-500 cursor-pointer"
-                      />
+                <thead className="sticky top-0 bg-bg/95 backdrop-blur-sm shadow-sm z-10 max-md:block">
+                  <tr className="border-b border-white/5 text-[11px] uppercase tracking-wider text-ink-muted font-semibold max-md:flex">
+                    <th className="pl-6 pr-2 py-4 w-10 max-md:w-auto max-md:px-4 max-md:py-3">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          aria-label="Select all items on this page"
+                          checked={allSelected}
+                          onChange={toggleAll}
+                          disabled={items.length === 0}
+                          className="accent-amber-500 cursor-pointer h-4 w-4"
+                        />
+                        <span aria-hidden="true" className="md:hidden normal-case tracking-normal text-xs font-medium">Select all</span>
+                      </label>
                     </th>
-                    <th className="px-4 py-4 w-[25%] min-w-[200px]">Title</th>
-                    <th className="px-4 py-4 w-24">Type</th>
-                    <th className="px-4 py-4 w-24">Priority</th>
-                    <th className="px-4 py-4 w-40">Categories</th>
-                    <th className="px-4 py-4 w-40">Tags</th>
-                    <th className="px-4 py-4 w-24 text-center">Score</th>
-                    <th className="px-4 py-4 min-w-[300px]">Summary</th>
-                    <th className="px-6 py-4 w-36 text-center">Actions</th>
+                    <th className="max-md:hidden px-4 py-4 w-[25%] min-w-[200px]">Title</th>
+                    <th className="max-md:hidden px-4 py-4 w-24">Type</th>
+                    <th className="max-md:hidden px-4 py-4 w-24">Priority</th>
+                    <th className="max-md:hidden px-4 py-4 w-40">Categories</th>
+                    <th className="max-md:hidden px-4 py-4 w-40">Tags</th>
+                    <th className="max-md:hidden px-4 py-4 w-24 text-center">Score</th>
+                    <th className="max-md:hidden px-4 py-4 min-w-[300px]">Summary</th>
+                    <th className="max-md:hidden px-6 py-4 w-36 text-center">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-white/[0.03]">
+                <tbody className="divide-y divide-white/[0.03] max-md:block">
                   {loading ? (
                     [...Array(10)].map((_, i) => (
                       <tr key={i} className="animate-pulse">
@@ -492,17 +495,17 @@ export default function TableView() {
                     </tr>
                   ) : (
                     items.map(item => (
-                      <tr key={item.id} className={`hover:bg-white/[0.03] transition-colors group ${selected.has(item.id) ? 'bg-accent/5' : ''}`}>
-                        <td className="pl-6 pr-2 py-4">
+                      <tr key={item.id} className={`hover:bg-white/[0.03] transition-colors group max-md:relative max-md:flex max-md:flex-wrap max-md:items-center max-md:gap-x-2 max-md:gap-y-1.5 max-md:py-3 max-md:pl-11 max-md:pr-4 ${selected.has(item.id) ? 'bg-accent/5' : ''}`}>
+                        <td className="pl-6 pr-2 py-4 max-md:absolute max-md:left-4 max-md:top-3.5 max-md:p-0">
                           <input
                             type="checkbox"
                             aria-label={`Select ${item.title}`}
                             checked={selected.has(item.id)}
                             onChange={() => toggleOne(item.id)}
-                            className="accent-amber-500 cursor-pointer"
+                            className="accent-amber-500 cursor-pointer max-md:h-4 max-md:w-4"
                           />
                         </td>
-                        <td className="px-4 py-4 truncate font-medium text-ink/90 group-hover:text-ink cursor-pointer" onClick={() => navigate(`/item/${item.id}`)}>
+                        <td className="px-4 py-4 truncate font-medium text-ink/90 group-hover:text-ink cursor-pointer max-md:w-full max-md:whitespace-normal max-md:p-0 max-md:text-[15px] max-md:leading-snug" onClick={() => navigate(`/item/${item.id}`)}>
                           <div className="flex items-center gap-2">
                             {item.remindAt && (
                               <span title={`Reminder: ${new Date(item.remindAt).toLocaleString()}`}>
@@ -512,18 +515,18 @@ export default function TableView() {
                             {item.title}
                           </div>
                         </td>
-                        <td className="px-4 py-4">
+                        <td className="px-4 py-4 max-md:p-0">
                           <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 border border-white/10 uppercase font-bold text-ink-muted">
                             {item.type}
                           </span>
                         </td>
-                        <td className="px-4 py-4">
-                          {item.priority ? <PriorityBadge value={item.priority} /> : <span className="text-ink-muted/30 text-xs">—</span>}
+                        <td className="px-4 py-4 max-md:p-0 max-md:empty:hidden">
+                          {item.priority ? <PriorityBadge value={item.priority} /> : <span className="text-ink-muted/30 text-xs max-md:hidden">—</span>}
                         </td>
-                        <td className="px-4 py-4 truncate text-xs text-ink-muted" title={item.categories.join(' > ')}>
+                        <td className="px-4 py-4 truncate text-xs text-ink-muted max-md:w-full max-md:p-0 max-md:whitespace-normal" title={item.categories.join(' > ')}>
                           {item.categories.join(' > ') || '—'}
                         </td>
-                        <td className="px-4 py-4 truncate">
+                        <td className="px-4 py-4 truncate max-md:hidden">
                           <div className="flex gap-1 overflow-hidden">
                             {item.tags.slice(0, 2).map(t => (
                               <span key={t} className="text-[10px] text-accent/70">#{t}</span>
@@ -532,7 +535,7 @@ export default function TableView() {
                             {item.tags.length === 0 && <span className="text-ink-muted/30">—</span>}
                           </div>
                         </td>
-                        <td className="px-4 py-4 text-center">
+                        <td className="px-4 py-4 text-center max-md:hidden">
                           {item.confidence !== undefined && item.confidence !== null ? (
                             <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
                               item.confidence >= 90 ? 'bg-green-500/10 text-green-400' :
@@ -545,13 +548,13 @@ export default function TableView() {
                             <span className="text-ink-muted/30 text-xs">—</span>
                           )}
                         </td>
-                        <td className="px-4 py-4 text-xs text-ink-muted line-clamp-1 h-12 flex items-center">
+                        <td className="px-4 py-4 text-xs text-ink-muted line-clamp-1 h-12 flex items-center max-md:hidden">
                           {(item.structured as any)?.summary || '—'}
                         </td>
-                        <td className="px-6 py-4 flex justify-center items-center gap-1.5">
+                        <td className="px-6 py-4 flex justify-center items-center gap-1.5 max-md:w-full max-md:justify-start max-md:p-0 max-md:-ml-2">
                           <button
                             onClick={() => navigate(`/item/${item.id}`)}
-                            className="p-1.5 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all"
+                            className="p-1.5 max-md:p-2.5 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all"
                             title="Edit"
                           >
                             <Pencil size={15} />
@@ -559,7 +562,7 @@ export default function TableView() {
                           <button
                             onClick={() => handleMoveToVault(item)}
                             disabled={migratingId === item.id}
-                            className="p-1.5 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all"
+                            className="p-1.5 max-md:p-2.5 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all"
                             title="Move to Secure Vault"
                           >
                             {migratingId === item.id ? <Loader2 size={15} className="animate-spin" /> : <Shield size={15} />}
@@ -567,7 +570,7 @@ export default function TableView() {
                           {!item.reviewed && (
                             <button
                               onClick={() => handleReview(item.id)}
-                              className="p-1.5 text-accent/60 hover:text-accent hover:bg-accent/10 rounded-lg transition-all"
+                              className="p-1.5 max-md:p-2.5 text-accent/60 hover:text-accent hover:bg-accent/10 rounded-lg transition-all"
                               title="Mark Reviewed"
                             >
                               <Check size={15} />
@@ -576,7 +579,7 @@ export default function TableView() {
                           <button
                             onClick={() => handleDelete(item)}
                             disabled={deletingId === item.id}
-                            className="p-1.5 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
+                            className="p-1.5 max-md:p-2.5 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all"
                             title="Delete"
                           >
                             {deletingId === item.id ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
@@ -590,7 +593,7 @@ export default function TableView() {
             </div>
 
             {/* Pagination */}
-            <div className="h-14 border-t border-white/5 flex items-center justify-between px-8 bg-white/[0.01]">
+            <div className="min-h-14 py-2 gap-3 flex-wrap border-t border-white/5 flex items-center justify-between px-4 sm:px-8 bg-white/[0.01]">
               <div className="text-xs text-ink-muted">
                 Showing {items.length > 0 ? offset + 1 : 0} to {offset + items.length} of {total} items
               </div>

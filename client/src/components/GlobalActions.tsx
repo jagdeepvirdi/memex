@@ -119,7 +119,7 @@ export function GlobalActions() {
 
   return <>
     {searchOpen && <SearchModal initialQuery={searchInitialQuery} initialTag={searchInitialTag} onClose={() => { setSearchOpen(false); setSearchInitialQuery(''); setSearchInitialTag('') }} />}
-    {captureOpen && <div className="fixed inset-0 z-[55] flex items-center justify-center bg-bg/80 p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) closeCapture() }}>
+    {captureOpen && <div className="fixed inset-0 z-[55] flex items-end sm:items-center justify-center bg-bg/80 p-0 sm:p-4 backdrop-blur-sm" onMouseDown={event => { if (event.target === event.currentTarget) closeCapture() }}>
       <div ref={captureRef} role="dialog" aria-modal="true" aria-label="Capture an item" className="w-full max-w-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-200">
         <IngestPanel initialUrl={captureDetail.url} initialText={captureDetail.text} onSuccess={() => { window.dispatchEvent(new Event('memex:categories-changed')); window.dispatchEvent(new Event('memex:item-captured')); closeCapture() }} onCancel={closeCapture} />
       </div>

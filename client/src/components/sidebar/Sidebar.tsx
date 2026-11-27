@@ -40,6 +40,7 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   const [tags, setTags] = useState<Tag[]>([])
   const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({})
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [browseOpen, setBrowseOpen] = useState(false)
   const mobileDialog = useRef<HTMLDivElement>(null)
   const location = useLocation()
 
@@ -72,6 +73,7 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   }, [mobileOpen])
 
   useEffect(() => { setMobileOpen(false) }, [location.pathname])
+  useEffect(() => { if (!mobileOpen) setBrowseOpen(false) }, [mobileOpen])
 
   const toggleCategory = (id: string) => setExpandedCats(previous => ({ ...previous, [id]: !previous[id] }))
 
@@ -102,7 +104,7 @@ export default function Sidebar({ activeSection }: SidebarProps) {
         <button type="button" aria-label="Close navigation menu" className="absolute inset-0 bg-bg/70 backdrop-blur-sm" onClick={() => setMobileOpen(false)} />
         <div ref={mobileDialog} role="dialog" aria-modal="true" aria-label="Navigation menu" className="absolute inset-x-0 bottom-0 max-h-[85dvh] overflow-y-auto rounded-t-2xl border border-white/10 bg-surface p-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] shadow-raised">
           <div className="mb-4 flex items-center justify-between"><BrandLockup size={28} wordmarkClassName="text-lg" /><button type="button" onClick={() => setMobileOpen(false)} aria-label="Close navigation menu" className="rounded-lg p-2 text-ink-muted hover:bg-white/5 hover:text-ink"><X size={18} /></button></div>
-          <NavigationGroups activeSection={activeSection} categories={categories} tags={tags} expandedCats={expandedCats} toggleCategory={toggleCategory} currentPath={location.pathname} onNavigate={() => setMobileOpen(false)} />
+          <NavigationGroups activeSection={activeSection} categories={categories} tags={tags} expandedCats={expandedCats} toggleCategory={toggleCategory} currentPath={location.pathname} onNavigate={() => setMobileOpen(false)} compact browseOpen={browseOpen} onToggleBrowse={() => setBrowseOpen(open => !open)} />
           <div className="mt-3 border-t border-white/5 pt-3"><AppLink item={{ label: 'Settings', to: '/settings', icon: <SettingsIcon size={17} />, section: 'settings' }} activeSection={activeSection} currentPath={location.pathname} onNavigate={() => setMobileOpen(false)} /></div>
         </div>
       </div>}
@@ -110,14 +112,36 @@ export default function Sidebar({ activeSection }: SidebarProps) {
   )
 }
 
-function NavigationGroups({ activeSection, categories, tags, expandedCats, toggleCategory, currentPath, onNavigate }: {
+function NavigationGroups({ activeSection, categories, tags, expandedCats, toggleCategory, currentPath, onNavigate, compact, browseOpen, onToggleBrowse }: {
   activeSection: Section; categories: Category[]; tags: Tag[]; expandedCats: Record<string, boolean>; toggleCategory: (id: string) => void; currentPath: string; onNavigate?: () => void
+  /** Phone sheet: every destination as a tile in two columns, and categories + tags behind one button. */
+  compact?: boolean; browseOpen?: boolean; onToggleBrowse?: () => void
 }) {
+  if (compact) {
+    return <>
+      <div className="grid grid-cols-2 gap-1.5">
+        {groups.flatMap(group => group.links).map(item => <AppLink key={item.to} item={item} activeSection={activeSection} currentPath={currentPath} onNavigate={onNavigate} tile />)}
+      </div>
+      <button type="button" onClick={onToggleBrowse} aria-expanded={!!browseOpen} className="mt-3 flex min-h-11 w-full items-center justify-between rounded-xl border border-white/10 px-3 text-sm font-medium text-ink-muted hover:bg-white/5 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">
+        <span className="flex items-center gap-2"><FolderSync size={16} aria-hidden="true" />Browse categories &amp; tags</span>
+        <ChevronDown size={16} aria-hidden="true" className={`transition-transform ${browseOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {browseOpen && <div className="mt-3"><BrowseSections categories={categories} tags={tags} expandedCats={expandedCats} toggleCategory={toggleCategory} currentPath={currentPath} onNavigate={onNavigate} /></div>}
+    </>
+  }
   return <>
     {groups.map(group => <section key={group.label} aria-label={group.label} className="mb-4">
       <h2 className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint">{group.label}</h2>
       <div className="grid gap-0.5">{group.links.map(item => <AppLink key={item.to} item={item} activeSection={activeSection} currentPath={currentPath} onNavigate={onNavigate} />)}</div>
     </section>)}
+    <BrowseSections categories={categories} tags={tags} expandedCats={expandedCats} toggleCategory={toggleCategory} currentPath={currentPath} onNavigate={onNavigate} />
+  </>
+}
+
+function BrowseSections({ categories, tags, expandedCats, toggleCategory, currentPath, onNavigate }: {
+  categories: Category[]; tags: Tag[]; expandedCats: Record<string, boolean>; toggleCategory: (id: string) => void; currentPath: string; onNavigate?: () => void
+}) {
+  return <>
     <section aria-labelledby="sidebar-categories" className="mb-4">
       <h2 id="sidebar-categories" className="flex items-center gap-2 px-3 pb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-faint"><span aria-hidden="true"><FolderSync size={12} /></span>Categories</h2>
       {categories.length ? <div className="grid gap-0.5">{categories.map(category => <CategoryRow key={category.id} category={category} expanded={expandedCats} toggle={toggleCategory} currentPath={currentPath} onNavigate={onNavigate} />)}</div> : <p className="px-3 py-1 text-xs text-ink-faint">No categories yet</p>}
@@ -129,9 +153,9 @@ function NavigationGroups({ activeSection, categories, tags, expandedCats, toggl
   </>
 }
 
-function AppLink({ item, activeSection, currentPath, onNavigate }: { item: LinkItem; activeSection: Section; currentPath: string; onNavigate?: () => void }) {
+function AppLink({ item, activeSection, currentPath, onNavigate, tile }: { item: LinkItem; activeSection: Section; currentPath: string; onNavigate?: () => void; tile?: boolean }) {
   const matchesCurrentRoute = activeSection === item.section && (item.to === '/' ? currentPath === '/' : currentPath === item.to || currentPath.startsWith(`${item.to}/`))
-  return <NavLink end={item.end} onClick={onNavigate} to={item.to} className={({ isActive }) => `flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${isActive || matchesCurrentRoute ? 'bg-accent/10 text-accent' : 'text-ink-muted hover:bg-white/5 hover:text-ink'}`}>
+  return <NavLink end={item.end} onClick={onNavigate} to={item.to} className={({ isActive }) => `flex ${tile ? 'min-h-12 gap-2.5 rounded-xl px-3 text-[13px]' : 'min-h-10 gap-3 rounded-lg px-3 text-sm'} items-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ${isActive || matchesCurrentRoute ? 'bg-accent/10 text-accent' : tile ? 'bg-white/[0.04] text-ink-muted hover:bg-white/5 hover:text-ink' : 'text-ink-muted hover:bg-white/5 hover:text-ink'}`}>
     <span aria-hidden="true" className="shrink-0">{item.icon}</span><span className="truncate">{item.label}</span>
   </NavLink>
 }

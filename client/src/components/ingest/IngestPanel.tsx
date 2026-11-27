@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic, ListPlus, BookText, Clock } from 'lucide-react';
+import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic, ListPlus, BookText, Clock, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { ingestUrl, createItem, apiFetch } from '../../lib/api';
 import type { SimilarItem } from '../../lib/api';
@@ -22,10 +22,22 @@ interface IngestPanelProps {
   initialText?: string;
 }
 
+type TabId = 'url' | 'keep' | 'manual' | 'paste' | 'markdown' | 'file' | 'voice';
+const TABS: { id: TabId; label: string; Icon: typeof Globe; primary?: boolean }[] = [
+  { id: 'url', label: 'Single URL', Icon: Globe, primary: true },
+  { id: 'manual', label: 'Manual Note', Icon: FileText, primary: true },
+  { id: 'paste', label: 'Bulk Paste', Icon: ListPlus },
+  { id: 'keep', label: 'Google Keep', Icon: FolderArchive },
+  { id: 'markdown', label: 'Markdown', Icon: BookText },
+  { id: 'file', label: 'File', Icon: Paperclip },
+  { id: 'voice', label: 'Voice', Icon: Mic },
+];
+
 export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialText }: IngestPanelProps) {
-  const [activeTab, setActiveTab] = useState<'url' | 'keep' | 'manual' | 'paste' | 'markdown' | 'file' | 'voice'>(
+  const [activeTab, setActiveTab] = useState<TabId>(
     initialUrl ? 'url' : initialText ? 'manual' : 'url'
   );
+  const [moreOpen, setMoreOpen] = useState(false);
   const [url, setUrl] = useState(initialUrl || '');
   const [manualText, setManualText] = useState(initialText || '');
   const [loading, setLoading] = useState(false);
@@ -137,88 +149,44 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
   };
 
   return (
-    <div className="bg-surface rounded-xl border border-white/5 shadow-2xl max-w-2xl w-full mx-auto flex flex-col overflow-hidden">
-      <div className="p-6 border-b border-white/5 flex justify-between items-center">
+    <div className="bg-surface rounded-xl max-sm:rounded-b-none border border-white/5 shadow-2xl max-w-2xl w-full mx-auto flex flex-col overflow-y-auto max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)]">
+      <div className="p-4 sm:p-6 border-b border-white/5 flex justify-between items-center">
         <h2 className="font-display text-xl text-ink">Add to Memex</h2>
         {onCancel && (
           <button 
             onClick={onCancel}
             aria-label="Close"
-            className="text-ink-muted hover:text-ink transition-colors"
+            className="-m-2 p-2 text-ink-muted hover:text-ink transition-colors"
           >
             <X size={20} />
           </button>
         )}
       </div>
 
-      {/* Tabs */}
-      <div role="tablist" aria-label="Capture type" className="flex overflow-x-auto border-b border-white/5">
-        <button role="tab" aria-selected={activeTab === 'url'} type="button"
-          onClick={() => setActiveTab('url')}
-          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-            activeTab === 'url' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
-          }`}
-        >
-          <Globe size={16} />
-          Single URL
-        </button>
-        <button role="tab" aria-selected={activeTab === 'manual'} type="button"
-          onClick={() => setActiveTab('manual')}
-          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-            activeTab === 'manual' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
-          }`}
-        >
-          <FileText size={16} />
-          Manual Note
-        </button>
-        <button role="tab" aria-selected={activeTab === 'paste'} type="button"
-          onClick={() => setActiveTab('paste')}
-          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-            activeTab === 'paste' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
-          }`}
-        >
-          <ListPlus size={16} />
-          Bulk Paste
-        </button>
-        <button role="tab" aria-selected={activeTab === 'keep'} type="button"
-          onClick={() => setActiveTab('keep')}
-          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-            activeTab === 'keep' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
-          }`}
-        >
-          <FolderArchive size={16} />
-          Google Keep
-        </button>
-        <button role="tab" aria-selected={activeTab === 'markdown'} type="button"
-          onClick={() => setActiveTab('markdown')}
-          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-            activeTab === 'markdown' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
-          }`}
-        >
-          <BookText size={16} />
-          Markdown
-        </button>
-        <button role="tab" aria-selected={activeTab === 'file'} type="button"
-          onClick={() => setActiveTab('file')}
-          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-            activeTab === 'file' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
-          }`}
-        >
-          <Paperclip size={16} />
-          File
-        </button>
-        <button role="tab" aria-selected={activeTab === 'voice'} type="button"
-          onClick={() => setActiveTab('voice')}
-          className={`flex-1 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all ${
-            activeTab === 'voice' ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
-          }`}
-        >
-          <Mic size={16} />
-          Voice
-        </button>
+      {/* Tabs. On a phone only the two everyday ones show; the rest are under "More ways to add" (the active tab always shows). */}
+      <div role="tablist" aria-label="Capture type" className="grid grid-cols-2 sm:flex sm:overflow-x-auto border-b border-white/5">
+        {TABS.map(({ id, label, Icon, primary }) => (
+          <button key={id} role="tab" aria-selected={activeTab === id} type="button"
+            onClick={() => setActiveTab(id)}
+            className={`min-h-11 py-3 text-sm font-medium flex items-center justify-center gap-2 transition-all sm:flex-1 ${
+              !primary && !moreOpen && activeTab !== id ? 'max-sm:hidden' : ''
+            } ${
+              activeTab === id ? 'text-accent border-b-2 border-accent bg-accent/5' : 'text-ink-muted hover:text-ink hover:bg-white/5'
+            }`}
+          >
+            <Icon size={16} />
+            {label}
+          </button>
+        ))}
       </div>
+      <button type="button" onClick={() => setMoreOpen(open => !open)} aria-expanded={moreOpen}
+        className="sm:hidden flex min-h-10 items-center justify-center gap-1.5 border-b border-white/5 text-xs font-medium text-ink-muted hover:text-ink"
+      >
+        {moreOpen ? 'Fewer ways to add' : 'More ways to add'}
+        <ChevronDown size={14} aria-hidden="true" className={`transition-transform ${moreOpen ? 'rotate-180' : ''}`} />
+      </button>
 
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {activeTab === 'manual' ? (
           <>
             {!preview ? (
@@ -265,7 +233,7 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
                   <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted" size={18} />
                   <input
                     type="url"
-                    placeholder="Paste URL (YouTube, Instagram, or Web)"
+                    placeholder="Paste URL (web, YouTube…)"
                     className="w-full bg-bg border border-white/10 rounded-lg py-3 pl-10 pr-4 text-ink outline-none focus:border-accent/50 transition-all placeholder:text-ink-muted/30"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}

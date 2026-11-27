@@ -374,11 +374,11 @@ export default function ItemPage() {
       <main id="main-content" tabIndex={-1} className="flex-1 flex flex-col relative overflow-y-auto">
         <AppHeader
           left={<div className="flex items-center gap-4"><button onClick={() => navigate(-1)} aria-label="Go back" className="text-ink-muted hover:text-ink transition-colors"><ArrowLeft size={20} /></button><div className="w-1 h-1 bg-white/20 rounded-full" /><span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">{item.type}</span></div>}
-          actions={<div className="flex items-center gap-1 sm:gap-2">{!isEditing ? (<><button type="button" onClick={handleMoveToVault} disabled={migrating} aria-label="Move to secure vault" className="p-2 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Move to Secure Vault">{migrating ? <Loader2 size={18} className="animate-spin" /> : <Shield size={18} />}</button><button type="button" onClick={startEditing} aria-label="Edit item" className="p-2 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Edit Item"><Edit2 size={18} /></button><button type="button" onClick={handleDelete} aria-label="Delete item" className="p-2 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Delete Item"><Trash2 size={18} /></button></>) : (<><button type="button" onClick={() => { setIsEditing(false); setEditedTitle(item.title); setEditedContent(item.content); setEditedCategories(item.categories.join(' > ')); setEditedTags(item.tags); }} aria-label="Cancel editing" className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Cancel"><X size={18} /></button><button type="button" onClick={handleSave} disabled={saving} className="bg-accent text-bg px-4 py-2 rounded-lg font-semibold flex items-center gap-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{saving ? 'Saving' : 'Save'}</button></>)}</div>}
+          actions={<div className="flex items-center gap-1 sm:gap-2">{!isEditing ? (<><button type="button" onClick={handleMoveToVault} disabled={migrating} aria-label="Move to secure vault" className="flex items-center gap-1.5 p-2 max-md:px-3 text-ink-muted hover:text-green-400 hover:bg-green-400/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Move to Secure Vault">{migrating ? <Loader2 size={18} className="animate-spin" /> : <Shield size={18} />}<span className="md:hidden text-xs font-medium">Vault</span></button><button type="button" onClick={startEditing} aria-label="Edit item" className="flex items-center gap-1.5 p-2 max-md:px-3 text-ink-muted hover:text-accent hover:bg-accent/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Edit Item"><Edit2 size={18} /><span className="md:hidden text-xs font-medium">Edit</span></button><button type="button" onClick={handleDelete} aria-label="Delete item" className="flex items-center gap-1.5 p-2 max-md:px-3 text-ink-muted hover:text-red-400 hover:bg-red-400/10 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Delete Item"><Trash2 size={18} /><span className="md:hidden text-xs font-medium">Delete</span></button></>) : (<><button type="button" onClick={() => { setIsEditing(false); setEditedTitle(item.title); setEditedContent(item.content); setEditedCategories(item.categories.join(' > ')); setEditedTags(item.tags); }} aria-label="Cancel editing" className="p-2 text-ink-muted hover:text-ink hover:bg-white/5 rounded-lg transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent" title="Cancel"><X size={18} /></button><button type="button" onClick={handleSave} disabled={saving} className="bg-accent text-bg px-4 py-2 rounded-lg font-semibold flex items-center gap-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent">{saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}{saving ? 'Saving' : 'Save'}</button></>)}</div>}
         />
         <AppHeader.Spacer />
 
-        <div className="p-5 sm:p-8 lg:p-12 max-w-4xl mx-auto w-full flex flex-col gap-8 sm:gap-12">
+        <div className="p-4 sm:p-8 lg:p-12 max-w-4xl mx-auto w-full flex flex-col gap-6 sm:gap-12">
           {/* Title Area */}
           <div className="flex flex-col gap-6">
             {isEditing ? (
@@ -559,13 +559,13 @@ export default function ItemPage() {
           })()}
 
           {/* Content Area */}
-          <div className="bg-surface/30 border border-white/5 rounded-2xl overflow-hidden min-h-[400px] flex flex-col shadow-2xl">
-            <div className="px-6 py-3 border-b border-white/5 bg-white/5 flex items-center justify-between">
+          <div className="bg-surface/30 border border-white/5 rounded-2xl overflow-hidden min-h-[120px] sm:min-h-[400px] flex flex-col shadow-2xl">
+            <div className="px-4 sm:px-6 py-3 border-b border-white/5 bg-white/5 flex items-center justify-between">
                <span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">Content</span>
                {item.encrypted && <span className="text-[10px] text-green-500 font-mono flex items-center gap-1"><Shield size={10} /> Encrypted</span>}
             </div>
             
-            <div className="p-8 flex-1">
+            <div className="p-4 sm:p-8 flex-1">
                {isEditing ? (
                  <Editor key={`${item.id}-edit`} content={editedContent} onChange={setEditedContent} />
                ) : (
@@ -706,7 +706,7 @@ export default function ItemPage() {
           {/* Extraction History */}
           {(extractions.length > 0 || item) && (
             <div className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
                 <button
                   onClick={() => setShowExtractions(v => !v)}
                   className="flex items-center gap-2 text-[10px] text-ink-muted uppercase tracking-widest font-bold hover:text-ink transition-colors"

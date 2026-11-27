@@ -162,15 +162,16 @@ export default function Dashboard() {
               type="button"
               aria-label="Search everything (press slash)"
               onClick={() => window.dispatchEvent(new Event('memex:open-search'))}
-              className="flex items-center gap-4 bg-surface/80 px-4 py-2 rounded-full border border-white/5 w-96 max-w-full text-left cursor-pointer hover:border-accent/30 transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex items-center gap-2 sm:gap-4 bg-surface/80 px-3 sm:px-4 py-2 rounded-full border border-white/5 w-96 max-w-full text-left cursor-pointer hover:border-accent/30 transition-all group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
             >
               <Search size={18} className="text-ink-muted group-hover:text-accent transition-colors" />
               <span className="text-ink-muted/50 text-sm flex-1">Search everything...</span>
-              <div className="flex items-center gap-1 px-1.5 py-0.5 bg-white/5 rounded border border-white/5 text-[10px] text-ink-muted font-mono">
+              <div className="max-md:hidden flex items-center gap-1 px-1.5 py-0.5 bg-white/5 rounded border border-white/5 text-[10px] text-ink-muted font-mono">
                 /
               </div>
             </button>
           }
+          actionsDesktopOnly
           actions={
             <button
               onClick={() => setShowShortcuts(true)}
@@ -184,20 +185,20 @@ export default function Dashboard() {
         <AppHeader.Spacer />
 
         {/* Hero Section */}
-        <div className="p-5 sm:p-8 xl:p-12 max-w-7xl mx-auto w-full flex flex-col gap-8 md:gap-10">
-          <section className="flex flex-col gap-8 animate-in fade-in slide-in-from-top-4 duration-500">
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+        <div className="p-4 sm:p-8 xl:p-12 max-w-7xl mx-auto w-full flex flex-col gap-6 md:gap-10">
+          <section className="flex flex-col gap-5 md:gap-8 animate-in fade-in slide-in-from-top-4 duration-500">
+            <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6">
               <div className="space-y-2">
-                <h1 className="font-display text-3xl md:text-4xl text-ink">Welcome back</h1>
-                <p className="text-ink-muted max-w-lg">
+                <h1 className="font-display text-2xl md:text-4xl text-ink">Welcome back</h1>
+                <p className="max-sm:hidden text-ink-muted max-w-lg">
                   Capture what matters, then find and revisit it when you need it. AI organization follows your configured provider and privacy settings.
                 </p>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => window.dispatchEvent(new Event('memex:open-capture'))} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-bg hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Plus size={16} />Capture something</button>
-                <button type="button" onClick={() => navigate('/ask')} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/10 bg-surface px-4 text-sm font-medium text-ink hover:bg-surface-hover"><Sparkles size={16} className="text-accent" />Ask your library</button>
-                <button type="button" onClick={() => navigate('/digest')} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/10 px-3 text-sm text-ink-muted hover:bg-white/5 hover:text-ink"><Newspaper size={16} />Weekly digest</button>
-                <button type="button" onClick={() => navigate('/graph')} className="inline-flex min-h-10 items-center gap-2 rounded-lg px-3 text-sm text-ink-muted hover:bg-white/5 hover:text-ink"><Compass size={16} />Explore connections</button>
+              <div className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:items-center">
+                <button type="button" onClick={() => window.dispatchEvent(new Event('memex:open-capture'))} className="inline-flex min-h-11 md:min-h-10 items-center justify-center gap-2 rounded-lg bg-accent px-4 text-sm font-semibold text-bg hover:bg-accent/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"><Plus size={16} />Capture<span className="max-sm:hidden">{' '}something</span></button>
+                <button type="button" onClick={() => navigate('/ask')} className="inline-flex min-h-11 md:min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 bg-surface px-4 text-sm font-medium text-ink hover:bg-surface-hover"><Sparkles size={16} className="text-accent" />Ask your library</button>
+                <button type="button" onClick={() => navigate('/digest')} className="inline-flex min-h-11 md:min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 px-3 text-sm text-ink-muted hover:bg-white/5 hover:text-ink"><Newspaper size={16} />Weekly digest</button>
+                <button type="button" onClick={() => navigate('/graph')} className="inline-flex min-h-11 md:min-h-10 items-center justify-center gap-2 rounded-lg border border-white/10 md:border-0 px-3 text-sm text-ink-muted hover:bg-white/5 hover:text-ink"><Compass size={16} />Explore connections</button>
               </div>
             </div>
 
@@ -251,8 +252,8 @@ export default function Dashboard() {
                   </AnimatePresence>
                 </div>
               ) : (
-                <div className="p-6 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl text-center">
-                  <p className="text-sm text-ink-muted">
+                <div className="p-4 sm:p-6 bg-white/[0.02] border border-dashed border-white/10 rounded-2xl text-center">
+                  <p className="text-xs sm:text-sm text-ink-muted">
                     No insights to show yet. They appear when there’s a useful pattern in your library.
                   </p>
                 </div>
@@ -261,7 +262,7 @@ export default function Dashboard() {
 
             {/* Quick Stats */}
             <div className="order-1">
-              {stats ? <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              {stats ? <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4 [&>article:last-child:nth-child(odd)]:max-lg:col-span-2">
                <StatCard
                  icon={<Database size={18} className="text-blue-400" />}
                  label="Total Items"
@@ -293,7 +294,7 @@ export default function Dashboard() {
                  label="Last 24h Activity"
                  value={stats.recentActivity}
                />
-              </div> : statsError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-ink-muted"><span>Library overview couldn’t be loaded.</span><button type="button" onClick={loadData} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></div> : <div role="status" aria-label="Loading library overview" className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">{Array.from({ length: 5 }, (_, i) => <div key={i} className="h-24 animate-pulse rounded-xl border border-white/5 bg-white/5" />)}</div>}
+              </div> : statsError ? <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-ink-muted"><span>Library overview couldn’t be loaded.</span><button type="button" onClick={loadData} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></div> : <div role="status" aria-label="Loading library overview" className="grid grid-cols-2 gap-3 sm:gap-4 sm:grid-cols-3 lg:grid-cols-5">{Array.from({ length: 5 }, (_, i) => <div key={i} className="h-24 animate-pulse rounded-xl border border-white/5 bg-white/5" />)}</div>}
             </div>
           </section>
 
@@ -360,7 +361,7 @@ export default function Dashboard() {
           )}
 
           {/* Recent Items */}
-          <section className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20">
+          <section className="flex flex-col gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-24 md:pb-20">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-xl text-ink">Recent Additions</h3>
               <button onClick={() => navigate('/items/table')} className="inline-flex min-h-[24px] items-center text-xs text-accent hover:underline font-medium">View All (Table)</button>
@@ -374,7 +375,7 @@ export default function Dashboard() {
               <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-400/20 bg-red-400/5 p-5 text-sm text-ink-muted"><span>Recent items couldn’t be loaded.</span><button type="button" onClick={loadData} className="rounded-lg px-3 py-2 font-medium text-accent hover:bg-accent/10">Retry</button></div>
             ) : items.length > 0 ? (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6">
                   {items.map(item => (
                     <ItemCard key={item.id} item={item} onClick={() => navigate(`/item/${item.id}`)} />
                   ))}
@@ -424,15 +425,15 @@ export default function Dashboard() {
 
 function StatCard({ icon, label, value, sub, onClick, onSubClick }: { icon: React.ReactNode, label: string, value: number | string, sub?: string, onClick?: () => void, onSubClick?: () => void }) {
   return (
-    <article className="bg-surface/50 border border-white/5 p-4 rounded-2xl flex flex-col gap-3 hover:border-white/10 transition-all group">
+    <article className="bg-surface/50 border border-white/5 p-3 sm:p-4 rounded-2xl flex flex-col gap-2 sm:gap-3 hover:border-white/10 transition-all group">
        <div className="flex items-center gap-2">
-          <div className="p-2 bg-white/5 rounded-lg group-hover:scale-110 transition-transform">
+          <div className="max-sm:hidden p-2 bg-white/5 rounded-lg group-hover:scale-110 transition-transform">
              {icon}
           </div>
-          <span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold">{label}</span>
+          <span className="text-[10px] text-ink-muted uppercase tracking-widest font-bold truncate">{label}</span>
        </div>
        <div className="flex items-end justify-between ml-1">
-         <span className="text-2xl font-mono text-ink">{value}</span>
+         <span className="text-xl sm:text-2xl font-mono text-ink">{value}</span>
          {sub && (
           onSubClick ? <button type="button" onClick={onSubClick} className="text-left text-[10px] text-accent font-medium pb-0.5 hover:underline">{sub}</button> : <span className="text-[10px] text-ink-muted font-medium pb-0.5">{sub}</span>
          )}

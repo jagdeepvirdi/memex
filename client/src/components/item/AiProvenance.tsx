@@ -119,7 +119,7 @@ export function ReClassifyControl({ item, busy, onRun }: ControlProps) {
       <button
         onClick={() => onRun(choice === '' ? undefined : choice)}
         disabled={busy}
-        className="flex items-center gap-1.5 text-[10px] text-ink-muted hover:text-accent border border-white/10 hover:border-accent/30 px-2.5 py-1 rounded-lg transition-all disabled:opacity-50"
+        className="flex items-center gap-1.5 whitespace-nowrap shrink-0 text-[10px] text-ink-muted hover:text-accent border border-white/10 hover:border-accent/30 px-2.5 py-1 rounded-lg transition-all disabled:opacity-50"
         title="Re-run AI classification and add to history"
       >
         {busy ? <Loader2 size={10} className="animate-spin" /> : <Bot size={10} />}

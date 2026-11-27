@@ -116,7 +116,7 @@ export default function SettingsPage() {
               <ul
                 ref={tabsRef}
                 onScroll={updateTabsHint}
-                className="flex md:flex-col gap-1 overflow-x-auto md:overflow-visible pb-2 md:pb-0 md:sticky md:top-28"
+                className="flex flex-wrap md:flex-nowrap md:flex-col gap-1 pb-2 md:pb-0 md:sticky md:top-28"
               >
                 {SETTINGS_TABS.map(t => {
                   const Icon = t.icon

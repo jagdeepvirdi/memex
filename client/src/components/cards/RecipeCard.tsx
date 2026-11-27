@@ -46,7 +46,7 @@ export default function RecipeCard({ item, onClick }: Props) {
           </Muted>
         )}
         {steps.length > 0 && (
-          <Muted>{steps.length} step{steps.length !== 1 ? 's' : ''}</Muted>
+          <span className="max-sm:hidden"><Muted>{steps.length} step{steps.length !== 1 ? 's' : ''}</Muted></span>
         )}
       </div>
 
@@ -54,7 +54,7 @@ export default function RecipeCard({ item, onClick }: Props) {
 
       {/* Prep time row */}
       {s.prepTime && (
-        <Muted>Prep {s.prepTime}</Muted>
+        <span className="max-sm:hidden"><Muted>Prep {s.prepTime}</Muted></span>
       )}
 
       <CardFooter tags={item.tags} />

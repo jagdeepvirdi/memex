@@ -15,6 +15,8 @@ interface Props {
    * so they get a row of their own under it (scrolls sideways if it must).
    */
   actions?: ReactNode
+  /** Hide `actions` on a phone altogether (instead of giving them a row of their own). */
+  actionsDesktopOnly?: boolean
 }
 
 // <AppHeader.Spacer /> is a separate element, so it learns through this tiny store whether the phone-only actions row
@@ -36,14 +38,14 @@ const getRow = () => actionsRowShown
  * Include <AppHeader.Spacer /> immediately after <AppHeader> in each page so
  * content doesn't slide under the fixed bar.
  */
-export function AppHeader({ left, actions }: Props) {
+export function AppHeader({ left, actions, actionsDesktopOnly }: Props) {
   const navigate = useNavigate()
   const { user, logout } = useAuthStore()
   const { aiStatus, enrichment, eta, isOnline } = useAiStatus()
   const [showProfile, setShowProfile] = useState(false)
   const profileTrigger = useRef<HTMLButtonElement>(null)
   const profileMenu = useRef<HTMLDivElement>(null)
-  const hasActions = !!actions
+  const hasActions = !!actions && !actionsDesktopOnly
   useLayoutEffect(() => {
     setActionsRowShown(hasActions)
     return () => setActionsRowShown(false)
@@ -77,7 +79,7 @@ export function AppHeader({ left, actions }: Props) {
       {actions && (
         <div
           data-testid="header-actions"
-          className="order-3 md:order-2 w-full md:w-auto h-12 md:h-auto flex items-center gap-3 overflow-x-auto md:overflow-visible border-t border-white/5 md:border-0 text-ink-muted"
+          className={`order-3 md:order-2 w-full md:w-auto h-12 md:h-auto flex items-center gap-3 overflow-x-auto md:overflow-visible border-t border-white/5 md:border-0 text-ink-muted ${actionsDesktopOnly ? 'max-md:hidden' : ''}`}
         >
           {actions}
           <div className="hidden md:block w-px h-5 bg-white/10 shrink-0" />
@@ -85,7 +87,7 @@ export function AppHeader({ left, actions }: Props) {
       )}
 
       {/* Right side */}
-      <div className="order-2 md:order-3 h-16 md:h-auto flex items-center gap-3 text-ink-muted shrink-0">
+      <div className="order-2 md:order-3 h-16 md:h-auto flex items-center gap-1 sm:gap-3 text-ink-muted shrink-0">
         <DemoBanner />
         <OutboxIndicator />
 
