@@ -2,7 +2,7 @@
 
 ## Project Context
 
-Memex is a local-first personal knowledge management system. It uses local AI (Ollama) to classify, organize, and connect notes, recipes, media, places, and more. Everything runs on the user's own machine — no cloud costs, no telemetry.
+Memex is a local-first personal knowledge management system. It uses local AI (Ollama) by default to classify, organize, and connect notes, recipes, media, places, and more. Everything runs on the user's own machine — no telemetry. A cloud AI (Gemini, Claude, OpenAI or Groq) is optional and opt-in.
 
 ## Tech Stack
 
@@ -20,7 +20,8 @@ Memex is a local-first personal knowledge management system. It uses local AI (O
 | AI — chat | Ollama (`llama3.2` or `gemma3:4b`) |
 | AI — embeddings | Ollama (`nomic-embed-text`, 768 dims) |
 | AI — vision | Ollama vision model (auto-detected: `llama3.2-vision` → `llava:7b` → `llava`) |
-| AI — optional | Anthropic Claude API (opt-in via Settings, never automatic for ingestion) |
+| AI — optional | Claude, Gemini, OpenAI, Groq (opt-in: a key, a provider choice and cloud consent in Settings; blocked by Strict Local Mode and the `cloudSafe` guard) |
+| AI — cloud embeddings | Gemini or OpenAI, only through `PUT /api/ai/embedding` (768 dims) |
 | File ingestion | MarkItDown (Python CLI, optional) |
 | Voice transcription | OpenAI Whisper CLI (Python, optional) |
 | Security | Web Crypto API (AES-256-GCM) for client-side vault encryption |
@@ -36,7 +37,7 @@ Memex is a local-first personal knowledge management system. It uses local AI (O
 
 ## Strategic Guidelines
 
-1. **Local AI first** — always use Ollama for classification, embeddings, and summarization. Claude API is only called when `use_claude = true` in DB settings AND `ANTHROPIC_API_KEY` is set.
+1. **Local AI first** — always use Ollama for classification, embeddings, and summarization. A cloud provider is used only when its key is set, it is selected (`ai_provider` or a per-task override), `allow_cloud` is on, Strict Local Mode is off, and the item passes `cloudSafe()`. Private items never leave Ollama. See `CLAUDE.md` for the full routing rules.
 2. **Security** — vault encryption (`client/src/lib/crypto.ts`) must not be weakened. Master passwords never leave the browser.
 3. **Surgical edits** — preserve existing logic and style when modifying files.
 4. **No `console.*`** — use `import logger from '../lib/logger.js'` in all server code. Logger is silenced in tests automatically.
@@ -45,7 +46,7 @@ Memex is a local-first personal knowledge management system. It uses local AI (O
 
 ## AI Routing (`server/src/services/ai.ts`)
 
-Single `aiChat()` function — dispatches to Ollama or Claude based on DB settings. Embeddings always go through Ollama (Anthropic has no embeddings API). All AI calls in classification/summarization go through this layer.
+Single `aiChat()` function — dispatches to Ollama, Claude, Gemini, OpenAI or Groq based on DB settings, per-task overrides and the `cloudSafe` guard. Embeddings go through the active embedding model (`aiEmbed`, Ollama by default; Claude and Groq have no embeddings API). All AI calls in classification/summarization go through this layer.
 
 ## Classification Pipeline
 
@@ -57,7 +58,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 - Multi-entity detection: if `multiEntity=true`, ingest route splits into N separate items
 - Fuzzy category mapping: AI output is normalised to the canonical tree before DB write
 
-## Database Migrations (16 total)
+## Database Migrations (26 total; the table lists 001-012, later ones are described in `CLAUDE.md`)
 
 | # | File | Summary |
 |---|---|---|
@@ -159,7 +160,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 | `/category/:id` | `Category.tsx` | Paginated item grid |
 | `/item/:id` | `Item.tsx` | Edit, delete, move to vault, extraction history |
 | `/vault` | `Vault.tsx` | AES-256 encrypted vault; change-password modal |
-| `/settings` | `Settings.tsx` | Model, Claude toggle, bookmarklet, Obsidian export |
+| `/settings/:tab?` | `Settings.tsx` | AI providers and keys, privacy, library, vault, capture (bookmarklet, MCP), appearance |
 | `/share/:token` | `PublicItem.tsx` | Public read-only page (no auth) |
 | `/welcome` | `Welcome.tsx` | Onboarding persona flow |
 | `/items/pending` | `PendingItems.tsx` | Multi-select bulk delete |
@@ -171,7 +172,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 
 | File | Purpose |
 |---|---|
-| `server/src/services/ai.ts` | AI routing — Ollama or Claude based on DB settings |
+| `server/src/services/ai.ts` | AI routing — Ollama, Claude, Gemini, OpenAI or Groq based on DB settings and `cloudSafe` |
 | `server/src/services/ollama.ts` | Ollama client (JSON mode, temp 0) |
 | `server/src/services/classifier.ts` | Classification + fuzzy category mapping |
 | `server/src/services/embedder.ts` | nomic-embed-text embeddings |
@@ -200,7 +201,7 @@ Single `aiChat()` function — dispatches to Ollama or Claude based on DB settin
 
 ## Testing
 
-- **664 tests** — 236 server + 428 client, all passing.
+- **About 2960 tests** — about 1960 server + 1000 client (2026-11-25; run the suites for the current number).
 - Server: `cd server && npm test`
 - Client: `cd client && npm test`
 - Coverage: `npm run coverage` in either package (threshold gates enforced).

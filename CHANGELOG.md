@@ -17,10 +17,14 @@ All notable changes to Memex are documented here.
 - **Phone guide.** README section on using Memex from a phone or another computer over HTTPS (Tailscale Serve or a reverse proxy) without opening the port to the network.
 - **Docker builds behind HTTPS-scanning networks.** Optional `certs/*.crt` lets the image build trust an antivirus or proxy root certificate; the README documents what the Docker install does and does not include.
 
+- **Fonts are self-hosted.** The app's three typefaces ship with it (no request to Google), and the PWA precaches them.
+- **GitHub README fallback.** When the page reader cannot fetch a plain `github.com/owner/repo` page, the README is read through the GitHub API, so the summary comes from the real text and not from the model's memory.
+
 ### Fixed
 - **File and voice panels tell Docker users the truth.** The Docker image has no Python tools, so the panels now say so (instead of a `pip install` that cannot work there).
 - **Keyword-only search finds natural-language questions.** When no embedding model is available, search used to require every word to match (55% of the benchmark questions found their note); terms are now OR-ed and ranked by how many match (100%).
 - **Batch imports respect the privacy guard.** Notes saved by Keep, bulk paste and Markdown import are now checked for tags such as `private` and for sensitive text before the first AI classification, so a cloud provider is not used for them.
+- **Gemini short answers.** Gemini's thinking tokens count against the output cap, so tiny caps (the recipe yes/no check, the Settings test) came back empty; the cap now has a floor.
 
 ### Changed
 - **New brand identity.** The supplied folded-ribbon "M" logo replaces the earlier mark in the app, login/onboarding, landing page, README, favicon, PWA and touch icons and the social preview. Assets are built from the two master PNGs by `python brand/generate-assets.py` (see `brand/README.md`).

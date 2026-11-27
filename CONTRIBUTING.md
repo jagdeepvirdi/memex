@@ -43,8 +43,8 @@ All changes must keep the test suite green. Run before submitting:
 
 ```bash
 # From the repo root
-cd server && npm test   # 232 server tests
-cd client && npm test   # 57 client tests
+cd server && npm test   # about 1960 server tests (2026-11-25)
+cd client && npm test   # about 1000 client tests (2026-11-25)
 ```
 
 Check coverage (with threshold gates):
