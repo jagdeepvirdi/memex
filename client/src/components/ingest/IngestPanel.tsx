@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic, ListPlus, BookText, Clock, ChevronDown } from 'lucide-react';
+import { Loader2, Plus, Globe, X, FolderArchive, FileText, Paperclip, AlertTriangle, ExternalLink, Mic, ListPlus, BookText, Clock, ChevronDown, Bookmark } from 'lucide-react';
 import { toast } from 'sonner';
 import { ingestUrl, createItem, apiFetch } from '../../lib/api';
 import type { SimilarItem } from '../../lib/api';
 import ItemCard from '../cards/ItemCard';
 import KeepImportPanel from './KeepImportPanel';
 import PasteImportPanel from './PasteImportPanel';
-import MarkdownImportPanel from './MarkdownImportPanel';
+import MarkdownImportPanel from './MarkdownImportPanel'
+import BookmarkImportPanel from './BookmarkImportPanel';
 import FileIngestPanel from './FileIngestPanel';
 import VoiceIngestPanel from './VoiceIngestPanel';
 import Editor from '../Editor';
@@ -22,13 +23,14 @@ interface IngestPanelProps {
   initialText?: string;
 }
 
-type TabId = 'url' | 'keep' | 'manual' | 'paste' | 'markdown' | 'file' | 'voice';
+type TabId = 'url' | 'keep' | 'manual' | 'paste' | 'markdown' | 'bookmarks' | 'file' | 'voice';
 const TABS: { id: TabId; label: string; Icon: typeof Globe; primary?: boolean }[] = [
   { id: 'url', label: 'Single URL', Icon: Globe, primary: true },
   { id: 'manual', label: 'Manual Note', Icon: FileText, primary: true },
   { id: 'paste', label: 'Bulk Paste', Icon: ListPlus },
   { id: 'keep', label: 'Google Keep', Icon: FolderArchive },
   { id: 'markdown', label: 'Markdown', Icon: BookText },
+  { id: 'bookmarks', label: 'Bookmarks', Icon: Bookmark },
   { id: 'file', label: 'File', Icon: Paperclip },
   { id: 'voice', label: 'Voice', Icon: Mic },
 ];
@@ -276,6 +278,8 @@ export default function IngestPanel({ onSuccess, onCancel, initialUrl, initialTe
           <KeepImportPanel />
         ) : activeTab === 'markdown' ? (
           <MarkdownImportPanel />
+) : activeTab === 'bookmarks' ? (
+          <BookmarkImportPanel />
         ) : activeTab === 'voice' ? (
           <VoiceIngestPanel onSuccess={onSuccess} />
         ) : (

@@ -503,6 +503,43 @@ export function startMarkdownImport(file: File): Promise<MarkdownImportResponse>
   return apiFetch<MarkdownImportResponse>('/ingest/markdown', { method: 'POST', body: markdownForm(file, false) })
 }
 
+// ── Bookmarks / Pocket / Raindrop import ─────────────────────
+
+export type BookmarkSkipReason = 'not-a-link' | 'duplicate-in-file' | 'already-saved' | 'limit-reached'
+
+export interface BookmarkEntryResult {
+  index: number
+  url: string
+  title: string
+  tags: string[]
+  folder?: string
+  status: 'saved' | 'skipped'
+  reason?: BookmarkSkipReason
+  itemId?: string
+  existingId?: string
+}
+
+export interface BookmarkImportResponse {
+  dryRun: boolean
+  total: number
+  new: number
+  skipped: number
+  max: number
+  saved?: number
+  jobId?: string | null
+  entries: BookmarkEntryResult[]
+}
+
+/** Dry run: reads the export and reports what would be saved or skipped. Writes nothing, fetches no page. */
+export function previewBookmarkImport(file: File): Promise<BookmarkImportResponse> {
+  return apiFetch<BookmarkImportResponse>('/ingest/bookmarks', { method: 'POST', body: markdownForm(file, true) })
+}
+
+/** Saves the new links instantly and starts background classification (poll `fetchIngestJob`). */
+export function startBookmarkImport(file: File): Promise<BookmarkImportResponse> {
+  return apiFetch<BookmarkImportResponse>('/ingest/bookmarks', { method: 'POST', body: markdownForm(file, false) })
+}
+
 export interface IngestJobStatus {
   status: 'processing' | 'completed' | 'failed' | 'cancelled' | string
   progress: number

@@ -113,6 +113,13 @@ describe('classify', () => {
     expect(result.type).toBe('note')
   })
 
+  it('keeps an item that came with its address a link when no model answers', async () => {
+    mockAI('garbage'); mockAI('garbage')
+    const result = await classify('Soup\nhttps://example.com/soup', { sourceUrl: 'https://example.com/soup' })
+    expect(result.type).toBe('link')
+    expect(result.confidence).toBe(0)
+  })
+
   it('uses first non-empty line as fallback title', async () => {
     mockAI('garbage'); mockAI('garbage')
     const result = await classify('\n\nMy Important Note\nSome content here')

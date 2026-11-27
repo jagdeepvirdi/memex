@@ -9,6 +9,7 @@ import { parseKeepZipAsync } from '../services/keepImporter.js';
 import { classifyAndUpdateBatch } from '../services/enrichBatch.js'
 import { splitPaste, planPaste, savePlanned, MAX_PASTE_ENTRIES, MAX_PASTE_CHARS, type PasteEntryResult } from '../services/pasteImport.js'
 import { readMarkdownUpload, planMarkdown, saveMarkdownNotes, MAX_MARKDOWN_ENTRIES } from '../services/markdownImport.js'
+import { readBookmarkUpload, planBookmarks, saveBookmarks, bookmarkContent, FROM_BOOKMARKS_TAG, MAX_BOOKMARKS } from '../services/bookmarkImport.js'
 import { classify, classifyBatch } from '../services/classifier.js';
 import { convertToMarkdown, checkMarkitdownInstalled, SUPPORTED_MIME_TYPES } from '../services/markitdown.js';
 import { describeImage, getAvailableVisionModel, isImageMime } from '../services/visionService.js';
@@ -429,6 +430,74 @@ router.post('/markdown', ingestLimiter, upload.single('file'), async (req, res) 
   } catch (err) {
     logger.error(err, 'Markdown import error')
     res.status(500).json({ error: 'Failed to import the Markdown notes' })
+  }
+})
+
+// ── POST /api/ingest/bookmarks ────────────────────────────────────────────────
+// Import saved links from a browser bookmarks export (.html from Chrome, Edge, Firefox, Safari), Pocket (.html) or Raindrop
+// (.html or .csv). One link item per bookmark; folder names and tags become tags; duplicates (in the file or already saved)
+// are skipped. NO page is fetched and nothing is sent anywhere here: links are saved with title + address and classified in
+// the background (poll GET /jobs/:id) under the usual provider and privacy settings. Multipart: `file`, optional `dryRun=true`.
+
+const BOOKMARK_KIND = 'bookmark-import'
+
+router.post('/bookmarks', ingestLimiter, upload.single('file'), async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded. Send the bookmarks .html (or Raindrop .csv) export.' })
+  const dryRun = String(req.body?.dryRun ?? '').toLowerCase() === 'true'
+
+  let parsed: ReturnType<typeof readBookmarkUpload>
+  try {
+    parsed = readBookmarkUpload(req.file.buffer, req.file.originalname)
+  } catch (err) {
+    return res.status(400).json({ error: err instanceof Error ? err.message : 'Could not read the file.' })
+  }
+  if (parsed.length === 0) return res.status(400).json({ error: 'No bookmarks found in that file.' })
+
+  try {
+    if (!dryRun && (await hasRunningJob(BOOKMARK_KIND))) {
+      return res.status(409).json({ error: 'A bookmark import is already running. Wait for it to finish.' })
+    }
+    const planned = await planBookmarks(parsed)
+    const toSave = planned.filter(b => b.status === 'new')
+    const counts = { total: planned.length, new: toSave.length, skipped: planned.length - toSave.length, max: MAX_BOOKMARKS }
+    const toResult = (b: (typeof planned)[number], itemId?: string) => ({
+      index: b.index, url: b.url, title: b.title, tags: b.tags, folder: b.folder,
+      status: b.status === 'new' ? 'saved' : 'skipped', reason: b.reason, itemId, existingId: b.existingId,
+    })
+
+    if (dryRun) return res.json({ dryRun: true, ...counts, entries: planned.map(b => toResult(b)) })
+    if (toSave.length === 0) return res.json({ dryRun: false, ...counts, saved: 0, jobId: null, entries: planned.map(b => toResult(b)) })
+
+    const client = await pool.connect()
+    let ids: string[]
+    try {
+      await client.query('BEGIN')
+      ids = await saveBookmarks(client, toSave, setItemTags)
+      await client.query('COMMIT')
+    } catch (err) {
+      await client.query('ROLLBACK')
+      throw err
+    } finally {
+      client.release()
+    }
+
+    const idByIndex = new Map(toSave.map((b, i) => [b.index, ids[i]]))
+    const entries = planned.map(b => toResult(b, idByIndex.get(b.index)))
+    const jobId = uuidv4()
+    await createJob(jobId, ids.length, BOOKMARK_KIND)
+    await saveJobDetails(jobId, { entries }).catch(() => {})
+    classifyAndUpdateBatch(
+      ids,
+      toSave.map(b => ({ title: b.title, content: bookmarkContent(b), labels: [FROM_BOOKMARKS_TAG, ...b.tags], source: 'url' as const, sourceUrl: b.url })),
+      jobId,
+      { details: { entries } },
+    ).catch(err => failJob(jobId, String(err)).catch(() => {}))
+
+    logger.info(`[Bookmark import] Saved ${ids.length} of ${planned.length} bookmarks, classification started (job ${jobId})`)
+    res.json({ dryRun: false, ...counts, saved: ids.length, jobId, entries })
+  } catch (err) {
+    logger.error(err, 'Bookmark import error')
+    res.status(500).json({ error: 'Failed to import the bookmarks' })
   }
 })
 

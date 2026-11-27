@@ -32,6 +32,7 @@ Everything is reachable from this computer only by default. More detail, local A
 
 - **Import from Google Keep** — upload a Takeout ZIP; every note saves instantly and is classified in the background with a live sidebar ETA
 - **Import Markdown / Obsidian notes** — Add > Markdown takes a zipped folder of `.md` files (or one file), previews what will be saved or skipped, keeps titles, front matter, tags and dates, and classifies in the background (see [Importing Markdown notes](#importing-markdown-notes-obsidian-or-any-folder-of-md-files))
+- **Import bookmarks, Pocket or Raindrop** — Add > Bookmarks takes the export file from Chrome, Edge, Firefox, Safari, Pocket or Raindrop (`.html`, or Raindrop's `.csv`), previews what will be saved or skipped, and saves each link with its title, tags and folder. No page is opened, so nothing about your bookmarks reaches a third party.
 - **Ingest anything** — URLs, YouTube videos, Instagram posts, PDFs, Word docs, PowerPoint, images (vision AI), voice memos (Whisper), plain text
 - **Auto-classify with local AI** — Ollama tags, categorizes, and extracts structured data from each item (confidence-scored, multi-entity detection)
 - **Ask your knowledge** — RAG-powered chat: ask questions, get cited answers from your own notes
@@ -400,6 +401,16 @@ Memex only lives on your computer, so on a weekend (or with no signal) the phone
 What it does: one note per `.md`, `.markdown` or `.txt` file (up to 500 per import, 20,000 characters each). The title comes from the front matter `title`, else the first `# heading`, else the file name. Front matter `tags` and inline `#tags` become tags, and `created` or `date` sets the note's date. Wikilinks (`[[Other note]]`) and image embeds stay as plain text. Hidden folders (`.obsidian`, `.trash`), images, attachments and other file types are ignored. A note is skipped if it is empty, too long, repeated in the folder, or already in Memex with the same title and text, so importing the same vault twice does not create copies.
 
 Nothing is read from or written to disk beyond the upload, and nothing is sent to an AI service by the import itself; classification afterwards follows your normal provider and privacy settings (a note you tag `private` stays on local AI). The API is `POST /api/ingest/markdown` (multipart `file`, optional `dryRun=true`).
+
+## Importing bookmarks (browser, Pocket or Raindrop)
+
+1. Export your bookmarks: in Chrome or Edge open the Bookmarks manager and choose **Export bookmarks**; Firefox has **Import and Backup > Export Bookmarks to HTML**; Safari has **File > Export > Bookmarks**; Pocket and Raindrop have an export page (HTML, or CSV for Raindrop).
+2. In Memex: **Add → Bookmarks** → choose the file → **Preview**. Nothing is saved yet; the preview lists what will be imported and what will be skipped, and why.
+3. **Import**. Links save at once as unreviewed link items tagged `from-bookmarks`; AI classification runs in the background.
+
+What it does: one link per bookmark (up to 1,000 per import; run it again to continue, because links already in Memex are skipped). The title and the date added are kept. A bookmark's own tags and the name of the folder it was in become tags (the browser's top folders such as "Bookmarks bar" do not). The same address saved twice, in any spelling (with or without `www.`, a trailing slash or `utm_` tracking), counts as one, and so does a link you already have. Addresses that are not web pages (`javascript:`, `place:`) are skipped.
+
+**No page is opened.** Links are saved with their title and address only, so nothing about your bookmarks is sent to a third party at import time; classification afterwards follows your normal provider and privacy settings, and with only a title and an address it can be rougher than for a saved page. Open a link and choose **Re-classify** to have the page read. The API is `POST /api/ingest/bookmarks` (multipart `file`, optional `dryRun=true`).
 
 ---
 

@@ -704,7 +704,8 @@ export async function classify(text: string, hints?: ClassifyHints): Promise<Cla
   }
 
   // ── Fallback: never block the user ────────────────────────────────────────
-  return finish({ ...fallback(text), model: usedModel })
+  // No answer from any model: an item that arrived with its address stays a link instead of turning into a note.
+  return finish({ ...fallback(text), ...(hints?.sourceUrl ? { type: 'link' as const } : {}), model: usedModel })
 }
 
 // ── Batch classify — one Ollama call for multiple notes ──────────────────────
